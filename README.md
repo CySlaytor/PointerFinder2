@@ -16,7 +16,7 @@ A powerful, multi-emulator pointer scanning tool designed for game reverse engin
 
 ## How to Use
 
-1.  Download the latest release from the [Releases page](https://github.com/CySlaytor/PointerFinder2/releases/tag/v2.0.0)
+1.  Download the latest release from the [Releases page](https://github.com/CySlaytor/PointerFinder2/releases/)
 2.  Run `PointerFinder2.exe`.
 3.  Run a game in a supported emulator (PCSX2 or DuckStation).
 4.  In the tool, go to **File -> Attach to Emulator...**.
