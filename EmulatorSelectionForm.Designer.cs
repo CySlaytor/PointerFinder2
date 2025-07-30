@@ -24,23 +24,27 @@
             this.label1.AutoSize = true;
             this.label1.Location = new System.Drawing.Point(12, 9);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(292, 15);
+            this.label1.Size = new System.Drawing.Size(296, 15);
             this.label1.TabIndex = 0;
-            this.label1.Text = "Multiple emulators found. Please select one to attach to:";
+            this.label1.Text = "Multiple emulator instances found. Please select one to attach to:";
             // 
             // listBoxEmulators
             // 
+            this.listBoxEmulators.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+            | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.listBoxEmulators.FormattingEnabled = true;
             this.listBoxEmulators.ItemHeight = 15;
             this.listBoxEmulators.Location = new System.Drawing.Point(15, 36);
             this.listBoxEmulators.Name = "listBoxEmulators";
-            this.listBoxEmulators.Size = new System.Drawing.Size(306, 64);
+            this.listBoxEmulators.Size = new System.Drawing.Size(407, 94);
             this.listBoxEmulators.TabIndex = 1;
             // 
             // btnOK
             // 
+            this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnOK.DialogResult = System.Windows.Forms.DialogResult.OK;
-            this.btnOK.Location = new System.Drawing.Point(246, 115);
+            this.btnOK.Location = new System.Drawing.Point(347, 145);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 2;
@@ -53,7 +57,7 @@
             this.AcceptButton = this.btnOK;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(336, 152);
+            this.ClientSize = new System.Drawing.Size(434, 181);
             this.Controls.Add(this.btnOK);
             this.Controls.Add(this.listBoxEmulators);
             this.Controls.Add(this.label1);
@@ -63,10 +67,11 @@
             this.Name = "EmulatorSelectionForm";
             this.ShowInTaskbar = false;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Select Emulator";
+            this.Text = "Select Emulator Instance";
             this.Load += new System.EventHandler(this.EmulatorSelectionForm_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
         #endregion
         private System.Windows.Forms.Label label1;

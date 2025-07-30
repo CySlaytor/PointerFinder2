@@ -11,6 +11,7 @@
         {
             if (disposing)
             {
+                // Ensure the timer is stopped and disposed of properly when the form is eventually closed.
                 if (_logTimer != null)
                 {
                     _logTimer.Stop();

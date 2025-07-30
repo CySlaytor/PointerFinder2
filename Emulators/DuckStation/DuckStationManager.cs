@@ -6,11 +6,13 @@ using System.Linq;
 
 namespace PointerFinder2.Emulators.DuckStation
 {
+    // Manages interaction with the DuckStation emulator, including process attachment, memory reading, and address translation.
     public class DuckStationManager : IEmulatorManager
     {
+        // Singleton instance of the logger for debug output.
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
-        // --- PS1 Memory Layout ---
+        // PS1 Memory Layout Constants.
         public const uint PS1_RAM_START = 0x80000000;
         public const uint PS1_RAM_SIZE = 0x200000; // 2MB
         public const uint PS1_RAM_END = PS1_RAM_START + PS1_RAM_SIZE;
@@ -23,53 +25,52 @@ namespace PointerFinder2.Emulators.DuckStation
         public nint ProcessHandle { get; private set; } = IntPtr.Zero;
         public nint MemoryBasePC { get; private set; } = IntPtr.Zero;
 
-        public bool Attach()
+        // Attaches to the DuckStation process by finding its exported "RAM" variable, which points to the emulated RAM.
+        public bool Attach(Process process)
         {
-            logger.Log($"[{EmulatorName}] Attempting to attach...");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
 
-            var profile = EmulatorProfileRegistry.Profiles.First(p => p.Target == EmulatorTarget.DuckStation);
-            foreach (var processName in profile.ProcessNames)
-            {
-                EmulatorProcess = Memory.GetProcess(processName);
-                if (EmulatorProcess != null) break;
-            }
+            EmulatorProcess = process;
 
             if (EmulatorProcess?.MainModule == null)
             {
-                logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
                 return false;
             }
-            logger.Log($"[{EmulatorName}] SUCCESS: Found process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
             ProcessHandle = Memory.OpenProcessHandle(EmulatorProcess);
             if (ProcessHandle == IntPtr.Zero)
             {
-                logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
                 return false;
             }
-            logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
+            // DuckStation conveniently exports a pointer to its emulated RAM.
             nint ramExportAddress = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "RAM");
             if (ramExportAddress == IntPtr.Zero)
             {
-                logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'RAM' export. Ensure the game is fully loaded.");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'RAM' export. Ensure the game is fully loaded.");
                 return false;
             }
 
+            // The exported address contains a pointer to the actual memory block, which we must read.
             long? ramPtr = Memory.ReadInt64(ProcessHandle, ramExportAddress);
             if (!ramPtr.HasValue)
             {
-                logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'RAM' export address.");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'RAM' export address.");
                 return false;
             }
 
             this.MemoryBasePC = (nint)ramPtr.Value;
-            logger.Log($"[{EmulatorName}] SUCCESS: PS1 RAM base found in PC memory at 0x{this.MemoryBasePC:X}.");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: PS1 RAM base found in PC memory at 0x{this.MemoryBasePC:X}.");
 
-            logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
 
+        // Detaches from the emulator process, releasing the handle.
         public void Detach()
         {
             if (ProcessHandle != IntPtr.Zero)
@@ -79,39 +80,44 @@ namespace PointerFinder2.Emulators.DuckStation
             ProcessHandle = IntPtr.Zero;
             MemoryBasePC = IntPtr.Zero;
             EmulatorProcess = null;
-            logger.Log($"[{EmulatorName}] Detached from process.");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
 
+        // Reads a block of memory from the emulated PS1 RAM.
         public byte[] ReadMemory(uint ps1Address, int count)
         {
             if (!IsAttached || ps1Address < PS1_RAM_START || ps1Address >= PS1_RAM_END) return null;
 
-            // Calculate the offset from the start of the PS1 RAM block, then add it to the base address in the PC's memory.
+            // Translate the PS1 address to a PC address by calculating the offset from the PS1 RAM start.
             nint addressInPC = IntPtr.Add(this.MemoryBasePC, (int)(ps1Address - PS1_RAM_START));
 
             return Memory.ReadBytes(this.ProcessHandle, addressInPC, count);
         }
 
+        // Reads a 32-bit unsigned integer from a specific PS1 memory address.
         public uint? ReadUInt32(uint ps1Address)
         {
             byte[] buffer = ReadMemory(ps1Address, 4);
             return buffer != null ? BitConverter.ToUInt32(buffer, 0) : null;
         }
 
+        // Checks if a given value is a valid pointer target within the PS1's RAM.
         public bool IsValidPointerTarget(uint value)
         {
+            // A valid pointer must be 4-byte aligned and fall within the 2MB RAM range.
             return (value & 3) == 0 && (value >= PS1_RAM_START && value < PS1_RAM_END);
         }
 
-        public uint? RecalculateFinalAddress(PointerPath path)
+        // Traverses a pointer path to calculate the final memory address. Used for filtering results.
+        public uint? RecalculateFinalAddress(PointerPath path, uint expectedFinalAddress)
         {
-            bool shouldLog = DebugSettings.LogFilterValidation && !DebugSettings.IsLoggingPaused;
+            bool shouldLog = DebugSettings.LogFilterValidation;
 
             if (shouldLog)
             {
                 logger.Log("--------------------------------------------------");
-                logger.Log($"[{EmulatorName}] Validating Path: {FormatDisplayAddress(path.BaseAddress)} -> {path.GetOffsetsString()} (Expecting: {FormatDisplayAddress(path.FinalAddress)})");
+                logger.Log($"[{EmulatorName}] Validating Path: {FormatDisplayAddress(path.BaseAddress)} -> {path.GetOffsetsString()} (Expecting: {FormatDisplayAddress(expectedFinalAddress)})");
             }
 
             if (path == null || !path.Offsets.Any())
@@ -135,6 +141,7 @@ namespace PointerFinder2.Emulators.DuckStation
             }
             if (shouldLog) logger.Log($"  -> Value: 0x{currentAddress.Value:X8}");
 
+            // Traverse the chain of pointers and offsets.
             for (int i = 0; i < path.Offsets.Count - 1; i++)
             {
                 if (shouldLog) logger.Log($"[{EmulatorName}] Step {i + 1}: Applying Offset #{i + 1} ({path.Offsets[i]:+X;-X})");
@@ -157,19 +164,21 @@ namespace PointerFinder2.Emulators.DuckStation
                 if (shouldLog) logger.Log($"  -> Value: 0x{currentAddress.Value:X8}");
             }
 
+            // Apply the final offset to get the target address.
             if (shouldLog) logger.Log($"[{EmulatorName}] Step {path.Offsets.Count}: Applying Final Offset ({path.Offsets.Last():+X;-X})");
             uint finalAddress = currentAddress.Value + (uint)path.Offsets.Last();
             if (shouldLog) logger.Log($"  -> Final Calculation: 0x{currentAddress.Value:X8} + 0x{path.Offsets.Last():X} = 0x{finalAddress:X8}");
 
             if (shouldLog)
             {
-                bool isValid = finalAddress == path.FinalAddress;
-                logger.Log($"[{EmulatorName}] Comparison: Calculated (0x{finalAddress:X8}) == Expected (0x{path.FinalAddress:X8}) -> {isValid.ToString().ToUpper()}");
+                bool isValid = finalAddress == expectedFinalAddress;
+                logger.Log($"[{EmulatorName}] Comparison: Calculated (0x{finalAddress:X8}) == Expected (0x{expectedFinalAddress:X8}) -> {isValid.ToString().ToUpper()}");
             }
 
             return finalAddress;
         }
 
+        // Formats a full PS1 memory address into a shorter, more user-friendly format (e.g., "1B4A0").
         public string FormatDisplayAddress(uint address)
         {
             if (address >= PS1_RAM_START && address < PS1_RAM_END)
@@ -179,9 +188,11 @@ namespace PointerFinder2.Emulators.DuckStation
             return address.ToString("X8");
         }
 
+        // Converts a user-entered address (which might be in short format) into a full PS1 memory address.
         public uint UnnormalizeAddress(string address)
         {
             uint parsedAddress = uint.Parse(address.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
+            // If the user enters a "short" address (e.g., "1B4A0"), assume it's relative to the start of RAM.
             if (parsedAddress < PS1_RAM_SIZE)
             {
                 return parsedAddress + PS1_RAM_START;
@@ -189,9 +200,10 @@ namespace PointerFinder2.Emulators.DuckStation
             return parsedAddress;
         }
 
+        // Provides a set of default settings tailored for DuckStation.
         public AppSettings GetDefaultSettings()
         {
-            logger.Log($"[{EmulatorName}] Getting default settings.");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");
             return new AppSettings
             {
                 StaticAddressStart = "10000",

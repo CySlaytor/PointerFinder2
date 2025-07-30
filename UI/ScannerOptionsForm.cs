@@ -7,11 +7,13 @@ using System.Windows.Forms;
 
 namespace PointerFinder2
 {
+    // A form for configuring the parameters of a pointer scan.
     public partial class ScannerOptionsForm : Form
     {
         private readonly EmulatorTarget _target;
         private readonly IEmulatorManager _manager;
         private readonly AppSettings _currentSettings;
+
         public ScannerOptionsForm(IEmulatorManager manager, AppSettings settings)
         {
             InitializeComponent();
@@ -20,10 +22,11 @@ namespace PointerFinder2
             _currentSettings = settings;
         }
 
+        // When the form loads, populate the controls with the current settings for the active emulator.
         private void ScannerOptionsForm_Load(object sender, EventArgs e)
         {
             var logger = DebugLogForm.Instance;
-            logger.Log("ScannerOptionsForm loading...");
+            if (DebugSettings.LogLiveScan) logger.Log("ScannerOptionsForm loading...");
 
             // --- Configure UI based on Emulator Target ---
             this.Text = $"{_manager.EmulatorName} Scan Options";
@@ -31,9 +34,9 @@ namespace PointerFinder2
             label1.Text = $"Target Address ({targetSystem}, Hex)";
             groupBox1.Text = $"Static Base Address Range ({targetSystem}, Hex)";
 
-            // Hide 16-byte alignment option for DuckStation as it's not applicable
+            // Hide the 16-byte alignment option for DuckStation as it's not applicable.
             chkUse16ByteAlignment.Visible = (_target == EmulatorTarget.PCSX2);
-            logger.Log($"UI configured for {_manager.EmulatorName}. 16-byte alignment visible: {chkUse16ByteAlignment.Visible}");
+            if (DebugSettings.LogLiveScan) logger.Log($"UI configured for {_manager.EmulatorName}. 16-byte alignment visible: {chkUse16ByteAlignment.Visible}");
 
             // --- Populate controls with current settings ---
             txtTargetAddress.Text = _currentSettings.LastTargetAddress;
@@ -47,21 +50,20 @@ namespace PointerFinder2
             chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
             txtMaxNegativeOffset.Text = _currentSettings.MaxNegativeOffset.ToString("X");
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;
-            logger.Log("Controls populated with current settings.");
+            if (DebugSettings.LogLiveScan) logger.Log("Controls populated with current settings.");
         }
 
-        // This method is now public so MainForm can call it after OK is clicked
+        // Parses and validates the user's input and returns a ScanParameters object.
         public ScanParameters GetScanParameters()
         {
             try
             {
-                // Use the manager's UnnormalizeAddress for the target
+                // Use the manager's UnnormalizeAddress to handle short vs. full hex addresses.
                 uint targetAddress = _manager.UnnormalizeAddress(txtTargetAddress.Text);
-                // And for the static range
                 uint staticStart = _manager.UnnormalizeAddress(txtStaticStart.Text);
                 uint staticEnd = _manager.UnnormalizeAddress(txtStaticEnd.Text);
 
-                DebugLogForm.Instance.Log($"Parsed Scan Parameters: Target={targetAddress:X8}, StaticRange={staticStart:X8}-{staticEnd:X8}");
+                if (DebugSettings.LogLiveScan) DebugLogForm.Instance.Log($"Parsed Scan Parameters: Target={targetAddress:X8}, StaticRange={staticStart:X8}-{staticEnd:X8}");
 
                 return new ScanParameters
                 {
@@ -84,7 +86,7 @@ namespace PointerFinder2
             }
         }
 
-        // This method is now public so MainForm can call it to save the settings
+        // Returns an AppSettings object reflecting the current values in the form's controls.
         public AppSettings GetCurrentSettings()
         {
             return new AppSettings
@@ -102,9 +104,10 @@ namespace PointerFinder2
             };
         }
 
+        // The OK button validates the input and closes the form if valid.
+        // The MainForm is responsible for retrieving the parameters after the dialog closes.
         private void btnOK_Click(object sender, EventArgs e)
         {
-            // The OK button just validates and closes. The MainForm will handle getting the parameters and saving.
             if (GetScanParameters() != null)
             {
                 DialogResult = DialogResult.OK;
@@ -112,6 +115,7 @@ namespace PointerFinder2
             }
         }
 
+        // Toggles the enabled state of the negative offset textbox based on its parent checkbox.
         private void chkScanForStructureBase_CheckedChanged(object sender, EventArgs e)
         {
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;

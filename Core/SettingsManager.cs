@@ -1,10 +1,15 @@
 ﻿using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 
 namespace PointerFinder2.Core
 {
+    // A data class to hold the application settings for a specific emulator profile.
     public class AppSettings
     {
         public string LastTargetAddress { get; set; } = "0";
@@ -19,30 +24,35 @@ namespace PointerFinder2.Core
         public bool Use16ByteAlignment { get; set; }
     }
 
+    // A static class responsible for loading from and saving settings to the settings.ini file.
     public static class SettingsManager
     {
         private static readonly string _settingsFile = Path.Combine(Application.StartupPath, "settings.ini");
 
+        // A dedicated method to save only the global debug settings.
+        // This is called from the DebugOptionsForm to avoid rewriting the entire file.
         public static void SaveDebugSettingsOnly()
         {
             var logger = DebugLogForm.Instance;
-            logger.Log("Saving debug settings only.");
+            if (DebugSettings.LogLiveScan) logger.Log("Saving debug settings only.");
             var ini = new IniFile(_settingsFile);
 
-            // Debug settings are global, not per-profile
+            // Debug settings are global, not per-profile.
             ini.Write("LogLiveScan", DebugSettings.LogLiveScan.ToString(), "Debug");
             ini.Write("LogFilterValidation", DebugSettings.LogFilterValidation.ToString(), "Debug");
             ini.Write("LogRefineScan", DebugSettings.LogRefineScan.ToString(), "Debug");
-            logger.Log("Debug settings saved successfully.");
+            if (DebugSettings.LogLiveScan) logger.Log("Debug settings saved successfully.");
         }
 
+        // Saves the application settings for a specific emulator target, as well as global debug settings.
         public static void Save(EmulatorTarget target, AppSettings settings)
         {
             var logger = DebugLogForm.Instance;
-            logger.Log($"Saving settings for profile: {target}");
+            if (DebugSettings.LogLiveScan) logger.Log($"Saving settings for profile: {target}");
             var ini = new IniFile(_settingsFile);
             string section = $"Scanner_{target}";
 
+            // Write the settings for the specified emulator profile.
             if (settings != null)
             {
                 ini.Write("LastTargetAddress", settings.LastTargetAddress, section);
@@ -57,45 +67,77 @@ namespace PointerFinder2.Core
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
             }
 
-            // Debug settings are global, not per-profile
-            ini.Write("LogLiveScan", DebugSettings.LogLiveScan.ToString(), "Debug");
-            ini.Write("LogFilterValidation", DebugSettings.LogFilterValidation.ToString(), "Debug");
-            ini.Write("LogRefineScan", DebugSettings.LogRefineScan.ToString(), "Debug");
-            logger.Log("Settings saved successfully.");
+            // Also save the global debug settings every time.
+            SaveDebugSettingsOnly();
+            if (DebugSettings.LogLiveScan) logger.Log("Settings saved successfully.");
         }
 
+
+        // Loads the application settings for a specific emulator target from the INI file.
+        // It also loads the global debug settings.
         public static AppSettings Load(EmulatorTarget target, AppSettings defaultSettings)
         {
             var logger = DebugLogForm.Instance;
-            logger.Log($"Loading settings for profile: {target}");
+            if (DebugSettings.LogLiveScan) logger.Log($"Loading settings for profile: {target}");
             var settings = new AppSettings();
             var ini = new IniFile(_settingsFile);
             string section = $"Scanner_{target}";
 
             if (!File.Exists(_settingsFile))
             {
-                logger.Log("Settings file not found, using default settings.");
+                if (DebugSettings.LogLiveScan) logger.Log("Settings file not found, using default settings.");
                 return defaultSettings;
             }
 
-            // Load scanner settings from the profile's section, using defaults as a fallback
+            // --- Load scanner settings with robust TryParse to prevent crashes from corrupted INI file ---
             settings.LastTargetAddress = ini.Read("LastTargetAddress", section, defaultSettings.LastTargetAddress);
-            settings.MaxOffset = int.Parse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()));
-            settings.MaxLevel = int.Parse(ini.Read("MaxLevel", section, defaultSettings.MaxLevel.ToString()));
-            settings.MaxResults = int.Parse(ini.Read("MaxResults", section, defaultSettings.MaxResults.ToString()));
+
+            if (!int.TryParse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()), out int maxOffset))
+                maxOffset = defaultSettings.MaxOffset;
+            settings.MaxOffset = maxOffset;
+
+            if (!int.TryParse(ini.Read("MaxLevel", section, defaultSettings.MaxLevel.ToString()), out int maxLevel))
+                maxLevel = defaultSettings.MaxLevel;
+            settings.MaxLevel = maxLevel;
+
+            if (!int.TryParse(ini.Read("MaxResults", section, defaultSettings.MaxResults.ToString()), out int maxResults))
+                maxResults = defaultSettings.MaxResults;
+            settings.MaxResults = maxResults;
+
             settings.StaticAddressStart = ini.Read("StaticAddressStart", section, defaultSettings.StaticAddressStart);
             settings.StaticAddressEnd = ini.Read("StaticAddressEnd", section, defaultSettings.StaticAddressEnd);
-            settings.AnalyzeStructures = bool.Parse(ini.Read("AnalyzeStructures", section, defaultSettings.AnalyzeStructures.ToString()));
-            settings.ScanForStructureBase = bool.Parse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()));
-            settings.Use16ByteAlignment = bool.Parse(ini.Read("Use16ByteAlignment", section, defaultSettings.Use16ByteAlignment.ToString()));
-            settings.MaxNegativeOffset = int.Parse(ini.Read("MaxNegativeOffset", section, defaultSettings.MaxNegativeOffset.ToString()));
 
-            // Load global debug settings
-            DebugSettings.LogLiveScan = bool.Parse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()));
-            DebugSettings.LogFilterValidation = bool.Parse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()));
-            DebugSettings.LogRefineScan = bool.Parse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()));
+            if (!bool.TryParse(ini.Read("AnalyzeStructures", section, defaultSettings.AnalyzeStructures.ToString()), out bool analyzeStructures))
+                analyzeStructures = defaultSettings.AnalyzeStructures;
+            settings.AnalyzeStructures = analyzeStructures;
 
-            logger.Log("Settings loaded successfully.");
+            if (!bool.TryParse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()), out bool scanForStructureBase))
+                scanForStructureBase = defaultSettings.ScanForStructureBase;
+            settings.ScanForStructureBase = scanForStructureBase;
+
+            if (!bool.TryParse(ini.Read("Use16ByteAlignment", section, defaultSettings.Use16ByteAlignment.ToString()), out bool use16ByteAlignment))
+                use16ByteAlignment = defaultSettings.Use16ByteAlignment;
+            settings.Use16ByteAlignment = use16ByteAlignment;
+
+            if (!int.TryParse(ini.Read("MaxNegativeOffset", section, defaultSettings.MaxNegativeOffset.ToString()), out int maxNegativeOffset))
+                maxNegativeOffset = defaultSettings.MaxNegativeOffset;
+            settings.MaxNegativeOffset = maxNegativeOffset;
+
+
+            // --- Load global debug settings with robust TryParse ---
+            if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan))
+                logLiveScan = false;
+            DebugSettings.LogLiveScan = logLiveScan;
+
+            if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation))
+                logFilterValidation = false;
+            DebugSettings.LogFilterValidation = logFilterValidation;
+
+            if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan))
+                logRefineScan = false;
+            DebugSettings.LogRefineScan = logRefineScan;
+
+            if (DebugSettings.LogLiveScan) logger.Log("Settings loaded successfully.");
             return settings;
         }
     }

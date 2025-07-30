@@ -129,11 +129,11 @@
             // 
             // lblProgressPercentage
             // 
-            lblProgressPercentage.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            lblProgressPercentage.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             lblProgressPercentage.BackColor = SystemColors.Control;
-            lblProgressPercentage.Location = new Point(772, 26);
+            lblProgressPercentage.Location = new Point(3, 26);
             lblProgressPercentage.Name = "lblProgressPercentage";
-            lblProgressPercentage.Size = new Size(115, 18);
+            lblProgressPercentage.Size = new Size(885, 18);
             lblProgressPercentage.TabIndex = 4;
             lblProgressPercentage.Text = "0 / 0";
             lblProgressPercentage.TextAlign = ContentAlignment.MiddleRight;
@@ -185,7 +185,7 @@
             btnScan.Name = "btnScan";
             btnScan.Size = new Size(316, 41);
             btnScan.TabIndex = 0;
-            btnScan.Text = "New Live Pointer Scan";
+            btnScan.Text = "New Pointer Scan";
             btnScan.UseVisualStyleBackColor = true;
             btnScan.Click += btnScan_Click;
             // 
