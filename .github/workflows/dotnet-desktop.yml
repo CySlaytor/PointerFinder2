@@ -1,0 +1,42 @@
+name: .NET Publish and Create Release
+
+# This workflow only runs when you push a new tag that starts with 'v' (e.g., v1.0, v2.1.0)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    # This permission is required for the action to create a GitHub Release
+    permissions:
+      contents: write
+
+    steps:
+    # 1. Checks out a copy of your repository's code
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # 2. Installs the specified .NET version
+    - name: Install .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x # Make sure this matches your project
+
+    # 3. Runs your exact publish command to create the single .exe
+    #    The backtick ` is used for multi-line commands in PowerShell
+    - name: Publish Single File Executable
+      run: |
+        dotnet publish PointerFinder2/PointerFinder2.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained false `
+          /p:PublishSingleFile=true `
+          /p:PublishDir=./publish
+
+    # 4. Creates the GitHub Release and uploads the .exe as an asset
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: publish/PointerFinder2.exe
