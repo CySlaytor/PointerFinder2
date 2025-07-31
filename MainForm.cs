@@ -34,7 +34,6 @@ namespace PointerFinder2
         private readonly Stopwatch _scanStopwatch = new Stopwatch();     // Measures the duration of scans.
 
         // --- Data & Threading ---
-        // The _currentResults list serves as the backing data store for the DataGridView in Virtual Mode.
         private List<PointerPath> _currentResults = new List<PointerPath>();
         private ConcurrentBag<PointerPath> _validFilteredPaths; // A thread-safe collection for the background filter task.
         private CancellationTokenSource _scanCts;
@@ -43,11 +42,18 @@ namespace PointerFinder2
         private bool _isRefining = false;
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
+        // --- UI State for Sorting ---
+        private DataGridViewColumn _sortedColumn;
+        private SortOrder _sortOrder = SortOrder.None;
+
         public MainForm()
         {
             InitializeComponent();
             dgvResults.DoubleBuffered(true); // Enables double buffering on the grid to reduce flicker.
             SetUIStateDetached();
+
+            // Attach event handler for manual sorting in Virtual Mode.
+            dgvResults.ColumnHeaderMouseClick += dgvResults_ColumnHeaderMouseClick;
 
             // Configure the timer to monitor the attached emulator process.
             _processMonitorTimer = new System.Windows.Forms.Timer();
@@ -470,7 +476,6 @@ namespace PointerFinder2
         // Event handler for Virtual Mode. It provides cell data to the DataGridView on demand.
         private void dgvResults_CellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
         {
-            // *** FIX: Add guard clause to prevent crash on detach ***
             if (_currentManager == null || _currentResults == null || e.RowIndex < 0 || e.RowIndex >= _currentResults.Count) return;
 
             PointerPath path = _currentResults[e.RowIndex];
@@ -501,7 +506,63 @@ namespace PointerFinder2
             }
         }
 
-        // Switches the UI between the idle state (buttons visible) and the active state (progress bar visible).
+        // Handles sorting when a column header is clicked in Virtual Mode.
+        private void dgvResults_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            var column = dgvResults.Columns[e.ColumnIndex];
+            if (column == null || !_currentResults.Any()) return;
+
+            // Determine the new sort order
+            if (_sortedColumn == column)
+            {
+                _sortOrder = (_sortOrder == SortOrder.Ascending) ? SortOrder.Descending : SortOrder.Ascending;
+            }
+            else
+            {
+                _sortOrder = SortOrder.Ascending;
+                if (_sortedColumn != null)
+                {
+                    _sortedColumn.HeaderCell.SortGlyphDirection = SortOrder.None;
+                }
+            }
+
+            _sortedColumn = column;
+
+            // Sort the backing data list based on the selected column and order
+            _currentResults.Sort((p1, p2) =>
+            {
+                int compareResult = 0;
+                if (column.Name == "colBase")
+                {
+                    compareResult = p1.BaseAddress.CompareTo(p2.BaseAddress);
+                }
+                else if (column.Name == "colFinal")
+                {
+                    compareResult = p1.FinalAddress.CompareTo(p2.FinalAddress);
+                }
+                else if (column.Name.StartsWith("colOffset"))
+                {
+                    // This logic correctly handles numerical sorting for hex offsets
+                    int offsetIndex = int.Parse(column.Name.Replace("colOffset", "")) - 1;
+
+                    // Treat paths with fewer offsets as "smaller" for sorting purposes
+                    int offset1 = (offsetIndex < p1.Offsets.Count) ? p1.Offsets[offsetIndex] : int.MinValue;
+                    int offset2 = (offsetIndex < p2.Offsets.Count) ? p2.Offsets[offsetIndex] : int.MinValue;
+                    compareResult = offset1.CompareTo(offset2);
+                }
+
+                // Reverse the result if sorting in descending order
+                return (_sortOrder == SortOrder.Descending) ? -compareResult : compareResult;
+            });
+
+            // Update the visual glyph on the column header
+            _sortedColumn.HeaderCell.SortGlyphDirection = _sortOrder;
+
+            // Invalidate the grid to force it to repaint with the newly sorted data
+            dgvResults.Invalidate();
+        }
+
+        // Switches the UI between the idle state and the active state.
         private void SwitchToScanUI(bool isScanningOrFiltering, string customMessage = null)
         {
             bool isScanning = _scanCts != null;
@@ -544,7 +605,7 @@ namespace PointerFinder2
             }
         }
 
-        // Callback method to update the progress bar and labels from a background thread.
+        // Updates the progress bar and labels from a background thread.
         private void UpdateScanProgress(ScanProgressReport report)
         {
             if (InvokeRequired)
@@ -572,7 +633,7 @@ namespace PointerFinder2
             }
         }
 
-        // Thread-safe method to update the main status label.
+        // Updates the main status label.
         private void UpdateStatus(string status)
         {
             if (InvokeRequired)
@@ -585,9 +646,17 @@ namespace PointerFinder2
             }
         }
 
-        // Overhauled method to populate the grid using Virtual Mode. This is now an instantaneous operation.
+        // Populates the grid using Virtual Mode.
         private void PopulateResultsGrid(List<PointerPath> results)
         {
+            // Reset sorting state when new data is loaded
+            if (_sortedColumn != null)
+            {
+                _sortedColumn.HeaderCell.SortGlyphDirection = SortOrder.None;
+                _sortedColumn = null;
+                _sortOrder = SortOrder.None;
+            }
+
             _currentResults = results;
 
             dgvResults.SuspendLayout();
@@ -633,7 +702,7 @@ namespace PointerFinder2
             dgvResults.Invalidate();
         }
 
-        // Analyzes the results to find potential data structures (arrays) and displays them in the Analysis tab.
+        // Analyzes results to find data structures.
         private int AnalyzeAndDisplayStructures(List<PointerPath> results)
         {
             treeViewAnalysis.Nodes.Clear();
@@ -673,7 +742,7 @@ namespace PointerFinder2
             return structureCount;
         }
 
-        // Helper method to format a TimeSpan into a user-friendly string.
+        // Formats a TimeSpan into a user-friendly string.
         private string FormatDuration(TimeSpan duration)
         {
             var sb = new StringBuilder("in ");
@@ -700,7 +769,7 @@ namespace PointerFinder2
 
         #region Filtering Logic
 
-        // Handles the "Filter Dynamic Paths" button click, starting the continuous filtering process.
+        // Handles the "Filter Dynamic Paths" button click.
         private async void btnFilter_Click(object sender, EventArgs e)
         {
             if (_filterCts != null) return;
@@ -770,7 +839,7 @@ namespace PointerFinder2
 
         #region General UI Event Handlers
 
-        // Handles the "Stop" button click for both scanning and filtering.
+        // Handles the "Stop" button click.
         private void btnStopScan_Click(object sender, EventArgs e)
         {
             if (_filterCts != null)
@@ -783,7 +852,7 @@ namespace PointerFinder2
             }
         }
 
-        // Handles the "Find" button to search for a base address in the results.
+        // Handles the "Find" button to search for a base address.
         private void btnSearch_Click(object sender, EventArgs e)
         {
             string searchText = txtSearchBaseAddress.Text.Trim();
@@ -826,7 +895,7 @@ namespace PointerFinder2
             }
         }
 
-        // Handles keyboard shortcuts within the DataGridView (Copy, Delete).
+        // Handles keyboard shortcuts within the DataGridView.
         private void dgvResults_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && e.KeyCode == Keys.C)
@@ -847,7 +916,7 @@ namespace PointerFinder2
             }
         }
 
-        // Configures the context menu items based on the current selection before it opens.
+        // Configures the context menu before it opens.
         private void contextMenuResults_Opening(object sender, CancelEventArgs e)
         {
             bool hasSelection = dgvResults.SelectedRows.Count > 0;
@@ -862,7 +931,7 @@ namespace PointerFinder2
         {
             if (dgvResults.SelectedRows.Count == 0 || _currentManager == null) return;
             var addresses = dgvResults.SelectedRows.Cast<DataGridViewRow>()
-                .Select(r => _currentResults[r.Index]) // Get path from the backing list using the row index.
+                .Select(r => _currentResults[r.Index])
                 .Select(p => _currentManager.FormatDisplayAddress(p.BaseAddress));
             if (addresses.Any())
             {
@@ -871,7 +940,7 @@ namespace PointerFinder2
             }
         }
 
-        // Copies the selected path in the format required by RetroAchievements.
+        // Copies the selected path in RetroAchievements format.
         private void copyAsRetroAchievementsFormatToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (dgvResults.SelectedRows.Count != 1)
@@ -893,28 +962,27 @@ namespace PointerFinder2
         {
             if (dgvResults.SelectedRows.Count == 0) return;
 
-            var selectedIndices = dgvResults.SelectedRows.Cast<DataGridViewRow>()
-                .Select(r => r.Index)
-                .OrderByDescending(i => i)
-                .ToList();
-
             int originalCount = _currentResults.Count;
 
-            foreach (int index in selectedIndices)
-            {
-                if (index >= 0 && index < _currentResults.Count)
-                {
-                    _currentResults.RemoveAt(index);
-                }
-            }
+            // Get a set of the indices to be removed for faster lookup.
+            var indicesToRemove = new HashSet<int>(dgvResults.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Index));
+
+            // Create a new list containing only the items we want to keep. This is much faster than RemoveAt in a loop.
+            _currentResults = _currentResults.Where((path, index) => !indicesToRemove.Contains(index)).ToList();
 
             if (_filterCts != null && _validFilteredPaths != null)
             {
                 _validFilteredPaths = new ConcurrentBag<PointerPath>(_currentResults);
             }
 
-            // In Virtual Mode, we just update the row count to reflect the change.
+            // Unselect all rows to prevent graphical glitches.
+            dgvResults.ClearSelection();
+
+            // Update the grid's row count and force a full refresh.
             dgvResults.RowCount = _currentResults.Count;
+            dgvResults.Invalidate();
+
+            lblResultCount.Text = $"Results: {_currentResults.Count}";
             UpdateStatus($"Deleted {originalCount - _currentResults.Count} row(s).");
         }
 
