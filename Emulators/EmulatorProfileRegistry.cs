@@ -5,14 +5,13 @@ using System.Collections.Generic;
 
 namespace PointerFinder2.Emulators
 {
-    // A static class that acts as a central registry for all supported emulator profiles.
-    // This is the single point of configuration for adding or modifying emulator support.
+    // A central registry for all supported emulator profiles.
+    // This is the main place to add or modify emulator support.
     public static class EmulatorProfileRegistry
     {
-        // A list containing the profiles for each supported emulator.
         public static readonly List<EmulatorProfile> Profiles = new List<EmulatorProfile>
         {
-            // Profile for the PCSX2 emulator.
+            // Profile for PCSX2.
             new EmulatorProfile
             {
                 Name = "PCSX2",
@@ -21,7 +20,7 @@ namespace PointerFinder2.Emulators
                 ManagerFactory = () => new Pcsx2Manager(),
                 ScannerFactory = () => new Pcsx2ScannerStrategy()
             },
-            // Profile for the DuckStation emulator.
+            // Profile for DuckStation.
             new EmulatorProfile
             {
                 Name = "DuckStation",

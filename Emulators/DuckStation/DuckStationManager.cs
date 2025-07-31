@@ -6,10 +6,9 @@ using System.Linq;
 
 namespace PointerFinder2.Emulators.DuckStation
 {
-    // Manages interaction with the DuckStation emulator, including process attachment, memory reading, and address translation.
+    // Manages interaction with the DuckStation emulator.
     public class DuckStationManager : IEmulatorManager
     {
-        // Singleton instance of the logger for debug output.
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
         // PS1 Memory Layout Constants.
@@ -25,7 +24,7 @@ namespace PointerFinder2.Emulators.DuckStation
         public nint ProcessHandle { get; private set; } = IntPtr.Zero;
         public nint MemoryBasePC { get; private set; } = IntPtr.Zero;
 
-        // Attaches to the DuckStation process by finding its exported "RAM" variable, which points to the emulated RAM.
+        // Attaches by finding DuckStation's exported "RAM" variable, which points to the emulated RAM.
         public bool Attach(Process process)
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
@@ -70,7 +69,7 @@ namespace PointerFinder2.Emulators.DuckStation
             return true;
         }
 
-        // Detaches from the emulator process, releasing the handle.
+        // Detaches from the emulator process.
         public void Detach()
         {
             if (ProcessHandle != IntPtr.Zero)
@@ -89,27 +88,27 @@ namespace PointerFinder2.Emulators.DuckStation
         {
             if (!IsAttached || ps1Address < PS1_RAM_START || ps1Address >= PS1_RAM_END) return null;
 
-            // Translate the PS1 address to a PC address by calculating the offset from the PS1 RAM start.
+            // Translate the PS1 address to a PC address.
             nint addressInPC = IntPtr.Add(this.MemoryBasePC, (int)(ps1Address - PS1_RAM_START));
 
             return Memory.ReadBytes(this.ProcessHandle, addressInPC, count);
         }
 
-        // Reads a 32-bit unsigned integer from a specific PS1 memory address.
+        // Reads a 32-bit unsigned integer from a PS1 memory address.
         public uint? ReadUInt32(uint ps1Address)
         {
             byte[] buffer = ReadMemory(ps1Address, 4);
             return buffer != null ? BitConverter.ToUInt32(buffer, 0) : null;
         }
 
-        // Checks if a given value is a valid pointer target within the PS1's RAM.
+        // Checks if a value is a valid pointer target within the PS1's RAM.
         public bool IsValidPointerTarget(uint value)
         {
             // A valid pointer must be 4-byte aligned and fall within the 2MB RAM range.
             return (value & 3) == 0 && (value >= PS1_RAM_START && value < PS1_RAM_END);
         }
 
-        // Traverses a pointer path to calculate the final memory address. Used for filtering results.
+        // Traverses a pointer path to verify its final address. Used for filtering.
         public uint? RecalculateFinalAddress(PointerPath path, uint expectedFinalAddress)
         {
             bool shouldLog = DebugSettings.LogFilterValidation;
@@ -178,7 +177,7 @@ namespace PointerFinder2.Emulators.DuckStation
             return finalAddress;
         }
 
-        // Formats a full PS1 memory address into a shorter, more user-friendly format (e.g., "1B4A0").
+        // Formats a full PS1 address into a shorter, user-friendly format (e.g., "1B4A0").
         public string FormatDisplayAddress(uint address)
         {
             if (address >= PS1_RAM_START && address < PS1_RAM_END)
@@ -188,11 +187,10 @@ namespace PointerFinder2.Emulators.DuckStation
             return address.ToString("X8");
         }
 
-        // Converts a user-entered address (which might be in short format) into a full PS1 memory address.
+        // Converts a user-entered address (e.g., "1B4A0") into a full PS1 address.
         public uint UnnormalizeAddress(string address)
         {
             uint parsedAddress = uint.Parse(address.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
-            // If the user enters a "short" address (e.g., "1B4A0"), assume it's relative to the start of RAM.
             if (parsedAddress < PS1_RAM_SIZE)
             {
                 return parsedAddress + PS1_RAM_START;
@@ -200,7 +198,7 @@ namespace PointerFinder2.Emulators.DuckStation
             return parsedAddress;
         }
 
-        // Provides a set of default settings tailored for DuckStation.
+        // Provides a set of default settings for DuckStation.
         public AppSettings GetDefaultSettings()
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");

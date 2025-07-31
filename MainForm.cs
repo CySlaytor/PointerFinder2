@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Media;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -29,8 +30,11 @@ namespace PointerFinder2
         // --- Timers ---
         private readonly System.Windows.Forms.Timer _processMonitorTimer; // Checks if the emulator process is still running.
         private readonly System.Windows.Forms.Timer _filterRefreshTimer;  // Periodically refreshes the UI during continuous filtering.
+        private readonly System.Windows.Forms.Timer _scanTimer;           // Updates the elapsed time label during scans.
+        private readonly Stopwatch _scanStopwatch = new Stopwatch();     // Measures the duration of scans.
 
         // --- Data & Threading ---
+        // The _currentResults list serves as the backing data store for the DataGridView in Virtual Mode.
         private List<PointerPath> _currentResults = new List<PointerPath>();
         private ConcurrentBag<PointerPath> _validFilteredPaths; // A thread-safe collection for the background filter task.
         private CancellationTokenSource _scanCts;
@@ -55,19 +59,35 @@ namespace PointerFinder2
             _filterRefreshTimer = new System.Windows.Forms.Timer();
             _filterRefreshTimer.Interval = 1000; // Refresh the grid every second.
             _filterRefreshTimer.Tick += FilterRefreshTimer_Tick;
+
+            // Configure the timer for updating the elapsed time display.
+            _scanTimer = new System.Windows.Forms.Timer();
+            _scanTimer.Interval = 100; // Update 10 times a second.
+            _scanTimer.Tick += ScanTimer_Tick;
         }
 
         #region State Management & Timers
 
+        // Periodically called by the scan timer to update the elapsed time label.
+        private void ScanTimer_Tick(object sender, EventArgs e)
+        {
+            if (_scanStopwatch.IsRunning)
+            {
+                TimeSpan ts = _scanStopwatch.Elapsed;
+                lblElapsedTime.Text = $"Time: {ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100}";
+            }
+        }
+
         // Periodically called by the filter timer to update the DataGridView with the latest valid paths.
-        // This decouples the heavy filtering logic from the UI thread, ensuring responsiveness.
         private void FilterRefreshTimer_Tick(object sender, EventArgs e)
         {
             if (_filterCts != null && !_filterCts.IsCancellationRequested)
             {
-                _currentResults = _validFilteredPaths.ToList();
-                PopulateResultsGrid(_currentResults);
-                UpdateStatus($"Filtering... {_currentResults.Count} paths remain.");
+                // In Virtual Mode, we just need to update the status and tell the grid its row count has changed.
+                UpdateStatus($"Filtering... {_validFilteredPaths.Count} paths remain.");
+                dgvResults.RowCount = _validFilteredPaths.Count;
+                // Invalidate forces the grid to repaint, requesting cell values for the now-visible rows.
+                dgvResults.Invalidate();
             }
         }
 
@@ -126,24 +146,19 @@ namespace PointerFinder2
         // Handles the "Attach/Detach" menu item click.
         private void menuAttach_Click(object sender, EventArgs e)
         {
-            // If already attached, this acts as a detach button.
             if (_currentManager != null && _currentManager.IsAttached)
             {
                 DetachAndReset();
                 return;
             }
 
-            // --- Smart Attach Logic ---
             if (DebugSettings.LogLiveScan) logger.Log("Initiating Smart Attach...");
-            // The key is the Emulator Profile, the value is a list of running process instances for that profile.
             var foundProcessMap = new Dictionary<EmulatorProfile, List<Process>>();
 
-            // Check for running processes for each defined profile.
             foreach (var profile in EmulatorProfileRegistry.Profiles)
             {
                 foreach (var processName in profile.ProcessNames)
                 {
-                    // Get all processes with that name, not just the first one.
                     Process[] processes = Process.GetProcessesByName(processName);
                     if (processes.Length > 0)
                     {
@@ -167,14 +182,13 @@ namespace PointerFinder2
             Process selectedProcess;
             EmulatorProfile selectedProfile;
 
-            // If only one total instance is found, attach to it automatically.
             if (totalInstancesFound == 1)
             {
                 var entry = foundProcessMap.First();
                 selectedProfile = entry.Key;
                 selectedProcess = entry.Value.First();
             }
-            else // If multiple instances are found (of the same or different emulators), prompt the user.
+            else
             {
                 using (var selectionForm = new EmulatorSelectionForm(foundProcessMap))
                 {
@@ -192,14 +206,12 @@ namespace PointerFinder2
 
             if (selectedProcess == null || selectedProfile == null) return;
 
-            // Initialize the manager, scanner, and settings for the selected profile.
             _activeProfile = selectedProfile;
             _currentManager = _activeProfile.ManagerFactory();
             _currentScanner = _activeProfile.ScannerFactory();
             var defaultSettings = _currentManager.GetDefaultSettings();
             _currentSettings = SettingsManager.Load(_activeProfile.Target, defaultSettings);
 
-            // Attempt to attach to the specific process instance and update the UI accordingly.
             if (_currentManager.Attach(selectedProcess))
             {
                 this.Text = $"Pointer Finder 2.0 - [{_activeProfile.Name} Mode]";
@@ -207,7 +219,7 @@ namespace PointerFinder2
                 lblBaseAddress.Text = $"{_activeProfile.Name} Base (PC): {_currentManager.MemoryBasePC:X}";
                 menuAttach.Text = $"Detach from {_activeProfile.Name}";
                 btnScan.Enabled = true;
-                bool hasResults = dgvResults.Rows.Count > 0;
+                bool hasResults = _currentResults.Any();
                 btnFilter.Enabled = hasResults;
                 btnRefineScan.Enabled = hasResults;
             }
@@ -232,7 +244,6 @@ namespace PointerFinder2
                 return;
             }
 
-            // Show the options form to get scan parameters from the user.
             using (var optionsForm = new ScannerOptionsForm(_currentManager, _currentSettings))
             {
                 if (optionsForm.ShowDialog() == DialogResult.OK)
@@ -242,7 +253,6 @@ namespace PointerFinder2
                     _currentSettings = optionsForm.GetCurrentSettings();
                     SettingsManager.Save(_activeProfile.Target, _currentSettings);
 
-                    // Start the scan operation within a try-catch to handle any immediate errors.
                     try
                     {
                         _scanCts = new CancellationTokenSource();
@@ -262,65 +272,70 @@ namespace PointerFinder2
         // Manages the execution of a scan task and handles its completion, cancellation, or failure.
         private async Task RunScan(Task<List<PointerPath>> scanTask)
         {
-            // Reset UI for a new scan.
-            _currentResults.Clear();
-            dgvResults.Rows.Clear();
+            PopulateResultsGrid(new List<PointerPath>());
             treeViewAnalysis.Nodes.Clear();
-            lblResultCount.Visible = false;
             lblProgressPercentage.Text = $"0 / {_lastScanParams.MaxResults}";
             progressBar.Maximum = _lastScanParams.MaxResults;
             progressBar.Value = 0;
 
             SwitchToScanUI(isScanningOrFiltering: true);
+            _scanStopwatch.Restart();
+            _scanTimer.Start();
 
             try
             {
-                // Await the scan task to complete. This will throw OperationCanceledException if cancelled.
-                _currentResults = await scanTask;
-
-                // This block is reached only if the scan completes normally (was not cancelled).
-                PopulateResultsGrid(_currentResults);
+                var results = await scanTask;
+                var elapsed = _scanStopwatch.Elapsed;
+                _scanTimer.Stop();
+                PopulateResultsGrid(results);
 
                 if (scanTask.IsCanceled)
                 {
-                    UpdateStatus($"Scan stopped by user. Found {_currentResults.Count} paths.");
+                    UpdateStatus($"Scan stopped by user. Found {_currentResults.Count} paths {FormatDuration(elapsed)}.");
+                    SoundManager.PlayNotify();
                 }
                 else
                 {
-                    // Scan completed normally.
+                    // For a new scan, always play the general notification sound.
+                    SoundManager.PlayNotify();
+
                     if (!_currentResults.Any())
                     {
-                        UpdateStatus("Scan complete. No paths found.");
-                    }
-                    else if ((_lastScanParams?.AnalyzeStructures ?? true))
-                    {
-                        int structureCount = AnalyzeAndDisplayStructures(_currentResults);
-                        UpdateStatus($"Scan complete. Found {_currentResults.Count} paths and {structureCount} potential structures.");
+                        UpdateStatus($"Scan complete. No paths found {FormatDuration(elapsed)}.");
                     }
                     else
                     {
-                        UpdateStatus($"Scan complete. Found {_currentResults.Count} paths.");
+                        int structureCount = 0;
+                        if ((_lastScanParams?.AnalyzeStructures ?? true))
+                        {
+                            structureCount = AnalyzeAndDisplayStructures(_currentResults);
+                            UpdateStatus($"Scan complete. Found {_currentResults.Count} paths and {structureCount} potential structures {FormatDuration(elapsed)}.");
+                        }
+                        else
+                        {
+                            UpdateStatus($"Scan complete. Found {_currentResults.Count} paths {FormatDuration(elapsed)}.");
+                        }
                     }
-                    SystemSounds.Asterisk.Play(); // Play a sound on successful completion.
                 }
             }
             catch (OperationCanceledException)
             {
-                // The awaited task was cancelled, but the scanner strategy returns the partial results it found.
-                // We can get these results from the task object itself.
-                _currentResults = scanTask.Result;
-                PopulateResultsGrid(_currentResults);
-                UpdateStatus($"Scan stopped by user. Found {_currentResults.Count} paths.");
+                var results = scanTask.Result;
+                var elapsed = _scanStopwatch.Elapsed;
+                _scanTimer.Stop();
+                PopulateResultsGrid(results);
+                UpdateStatus($"Scan stopped by user. Found {_currentResults.Count} paths {FormatDuration(elapsed)}.");
+                SoundManager.PlayNotify();
             }
             catch (Exception ex)
             {
-                // This block is for genuine, unexpected errors.
                 MessageBox.Show("An error occurred during scan: " + ex.Message, "Scan Error", MessageBoxButtons.OK, MessageBoxIcon.Hand);
                 UpdateStatus("Scan failed with an error.");
             }
             finally
             {
-                // Always clean up and reset the UI, regardless of the outcome.
+                _scanStopwatch.Stop();
+                _scanTimer.Stop();
                 _scanCts?.Dispose();
                 _scanCts = null;
                 SwitchToScanUI(isScanningOrFiltering: false);
@@ -334,7 +349,7 @@ namespace PointerFinder2
         private async void btnRefineScan_Click(object sender, EventArgs e)
         {
             if (_scanCts != null || _activeProfile == null) return;
-            if (!_currentManager.IsAttached || dgvResults.Rows.Count == 0)
+            if (!_currentManager.IsAttached || !_currentResults.Any())
             {
                 MessageBox.Show("Please perform an initial scan and have results before refining.", "Initial Scan Required", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                 return;
@@ -350,15 +365,10 @@ namespace PointerFinder2
                     _currentSettings = optionsForm.GetCurrentSettings();
                     SettingsManager.Save(_activeProfile.Target, _currentSettings);
 
-                    // Get the set of existing paths to compare against.
                     var existingPaths = new HashSet<string>(
-                        dgvResults.Rows.Cast<DataGridViewRow>()
-                        .Select(r => r.Tag as PointerPath)
-                        .Where(p => p != null)
-                        .Select(p => $"{p.BaseAddress:X8}:{p.GetOffsetsString()}")
+                        _currentResults.Select(p => $"{p.BaseAddress:X8}:{p.GetOffsetsString()}")
                     );
 
-                    // Start the refine operation.
                     try
                     {
                         _scanCts = new CancellationTokenSource();
@@ -385,45 +395,54 @@ namespace PointerFinder2
             progressBar.Value = 0;
 
             SwitchToScanUI(true, "Refining results...");
+            _scanStopwatch.Restart();
+            _scanTimer.Start();
             bool shouldLog = DebugSettings.LogRefineScan;
 
             try
             {
                 if (shouldLog) logger.Log($"--- STARTING REFINE SCAN: {existingPaths.Count} initial paths to verify. ---");
-                var newResults = await scanTask; // Await the new scan.
+                var newResults = await scanTask;
+                var elapsed = _scanStopwatch.Elapsed;
+                _scanTimer.Stop();
                 if (shouldLog) logger.Log($"New scan completed, found {newResults.Count} potential paths. Performing intersection...");
 
-                // Find the common paths between the old and new results.
-                _currentResults = newResults.Where(p => existingPaths.Contains($"{p.BaseAddress:X8}:{p.GetOffsetsString()}")).ToList();
-                PopulateResultsGrid(_currentResults);
+                var finalResults = newResults.Where(p => existingPaths.Contains($"{p.BaseAddress:X8}:{p.GetOffsetsString()}")).ToList();
+                PopulateResultsGrid(finalResults);
 
                 if (scanTask.IsCanceled)
                 {
-                    UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths.");
+                    UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
+                    SoundManager.PlayNotify();
                 }
                 else
                 {
+                    // For a refine scan, play success or fail based on results.
                     if (_currentResults.Any())
                     {
-                        UpdateStatus($"Refine scan complete. Found {_currentResults.Count} matching paths.");
+                        UpdateStatus($"Refine scan complete. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
                         if (_lastScanParams?.AnalyzeStructures ?? true)
                         {
                             AnalyzeAndDisplayStructures(_currentResults);
                         }
+                        SoundManager.PlaySuccess();
                     }
                     else
                     {
-                        UpdateStatus("Refine scan complete. No matching paths found.");
+                        UpdateStatus($"Refine scan complete. No matching paths found {FormatDuration(elapsed)}.");
+                        SoundManager.PlayFail();
                     }
-                    SystemSounds.Asterisk.Play();
                 }
             }
             catch (OperationCanceledException)
             {
-                var newResults = scanTask.Result; // Get partial results on cancellation.
-                _currentResults = newResults.Where(p => existingPaths.Contains($"{p.BaseAddress:X8}:{p.GetOffsetsString()}")).ToList();
-                PopulateResultsGrid(_currentResults);
-                UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths.");
+                var newResults = scanTask.Result;
+                var elapsed = _scanStopwatch.Elapsed;
+                _scanTimer.Stop();
+                var finalResults = newResults.Where(p => existingPaths.Contains($"{p.BaseAddress:X8}:{p.GetOffsetsString()}")).ToList();
+                PopulateResultsGrid(finalResults);
+                UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
+                SoundManager.PlayNotify();
             }
             catch (Exception ex)
             {
@@ -433,6 +452,8 @@ namespace PointerFinder2
             finally
             {
                 _isRefining = false;
+                _scanStopwatch.Stop();
+                _scanTimer.Stop();
                 _scanCts?.Dispose();
                 _scanCts = null;
                 SwitchToScanUI(false);
@@ -446,6 +467,40 @@ namespace PointerFinder2
 
         #region UI Updates and Interaction
 
+        // Event handler for Virtual Mode. It provides cell data to the DataGridView on demand.
+        private void dgvResults_CellValueNeeded(object sender, DataGridViewCellValueEventArgs e)
+        {
+            // *** FIX: Add guard clause to prevent crash on detach ***
+            if (_currentManager == null || _currentResults == null || e.RowIndex < 0 || e.RowIndex >= _currentResults.Count) return;
+
+            PointerPath path = _currentResults[e.RowIndex];
+            string colName = dgvResults.Columns[e.ColumnIndex].Name;
+
+            switch (colName)
+            {
+                case "colBase":
+                    e.Value = _currentManager.FormatDisplayAddress(path.BaseAddress);
+                    break;
+
+                case "colFinal":
+                    e.Value = _currentManager.FormatDisplayAddress(path.FinalAddress);
+                    break;
+
+                default: // Handle Offset columns dynamically
+                    int offsetIndex = e.ColumnIndex - 1;
+                    if (offsetIndex >= 0 && offsetIndex < path.Offsets.Count)
+                    {
+                        int offset = path.Offsets[offsetIndex];
+                        e.Value = (offset < 0) ? $"-{Math.Abs(offset):X}" : $"+{offset:X}";
+                    }
+                    else
+                    {
+                        e.Value = string.Empty;
+                    }
+                    break;
+            }
+        }
+
         // Switches the UI between the idle state (buttons visible) and the active state (progress bar visible).
         private void SwitchToScanUI(bool isScanningOrFiltering, string customMessage = null)
         {
@@ -453,12 +508,13 @@ namespace PointerFinder2
             bool isFiltering = _filterCts != null;
 
             tableLayoutPanel1.Visible = !isScanningOrFiltering;
-            progressBar.Visible = isScanning; // Progress bar is only shown for scanning, not filtering.
+            progressBar.Visible = isScanning;
             btnStopScan.Visible = isScanningOrFiltering;
             btnStopScan.Text = isFiltering ? "Stop Filtering" : "Stop Scan";
 
             lblProgressPercentage.Visible = isScanning;
-            lblResultCount.Visible = !isScanningOrFiltering && dgvResults.Rows.Count > 0;
+            lblResultCount.Visible = !isScanningOrFiltering && _currentResults.Any();
+            lblElapsedTime.Visible = isScanningOrFiltering;
 
             if (isScanningOrFiltering)
             {
@@ -477,7 +533,7 @@ namespace PointerFinder2
                 if (_currentManager != null && _currentManager.IsAttached)
                 {
                     btnScan.Enabled = true;
-                    bool hasResults = dgvResults.Rows.Count > 0;
+                    bool hasResults = _currentResults.Any();
                     btnFilter.Enabled = hasResults;
                     btnRefineScan.Enabled = hasResults;
                 }
@@ -529,56 +585,52 @@ namespace PointerFinder2
             }
         }
 
-        // Clears and repopulates the results DataGridView.
+        // Overhauled method to populate the grid using Virtual Mode. This is now an instantaneous operation.
         private void PopulateResultsGrid(List<PointerPath> results)
         {
+            _currentResults = results;
+
             dgvResults.SuspendLayout();
-            dgvResults.Rows.Clear();
+            dgvResults.CellValueNeeded -= dgvResults_CellValueNeeded;
+
             dgvResults.Columns.Clear();
+
             lblResultCount.Text = $"Results: {results.Count}";
             bool hasResults = results.Any();
             lblResultCount.Visible = hasResults;
 
             if (!hasResults)
             {
-                dgvResults.ResumeLayout();
-                if (_currentManager != null && _currentManager.IsAttached)
-                {
-                    btnFilter.Enabled = false;
-                    btnRefineScan.Enabled = false;
-                }
-                return;
+                dgvResults.VirtualMode = false;
+                dgvResults.RowCount = 0;
+                btnFilter.Enabled = false;
+                btnRefineScan.Enabled = false;
             }
-            btnFilter.Enabled = true;
-            btnRefineScan.Enabled = true;
-            int maxOffsets = results.Max(p => p.Offsets.Count);
-            if (maxOffsets == 0 && results.Any()) maxOffsets = 1;
-            dgvResults.Columns.Add("colBase", "Base Address");
-            dgvResults.Columns["colBase"].Width = 120;
-            for (int i = 0; i < maxOffsets; i++)
+            else
             {
-                var col = new DataGridViewTextBoxColumn { Name = $"colOffset{i + 1}", HeaderText = $"Offset {i + 1}", Width = 80 };
-                dgvResults.Columns.Add(col);
-            }
-            dgvResults.Columns.Add("colFinal", "Final Address");
-            dgvResults.Columns["colFinal"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            var rows = new List<DataGridViewRow>();
-            foreach (var result in results)
-            {
-                var row = new DataGridViewRow();
-                row.CreateCells(dgvResults);
-                row.Cells[0].Value = _currentManager.FormatDisplayAddress(result.BaseAddress);
-                for (int i = 0; i < result.Offsets.Count; i++)
+                btnFilter.Enabled = true;
+                btnRefineScan.Enabled = true;
+
+                int maxOffsets = results.Max(p => p.Offsets.Count);
+                if (maxOffsets == 0) maxOffsets = 1;
+
+                dgvResults.Columns.Add("colBase", "Base Address");
+                dgvResults.Columns["colBase"].Width = 120;
+                for (int i = 0; i < maxOffsets; i++)
                 {
-                    int offset = result.Offsets[i];
-                    row.Cells[i + 1].Value = (offset < 0) ? $"-{Math.Abs(offset):X}" : $"+{offset:X}";
+                    var col = new DataGridViewTextBoxColumn { Name = $"colOffset{i + 1}", HeaderText = $"Offset {i + 1}", Width = 80 };
+                    dgvResults.Columns.Add(col);
                 }
-                row.Cells[dgvResults.Columns.Count - 1].Value = _currentManager.FormatDisplayAddress(result.FinalAddress);
-                row.Tag = result;
-                rows.Add(row);
+                dgvResults.Columns.Add("colFinal", "Final Address");
+                dgvResults.Columns["colFinal"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+
+                dgvResults.VirtualMode = true;
+                dgvResults.RowCount = results.Count;
+                dgvResults.CellValueNeeded += dgvResults_CellValueNeeded;
             }
-            dgvResults.Rows.AddRange(rows.ToArray());
+
             dgvResults.ResumeLayout();
+            dgvResults.Invalidate();
         }
 
         // Analyzes the results to find potential data structures (arrays) and displays them in the Analysis tab.
@@ -586,20 +638,26 @@ namespace PointerFinder2
         {
             treeViewAnalysis.Nodes.Clear();
             treeViewAnalysis.BeginUpdate();
-            // Group paths by their offset signature. A group with many members might be an array of objects.
-            var structureGroups = from p in results group p by p.GetOffsetsString() into g where g.Count() > 1 orderby g.Count() descending select g;
+
+            var structureGroups = from p in results
+                                  group p by p.GetOffsetsString() into g
+                                  where g.Count() > 1
+                                  orderby g.Count() descending
+                                  select g;
+
             int structureCount = structureGroups.Count();
             foreach (var group in structureGroups)
             {
                 var members = group.OrderBy(p => p.BaseAddress).ToList();
                 if (members.Count < 2) continue;
-                // Calculate the distance (stride) between consecutive members to find a common delta.
+
                 var deltas = new List<long>();
                 for (int i = 1; i < members.Count; i++)
                 {
                     deltas.Add((long)members[i].BaseAddress - members[i - 1].BaseAddress);
                 }
                 if (!deltas.Any()) continue;
+
                 var commonDelta = deltas.GroupBy(d => d).OrderByDescending(g => g.Count()).First().Key;
                 var rootNode = new TreeNode($"Structure Found ({group.Count()} members, Offsets: {group.Key})");
                 rootNode.Nodes.Add($"Common Delta (Stride): 0x{commonDelta:X}");
@@ -615,6 +673,29 @@ namespace PointerFinder2
             return structureCount;
         }
 
+        // Helper method to format a TimeSpan into a user-friendly string.
+        private string FormatDuration(TimeSpan duration)
+        {
+            var sb = new StringBuilder("in ");
+            if (duration.TotalMinutes >= 1)
+            {
+                sb.Append($"{(int)duration.TotalMinutes} minute{((int)duration.TotalMinutes != 1 ? "s" : "")}");
+                if (duration.Seconds > 0)
+                {
+                    sb.Append($" and {duration.Seconds} second{(duration.Seconds != 1 ? "s" : "")}");
+                }
+            }
+            else if (duration.TotalSeconds >= 1)
+            {
+                sb.Append($"{duration.TotalSeconds:F1} seconds");
+            }
+            else
+            {
+                sb.Append($"{duration.TotalMilliseconds:F0} milliseconds");
+            }
+            return sb.ToString();
+        }
+
         #endregion
 
         #region Filtering Logic
@@ -628,15 +709,16 @@ namespace PointerFinder2
 
             SwitchToScanUI(isScanningOrFiltering: true, customMessage: "Starting filter...");
             _filterRefreshTimer.Start();
+            _scanStopwatch.Restart();
+            _scanTimer.Start();
 
             try
             {
-                // Run the filtering logic on a background thread.
                 await Task.Run(() => FilterPathsContinuously(_filterCts.Token), _filterCts.Token);
             }
             catch (TaskCanceledException)
             {
-                // Expected when the user clicks "Stop Filtering".
+                // This is expected when the user clicks "Stop Filtering".
             }
             catch (Exception ex)
             {
@@ -644,11 +726,13 @@ namespace PointerFinder2
             }
             finally
             {
-                // Always clean up and reset the UI.
+                var elapsed = _scanStopwatch.Elapsed;
+                _scanStopwatch.Stop();
+                _scanTimer.Stop();
                 _filterRefreshTimer.Stop();
-                _currentResults = _validFilteredPaths.ToList();
-                PopulateResultsGrid(_currentResults); // Perform one final update.
-                UpdateStatus($"Filtering stopped. {_currentResults.Count} paths remain.");
+
+                PopulateResultsGrid(_validFilteredPaths.ToList());
+                UpdateStatus($"Filtering stopped {FormatDuration(elapsed)}. {_currentResults.Count} paths remain.");
 
                 _filterCts?.Dispose();
                 _filterCts = null;
@@ -657,19 +741,14 @@ namespace PointerFinder2
         }
 
         // The background task that continuously validates pointer paths.
-        // It operates on a separate thread-safe list to avoid interfering with the UI.
         private void FilterPathsContinuously(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
             {
                 var pathsToCheck = _validFilteredPaths.ToList();
-                if (pathsToCheck.Count == 0)
-                {
-                    break; // No more paths left to filter.
-                }
+                if (pathsToCheck.Count == 0) break;
 
                 var stillValidPaths = new ConcurrentBag<PointerPath>();
-                // Check all current paths in parallel for maximum speed.
                 Parallel.ForEach(pathsToCheck, path =>
                 {
                     if (token.IsCancellationRequested) return;
@@ -681,8 +760,8 @@ namespace PointerFinder2
                 });
 
                 _validFilteredPaths = stillValidPaths;
+                _currentResults = stillValidPaths.ToList();
 
-                // A small delay to prevent this background thread from hogging 100% of a CPU core.
                 Thread.Sleep(250);
             }
         }
@@ -708,18 +787,17 @@ namespace PointerFinder2
         private void btnSearch_Click(object sender, EventArgs e)
         {
             string searchText = txtSearchBaseAddress.Text.Trim();
-            if (string.IsNullOrEmpty(searchText))
+            if (string.IsNullOrEmpty(searchText)) return;
+
+            for (int i = 0; i < _currentResults.Count; i++)
             {
-                return;
-            }
-            foreach (DataGridViewRow row in dgvResults.Rows)
-            {
-                if (row.IsNewRow) continue;
-                if (row.Cells[0].Value != null && row.Cells[0].Value.ToString().Equals(searchText, StringComparison.OrdinalIgnoreCase))
+                string baseAddr = _currentManager.FormatDisplayAddress(_currentResults[i].BaseAddress);
+                if (baseAddr.Equals(searchText, StringComparison.OrdinalIgnoreCase))
                 {
                     dgvResults.ClearSelection();
-                    row.Selected = true;
-                    dgvResults.FirstDisplayedScrollingRowIndex = row.Index;
+                    // In Virtual Mode, setting the CurrentCell is the most reliable way to navigate.
+                    dgvResults.CurrentCell = dgvResults.Rows[i].Cells[0];
+                    dgvResults.Rows[i].Selected = true;
                     UpdateStatus($"Found and selected base address '{searchText}'.");
                     return;
                 }
@@ -744,7 +822,7 @@ namespace PointerFinder2
             if (e.KeyCode == Keys.Enter)
             {
                 btnSearch.PerformClick();
-                e.SuppressKeyPress = true; // Prevents the 'ding' sound.
+                e.SuppressKeyPress = true;
             }
         }
 
@@ -784,8 +862,8 @@ namespace PointerFinder2
         {
             if (dgvResults.SelectedRows.Count == 0 || _currentManager == null) return;
             var addresses = dgvResults.SelectedRows.Cast<DataGridViewRow>()
-                .Select(r => r.Tag as PointerPath).Where(p => p != null)
-                .Select(p => $"0x{_currentManager.FormatDisplayAddress(p.BaseAddress)}");
+                .Select(r => _currentResults[r.Index]) // Get path from the backing list using the row index.
+                .Select(p => _currentManager.FormatDisplayAddress(p.BaseAddress));
             if (addresses.Any())
             {
                 Clipboard.SetText(string.Join(Environment.NewLine, addresses));
@@ -802,53 +880,58 @@ namespace PointerFinder2
                     UpdateStatus("Cannot copy multiple rows in RetroAchievements format.");
                 return;
             }
-            if (dgvResults.SelectedRows[0].Tag is PointerPath path && _currentManager != null)
+            PointerPath path = _currentResults[dgvResults.SelectedRows[0].Index];
+            if (path != null && _currentManager != null)
             {
                 Clipboard.SetText(path.ToRetroAchievementsString(_currentManager));
                 UpdateStatus("Copied path in RetroAchievements format.");
             }
         }
 
-        // Deletes the selected rows from the results. This action is immediate and responsive.
+        // Deletes the selected rows from the results.
         private void deleteSelectedToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (dgvResults.SelectedRows.Count == 0) return;
 
-            var pathsToRemove = new HashSet<PointerPath>(dgvResults.SelectedRows.Cast<DataGridViewRow>()
-                .Select(r => r.Tag as PointerPath).Where(p => p != null));
+            var selectedIndices = dgvResults.SelectedRows.Cast<DataGridViewRow>()
+                .Select(r => r.Index)
+                .OrderByDescending(i => i)
+                .ToList();
 
-            // Remove from the main backing list first.
             int originalCount = _currentResults.Count;
-            _currentResults.RemoveAll(p => pathsToRemove.Contains(p));
 
-            // If the filter is currently running, we must also update its source list.
+            foreach (int index in selectedIndices)
+            {
+                if (index >= 0 && index < _currentResults.Count)
+                {
+                    _currentResults.RemoveAt(index);
+                }
+            }
+
             if (_filterCts != null && _validFilteredPaths != null)
             {
                 _validFilteredPaths = new ConcurrentBag<PointerPath>(_currentResults);
             }
 
-            // Now, refresh the UI with the modified list.
-            PopulateResultsGrid(_currentResults);
+            // In Virtual Mode, we just update the row count to reflect the change.
+            dgvResults.RowCount = _currentResults.Count;
             UpdateStatus($"Deleted {originalCount - _currentResults.Count} row(s).");
         }
 
-        // Exits the application.
         private void menuExit_Click(object sender, EventArgs e)
         {
             Application.Exit();
         }
 
-        // Shows the debug console window.
         private void debugConsoleToolStripMenuItem_Click(object sender, EventArgs e)
         {
             DebugLogForm.Instance.Show();
             DebugLogForm.Instance.BringToFront();
         }
 
-        // Shows the debug options window.
         private void debugOptionsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            new DebugOptionsForm().ShowDialog(this);
+            new SettingsForm().ShowDialog(this);
         }
 
         #endregion

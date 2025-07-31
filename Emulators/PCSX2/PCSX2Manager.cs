@@ -6,10 +6,9 @@ using System.Linq;
 
 namespace PointerFinder2.Emulators.PCSX2
 {
-    // Manages interaction with the PCSX2 emulator, including process attachment, memory reading, and address translation.
+    // Manages interaction with the PCSX2 emulator.
     public class Pcsx2Manager : IEmulatorManager
     {
-        // Singleton instance of the logger for debug output.
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
         // PS2 Memory Layout Constants.
@@ -27,7 +26,7 @@ namespace PointerFinder2.Emulators.PCSX2
         public nint MemoryBasePC { get; private set; } = IntPtr.Zero;
         private nint Ps2MemoryBaseInPC { get; set; } = IntPtr.Zero;
 
-        // Attaches to the PCSX2 process by finding its exported "EEMem" variable, which points to the emulated RAM.
+        // Attaches by finding PCSX2's exported "EEMem" variable, which points to the emulated RAM.
         public bool Attach(Process process)
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
@@ -49,7 +48,7 @@ namespace PointerFinder2.Emulators.PCSX2
             }
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
-            // PCSX2 exports a pointer to its emulated EE RAM, which we can find by name.
+            // PCSX2 exports a pointer to its emulated EE RAM.
             nint eeMemBasePC = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "EEMem");
             if (eeMemBasePC == IntPtr.Zero)
             {
@@ -73,7 +72,7 @@ namespace PointerFinder2.Emulators.PCSX2
             return true;
         }
 
-        // Detaches from the emulator process, releasing the handle.
+        // Detaches from the emulator process.
         public void Detach()
         {
             if (ProcessHandle != IntPtr.Zero)
@@ -96,7 +95,7 @@ namespace PointerFinder2.Emulators.PCSX2
             return Memory.ReadBytes(ProcessHandle, address, count);
         }
 
-        // Reads a 32-bit unsigned integer from a specific PS2 memory address.
+        // Reads a 32-bit unsigned integer from a PS2 memory address.
         public uint? ReadUInt32(uint ps2Address)
         {
             byte[] buffer = ReadMemory(ps2Address, 4);
@@ -107,17 +106,16 @@ namespace PointerFinder2.Emulators.PCSX2
             return BitConverter.ToUInt32(buffer, 0);
         }
 
-        // Checks if a given value is a valid pointer target within the PS2's main memory regions.
+        // Checks if a value is a valid pointer target within the PS2's main memory regions.
         public bool IsValidPointerTarget(uint value)
         {
-            // A valid pointer must be 4-byte aligned.
-            if ((value & 3) != 0) return false;
+            if ((value & 3) != 0) return false; // Must be 4-byte aligned.
             bool isGameCode = value >= PS2_GAME_CODE_START && value < PS2_GAME_CODE_END;
             bool isEeMem = value >= PS2_EEMEM_START && value < PS2_EEMEM_END;
             return isGameCode || isEeMem;
         }
 
-        // Traverses a pointer path to calculate the final memory address. Used for filtering results.
+        // Traverses a pointer path to verify its final address. Used for filtering.
         public uint? RecalculateFinalAddress(PointerPath path, uint expectedFinalAddress)
         {
             bool shouldLog = DebugSettings.LogFilterValidation;
@@ -207,10 +205,9 @@ namespace PointerFinder2.Emulators.PCSX2
             return finalAddress;
         }
 
-        // Formats a full PS2 memory address into a shorter, more user-friendly format (e.g., relative to EE RAM).
+        // Formats a full PS2 address into a shorter format relative to EE RAM.
         public string FormatDisplayAddress(uint address)
         {
-            // For PCSX2, we often display addresses relative to the start of user RAM (0x20000000).
             if (address >= 0x20000000 && address < 0x22000000)
             {
                 return (address - 0x20000000).ToString("X");
@@ -218,11 +215,10 @@ namespace PointerFinder2.Emulators.PCSX2
             return address.ToString("X8");
         }
 
-        // Converts a user-entered address (which might be in short format) into a full PS2 memory address.
+        // Converts a user-entered address into a full PS2 memory address.
         public uint UnnormalizeAddress(string address)
         {
             uint parsedAddress = uint.Parse(address.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
-            // If the user enters a "short" address (e.g., "D0FBD0"), assume it's in the main user RAM area.
             if (parsedAddress < 0x2000000)
             {
                 return parsedAddress + 0x20000000;
@@ -230,7 +226,7 @@ namespace PointerFinder2.Emulators.PCSX2
             return parsedAddress;
         }
 
-        // Provides a set of default settings tailored for PCSX2.
+        // Provides a set of default settings for PCSX2.
         public AppSettings GetDefaultSettings()
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");

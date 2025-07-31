@@ -1,15 +1,12 @@
 ﻿using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 
 namespace PointerFinder2.Core
 {
-    // A data class to hold the application settings for a specific emulator profile.
+    // Holds the saved settings for a specific emulator profile.
     public class AppSettings
     {
         public string LastTargetAddress { get; set; } = "0";
@@ -24,27 +21,36 @@ namespace PointerFinder2.Core
         public bool Use16ByteAlignment { get; set; }
     }
 
-    // A static class responsible for loading from and saving settings to the settings.ini file.
+    // Handles loading and saving all settings to the settings.ini file.
     public static class SettingsManager
     {
         private static readonly string _settingsFile = Path.Combine(Application.StartupPath, "settings.ini");
 
-        // A dedicated method to save only the global debug settings.
-        // This is called from the DebugOptionsForm to avoid rewriting the entire file.
+        // Saves only the global app settings (like sound preferences).
+        public static void SaveGlobalSettingsOnly()
+        {
+            var logger = DebugLogForm.Instance;
+            if (DebugSettings.LogLiveScan) logger.Log("Saving global settings only.");
+            var ini = new IniFile(_settingsFile);
+
+            ini.Write("UseWindowsDefaultSound", GlobalSettings.UseWindowsDefaultSound.ToString(), "Global");
+            if (DebugSettings.LogLiveScan) logger.Log("Global settings saved successfully.");
+        }
+
+        // Saves only the debug logging settings.
         public static void SaveDebugSettingsOnly()
         {
             var logger = DebugLogForm.Instance;
             if (DebugSettings.LogLiveScan) logger.Log("Saving debug settings only.");
             var ini = new IniFile(_settingsFile);
 
-            // Debug settings are global, not per-profile.
             ini.Write("LogLiveScan", DebugSettings.LogLiveScan.ToString(), "Debug");
             ini.Write("LogFilterValidation", DebugSettings.LogFilterValidation.ToString(), "Debug");
             ini.Write("LogRefineScan", DebugSettings.LogRefineScan.ToString(), "Debug");
             if (DebugSettings.LogLiveScan) logger.Log("Debug settings saved successfully.");
         }
 
-        // Saves the application settings for a specific emulator target, as well as global debug settings.
+        // Saves settings for a specific emulator, plus all global settings.
         public static void Save(EmulatorTarget target, AppSettings settings)
         {
             var logger = DebugLogForm.Instance;
@@ -52,7 +58,6 @@ namespace PointerFinder2.Core
             var ini = new IniFile(_settingsFile);
             string section = $"Scanner_{target}";
 
-            // Write the settings for the specified emulator profile.
             if (settings != null)
             {
                 ini.Write("LastTargetAddress", settings.LastTargetAddress, section);
@@ -67,14 +72,13 @@ namespace PointerFinder2.Core
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
             }
 
-            // Also save the global debug settings every time.
+            SaveGlobalSettingsOnly();
             SaveDebugSettingsOnly();
             if (DebugSettings.LogLiveScan) logger.Log("Settings saved successfully.");
         }
 
 
-        // Loads the application settings for a specific emulator target from the INI file.
-        // It also loads the global debug settings.
+        // Loads settings for a specific emulator and all global settings from the INI file.
         public static AppSettings Load(EmulatorTarget target, AppSettings defaultSettings)
         {
             var logger = DebugLogForm.Instance;
@@ -89,7 +93,7 @@ namespace PointerFinder2.Core
                 return defaultSettings;
             }
 
-            // --- Load scanner settings with robust TryParse to prevent crashes from corrupted INI file ---
+            // Load scanner settings with robust TryParse to prevent crashes from a corrupted INI.
             settings.LastTargetAddress = ini.Read("LastTargetAddress", section, defaultSettings.LastTargetAddress);
 
             if (!int.TryParse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()), out int maxOffset))
@@ -124,7 +128,12 @@ namespace PointerFinder2.Core
             settings.MaxNegativeOffset = maxNegativeOffset;
 
 
-            // --- Load global debug settings with robust TryParse ---
+            // Load global app settings.
+            if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound))
+                useDefaultSound = false;
+            GlobalSettings.UseWindowsDefaultSound = useDefaultSound;
+
+            // Load global debug settings.
             if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan))
                 logLiveScan = false;
             DebugSettings.LogLiveScan = logLiveScan;

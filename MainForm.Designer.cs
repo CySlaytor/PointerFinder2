@@ -25,6 +25,7 @@
             debugConsoleToolStripMenuItem = new ToolStripMenuItem();
             debugOptionsToolStripMenuItem = new ToolStripMenuItem();
             panelBottom = new Panel();
+            lblElapsedTime = new Label();
             lblProgressPercentage = new Label();
             btnStopScan = new Button();
             progressBar = new ProgressBar();
@@ -112,11 +113,12 @@
             // 
             debugOptionsToolStripMenuItem.Name = "debugOptionsToolStripMenuItem";
             debugOptionsToolStripMenuItem.Size = new Size(180, 22);
-            debugOptionsToolStripMenuItem.Text = "Debug Options...";
+            debugOptionsToolStripMenuItem.Text = "Settings...";
             debugOptionsToolStripMenuItem.Click += debugOptionsToolStripMenuItem_Click;
             // 
             // panelBottom
             // 
+            panelBottom.Controls.Add(lblElapsedTime);
             panelBottom.Controls.Add(lblProgressPercentage);
             panelBottom.Controls.Add(btnStopScan);
             panelBottom.Controls.Add(progressBar);
@@ -127,13 +129,24 @@
             panelBottom.Size = new Size(966, 47);
             panelBottom.TabIndex = 2;
             // 
+            // lblElapsedTime
+            // 
+            lblElapsedTime.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            lblElapsedTime.AutoSize = true;
+            lblElapsedTime.Location = new Point(9, 27);
+            lblElapsedTime.Name = "lblElapsedTime";
+            lblElapsedTime.Size = new Size(71, 15);
+            lblElapsedTime.TabIndex = 5;
+            lblElapsedTime.Text = "Time: 00:00.0";
+            lblElapsedTime.TextAlign = ContentAlignment.MiddleLeft;
+            lblElapsedTime.Visible = false;
+            // 
             // lblProgressPercentage
             // 
-            lblProgressPercentage.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            lblProgressPercentage.BackColor = SystemColors.Control;
-            lblProgressPercentage.Location = new Point(3, 26);
+            lblProgressPercentage.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            lblProgressPercentage.Location = new Point(748, 27);
             lblProgressPercentage.Name = "lblProgressPercentage";
-            lblProgressPercentage.Size = new Size(885, 18);
+            lblProgressPercentage.Size = new Size(140, 18);
             lblProgressPercentage.TabIndex = 4;
             lblProgressPercentage.Text = "0 / 0";
             lblProgressPercentage.TextAlign = ContentAlignment.MiddleRight;
@@ -419,6 +432,7 @@
             menuStrip1.ResumeLayout(false);
             menuStrip1.PerformLayout();
             panelBottom.ResumeLayout(false);
+            panelBottom.PerformLayout();
             tableLayoutPanel1.ResumeLayout(false);
             tabControlMain.ResumeLayout(false);
             tabResults.ResumeLayout(false);
@@ -469,5 +483,6 @@
         private System.Windows.Forms.Button btnSearch;
         private System.Windows.Forms.TextBox txtSearchBaseAddress;
         private System.Windows.Forms.Label labelSearch;
+        private Label lblElapsedTime;
     }
 }

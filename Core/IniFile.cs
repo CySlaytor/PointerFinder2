@@ -4,21 +4,19 @@ using System.Text;
 
 namespace PointerFinder2.Core
 {
-    // A simple wrapper class for reading from and writing to INI configuration files.
-    // It uses the Windows Kernel32 API for robust INI file handling.
+    // A simple wrapper for reading from and writing to INI configuration files using the Windows API.
     public class IniFile
     {
         private readonly string _path;
 
-        // P/Invoke declaration for writing to a private profile (INI file).
+        // P/Invoke for writing to an INI file.
         [DllImport("kernel32", CharSet = CharSet.Unicode)]
         private static extern long WritePrivateProfileString(string section, string key, string value, string filePath);
 
-        // P/Invoke declaration for reading from a private profile (INI file).
+        // P/Invoke for reading from an INI file.
         [DllImport("kernel32", CharSet = CharSet.Unicode)]
         private static extern int GetPrivateProfileString(string section, string key, string Default, StringBuilder retVal, int size, string filePath);
 
-        // Constructor that takes the path to the INI file.
         public IniFile(string iniPath)
         {
             _path = new FileInfo(iniPath).FullName;

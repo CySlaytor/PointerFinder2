@@ -1,7 +1,7 @@
 ﻿namespace PointerFinder2.DataModels
 {
-    // A static class to hold global debug settings.
-    // This allows any part of the application to check if a specific logging feature is enabled.
+    // A static class to hold global debug settings, allowing any part of the app
+    // to check if a specific logging feature is enabled.
     public static class DebugSettings
     {
         // Toggles detailed logging for the main pointer scanning process.
