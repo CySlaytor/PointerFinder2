@@ -1,29 +1,38 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>disable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<Nullable>disable</Nullable>
+		<UseWindowsForms>true</UseWindowsForms>
+		<ImplicitUsings>enable</ImplicitUsings>
 
-  <ItemGroup>
-    <None Remove="Sounds\fail.wav" />
-    <None Remove="Sounds\notify.wav" />
-    <None Remove="Sounds\success.wav" />
-  </ItemGroup>
+		<!-- Version and Metadata Information -->
+		<AssemblyVersion>2.2.1.0</AssemblyVersion>
+		<FileVersion>2.2.1.0</FileVersion>
+		<Company>CySlaytor</Company>
+		<Product>Pointer Finder 2</Product>
+		<Description>A powerful and versatile pointer scanning tool for game reverse engineering and achievement development.</Description>
+		<Copyright>Copyright © CySlaytor 2024</Copyright>
 
-  <ItemGroup>
-    <EmbeddedResource Include="Sounds\fail.wav">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Sounds\notify.wav">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Sounds\success.wav">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
-  </ItemGroup>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="Sounds\fail.wav" />
+		<None Remove="Sounds\notify.wav" />
+		<None Remove="Sounds\success.wav" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Sounds\fail.wav">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Sounds\notify.wav">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Sounds\success.wav">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</EmbeddedResource>
+	</ItemGroup>
 
 </Project>
