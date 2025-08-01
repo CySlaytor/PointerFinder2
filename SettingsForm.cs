@@ -5,11 +5,17 @@ using System.Windows.Forms;
 
 namespace PointerFinder2
 {
+    // The form for managing global application and debug settings.
     public partial class SettingsForm : Form
     {
-        public SettingsForm()
+        private readonly MainForm _mainForm;
+
+        // The constructor now requires a reference to the MainForm
+        // so it can call the public RestartApplication method.
+        public SettingsForm(MainForm mainForm)
         {
             InitializeComponent();
+            _mainForm = mainForm;
         }
 
         private void SettingsForm_Load(object sender, EventArgs e)
@@ -28,14 +34,28 @@ namespace PointerFinder2
             Close();
         }
 
-        // --- General Settings Event Handlers ---
+        // This button now triggers the smart self-restart to fully reset the application's memory.
+        private void btnRestartApp_Click(object sender, EventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will close and restart the application to reset its memory state. Your current emulator attachment will be preserved.\n\nAre you sure you want to continue?",
+                "Confirm Application Restart",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.Yes)
+            {
+                _mainForm?.RestartApplication();
+            }
+        }
+
+        #region Settings Event Handlers
         private void chkUseDefaultSounds_CheckedChanged(object sender, EventArgs e)
         {
             GlobalSettings.UseWindowsDefaultSound = chkUseDefaultSounds.Checked;
             SettingsManager.SaveGlobalSettingsOnly();
         }
 
-        // --- Debug Settings Event Handlers ---
         private void chkLogLiveScan_CheckedChanged(object sender, EventArgs e)
         {
             DebugSettings.LogLiveScan = chkLogLiveScan.Checked;
@@ -53,5 +73,6 @@ namespace PointerFinder2
             DebugSettings.LogRefineScan = chkLogRefineScan.Checked;
             SettingsManager.SaveDebugSettingsOnly();
         }
+        #endregion
     }
 }

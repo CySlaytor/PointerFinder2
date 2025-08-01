@@ -6,7 +6,9 @@ using System.Collections.Generic;
 namespace PointerFinder2.Emulators
 {
     // A central registry for all supported emulator profiles.
-    // This is the main place to add or modify emulator support.
+    // This is the main place to add or modify emulator support. To add a new
+    // emulator, create its Manager and Scanner classes, then add a new
+    // EmulatorProfile entry to this list.
     public static class EmulatorProfileRegistry
     {
         public static readonly List<EmulatorProfile> Profiles = new List<EmulatorProfile>

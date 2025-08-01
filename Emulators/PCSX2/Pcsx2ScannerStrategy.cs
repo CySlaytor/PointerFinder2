@@ -20,9 +20,9 @@ namespace PointerFinder2.Emulators.PCSX2
         private ConcurrentBag<PointerPath> _foundPaths;
         private IProgress<ScanProgressReport> _progress;
         private CancellationToken _cancellationToken;
-        // The pointer map uses a List<uint> for its value, which is populated by merging thread-local results.
         private ConcurrentDictionary<uint, List<uint>> _intelligentPointerMap;
         private readonly DebugLogForm logger = DebugLogForm.Instance;
+        private long _foundPathsCounter = 0;
 
         public async Task<List<PointerPath>> Scan(IEmulatorManager manager, ScanParameters parameters, IProgress<ScanProgressReport> progress, CancellationToken cancellationToken)
         {
@@ -32,26 +32,28 @@ namespace PointerFinder2.Emulators.PCSX2
             _cancellationToken = cancellationToken;
             _foundPaths = new ConcurrentBag<PointerPath>();
             _intelligentPointerMap = new ConcurrentDictionary<uint, List<uint>>(Environment.ProcessorCount, 100000);
+            _foundPathsCounter = 0;
 
             if (_params == null) return new List<PointerPath>();
 
             try
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- STARTING NEW SCAN (STABLE MULTI-CORE ALGORITHM) ---");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- STARTING NEW SCAN ---");
 
+                // Phase 1: Scan all relevant memory regions to build a map of what points to where.
                 await BuildIntelligentPointerMapAsync();
                 if (cancellationToken.IsCancellationRequested) return _foundPaths.ToList();
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] Pointer map built with {_intelligentPointerMap.Count} unique pointers. Resolving paths...");
 
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] Pointer map built. Contains {_intelligentPointerMap.Count} unique pointer values. Starting path resolution for target 0x{_params.TargetAddress:X8}.");
+                // Phase 2: Work backwards from the target address to find valid chains.
                 ReportProgress("Resolving paths...", 0, 1, 0);
-
                 await Task.Run(() => ResolvePathsBackward(_params.TargetAddress, new List<int>(), 1), cancellationToken);
 
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- PARALLEL SCAN COMPLETE: Found {_foundPaths.Count} paths. ---");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN COMPLETE: Found {_foundPaths.Count} paths. ---");
             }
             catch (OperationCanceledException)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN CANCELLED BY USER. Found {_foundPaths.Count} paths. ---");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN CANCELLED. Found {_foundPaths.Count} paths. ---");
             }
             finally
             {
@@ -62,9 +64,10 @@ namespace PointerFinder2.Emulators.PCSX2
             return _foundPaths.ToList();
         }
 
+        // Recursively searches backwards for pointers that could lead to the target address.
         private void ResolvePathsBackward(uint addressToFind, List<int> previousOffsets, int level)
         {
-            if (_cancellationToken.IsCancellationRequested || _params == null || previousOffsets.Count >= _params.MaxLevel || _foundPaths.Count >= _params.MaxResults)
+            if (_cancellationToken.IsCancellationRequested || _params == null || previousOffsets.Count >= _params.MaxLevel || _foundPathsCounter >= _params.MaxResults)
             {
                 return;
             }
@@ -72,6 +75,8 @@ namespace PointerFinder2.Emulators.PCSX2
             var searchItems = new List<(uint valueToSearch, int offset)>();
             searchItems.Add((addressToFind, 0));
 
+            // For PCSX2, we can optimize by searching in 16-byte aligned steps if the user enables it.
+            // This is much faster and often more accurate for structure-based data.
             int step = _params.Use16ByteAlignment ? 16 : 4;
             uint startAddress = _params.Use16ByteAlignment ? addressToFind & 0xFFFFFFF0 : addressToFind;
 
@@ -82,6 +87,7 @@ namespace PointerFinder2.Emulators.PCSX2
                 searchItems.Add((currentAddress, offset));
             }
 
+            // On the first level, also search for pointers with negative offsets to find structure bases.
             if (previousOffsets.Count == 0 && _params.ScanForStructureBase)
             {
                 for (int offset = -4; offset >= -_params.MaxNegativeOffset; offset -= 4)
@@ -90,14 +96,19 @@ namespace PointerFinder2.Emulators.PCSX2
                 }
             }
 
-            Parallel.ForEach(searchItems, new ParallelOptions { CancellationToken = _cancellationToken }, item =>
+            // This loop is intentionally serial. The work items are too small for parallelization to be efficient here.
+            foreach (var item in searchItems)
             {
+                if (_cancellationToken.IsCancellationRequested) return;
                 CheckPointerAndRecurse(item.valueToSearch, item.offset, previousOffsets, level);
-            });
+            }
         }
 
+        // Checks our map for a given pointer value and continues the search if found.
         private void CheckPointerAndRecurse(uint pointerValueToSearch, int offset, List<int> previousOffsets, int level)
         {
+            // The check is complex because a PS2 pointer can be in kernel format (e.g. 0x00xxxxxx) or EE format (0x20xxxxxx).
+            // We need to check for both possibilities in our map.
             if (!_intelligentPointerMap.TryGetValue(pointerValueToSearch, out var sources) &&
                 !(pointerValueToSearch >= Pcsx2Manager.PS2_EEMEM_START && _intelligentPointerMap.TryGetValue(pointerValueToSearch - Pcsx2Manager.PS2_EEMEM_START, out sources)))
             {
@@ -108,8 +119,9 @@ namespace PointerFinder2.Emulators.PCSX2
 
             foreach (uint sourceAddress in sources)
             {
-                if (_cancellationToken.IsCancellationRequested || _foundPaths.Count >= _params.MaxResults) break;
+                if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) break;
 
+                // Check if we've hit a static base address. If so, we found a complete path.
                 if (sourceAddress >= _params.StaticBaseStart && sourceAddress <= _params.StaticBaseEnd)
                 {
                     var finalOffsets = new List<int>(newOffsets);
@@ -117,21 +129,29 @@ namespace PointerFinder2.Emulators.PCSX2
                     var newPath = new PointerPath { BaseAddress = sourceAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
 
                     _foundPaths.Add(newPath);
-                    ReportProgress(null, 0, 0, _foundPaths.Count);
+                    long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+
+                    // Throttle UI updates.
+                    if (currentCount % 100 == 0 || currentCount == _params.MaxResults)
+                    {
+                        ReportProgress(null, 0, 0, (int)currentCount);
+                    }
                 }
                 else
                 {
+                    // If it's not a static address, continue searching backwards from this new address.
                     ResolvePathsBackward(sourceAddress, newOffsets, level + 1);
                 }
             }
         }
 
+        // Scans both PS2 EE RAM and the Game Code region in parallel to build the pointer map.
         private async Task BuildIntelligentPointerMapAsync()
         {
             long totalSize = (Pcsx2Manager.PS2_EEMEM_END - Pcsx2Manager.PS2_EEMEM_START) +
                              (Pcsx2Manager.PS2_GAME_CODE_END - Pcsx2Manager.PS2_GAME_CODE_START);
             long processedSize = 0;
-            int chunkSize = 131072;
+            int chunkSize = 131072; // 128K chunks.
 
             var allChunks = new List<(uint, int)>();
             var regions = new[]
@@ -153,9 +173,7 @@ namespace PointerFinder2.Emulators.PCSX2
                 Parallel.ForEach(
                     allChunks,
                     new ParallelOptions { CancellationToken = _cancellationToken },
-                    // Each thread gets its own private dictionary. This avoids lock contention.
                     () => new Dictionary<uint, List<uint>>(),
-                    // The main loop body processes one chunk and adds results to the private dictionary.
                     (chunkInfo, loopState, localMap) =>
                     {
                         var (addr, size) = chunkInfo;
@@ -177,14 +195,12 @@ namespace PointerFinder2.Emulators.PCSX2
                             }
                         }
                         long currentProcessed = Interlocked.Add(ref processedSize, size);
-                        // Report progress only periodically to avoid overwhelming the UI thread.
                         if (currentProcessed % (chunkSize * 16) == 0)
                         {
                             ReportProgress($"Building pointer map... {((double)currentProcessed / totalSize):P0}", currentProcessed, totalSize, 0);
                         }
                         return localMap;
                     },
-                    // The finalizer runs once per thread, merging its private results into the main concurrent dictionary.
                     (finalLocalMap) =>
                     {
                         foreach (var kvp in finalLocalMap)
@@ -198,10 +214,10 @@ namespace PointerFinder2.Emulators.PCSX2
                     }
                 );
             }, _cancellationToken);
-            // Report final progress to ensure the bar reaches 100%.
             ReportProgress($"Building pointer map... 100%", totalSize, totalSize, 0);
         }
 
+        // Helper to send progress updates to the UI thread.
         private void ReportProgress(string message, long current, long max, int found)
         {
             var report = new ScanProgressReport { FoundCount = found };

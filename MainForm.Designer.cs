@@ -445,7 +445,6 @@
             panelSearch.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
-
         }
 
         #endregion

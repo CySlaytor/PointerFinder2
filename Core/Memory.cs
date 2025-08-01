@@ -41,7 +41,7 @@ namespace PointerFinder2.Core
         }
 
         // Finds the memory address of an exported variable (e.g., "EEMem") by parsing the process's PE header.
-        // This is the key to attaching robustly without hardcoded offsets.
+        // This is the key to attaching robustly without hardcoded offsets, which would break with every new emulator version.
         public static nint FindExportedAddress(Process process, nint processHandle, string exportName)
         {
             if (process?.MainModule == null || processHandle == IntPtr.Zero) return IntPtr.Zero;

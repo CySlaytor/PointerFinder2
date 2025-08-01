@@ -8,7 +8,8 @@ namespace PointerFinder2.Emulators
 {
     // Defines the contract for a pointer scanning algorithm.
     // This allows different emulators to have completely different scanning logic
-    // while still being controlled by the main application in a consistent way.
+    // (e.g., different memory layouts, address formats) while still being controlled
+    // by the main application in a consistent way.
     public interface IPointerScannerStrategy
     {
         // The main method that executes the pointer scan.

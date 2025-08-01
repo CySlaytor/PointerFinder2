@@ -105,7 +105,6 @@ namespace PointerFinder2
         }
 
         // The OK button validates the input and closes the form if valid.
-        // The MainForm is responsible for retrieving the parameters after the dialog closes.
         private void btnOK_Click(object sender, EventArgs e)
         {
             if (GetScanParameters() != null)
@@ -115,7 +114,7 @@ namespace PointerFinder2
             }
         }
 
-        // Toggles the enabled state of the negative offset textbox based on its parent checkbox.
+        // Toggles the enabled state of the negative offset textbox.
         private void chkScanForStructureBase_CheckedChanged(object sender, EventArgs e)
         {
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;

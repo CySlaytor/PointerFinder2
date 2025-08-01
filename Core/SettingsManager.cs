@@ -22,6 +22,7 @@ namespace PointerFinder2.Core
     }
 
     // Handles loading and saving all settings to the settings.ini file.
+    // It's a static class because we only ever need one instance of it.
     public static class SettingsManager
     {
         private static readonly string _settingsFile = Path.Combine(Application.StartupPath, "settings.ini");
@@ -77,8 +78,8 @@ namespace PointerFinder2.Core
             if (DebugSettings.LogLiveScan) logger.Log("Settings saved successfully.");
         }
 
-
         // Loads settings for a specific emulator and all global settings from the INI file.
+        // If the settings file or a value is missing/corrupt, it safely falls back to default values.
         public static AppSettings Load(EmulatorTarget target, AppSettings defaultSettings)
         {
             var logger = DebugLogForm.Instance;
@@ -126,7 +127,6 @@ namespace PointerFinder2.Core
             if (!int.TryParse(ini.Read("MaxNegativeOffset", section, defaultSettings.MaxNegativeOffset.ToString()), out int maxNegativeOffset))
                 maxNegativeOffset = defaultSettings.MaxNegativeOffset;
             settings.MaxNegativeOffset = maxNegativeOffset;
-
 
             // Load global app settings.
             if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound))

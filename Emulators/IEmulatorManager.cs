@@ -6,8 +6,8 @@ using System.Diagnostics;
 namespace PointerFinder2.Emulators
 {
     // Defines the contract for an emulator manager.
-    // Each supported emulator needs a class that implements this to abstract away
-    // the details of how to interact with its process.
+    // Each supported emulator needs a class that implements this interface to abstract away
+    // the details of how to interact with its process, memory, and addresses.
     public interface IEmulatorManager
     {
         // The user-friendly name of the emulator (e.g., "PCSX2").

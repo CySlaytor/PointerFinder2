@@ -17,6 +17,7 @@
 
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             this.tabControlSettings = new System.Windows.Forms.TabControl();
             this.tabGeneral = new System.Windows.Forms.TabPage();
             this.grpSound = new System.Windows.Forms.GroupBox();
@@ -27,6 +28,8 @@
             this.chkLogFilter = new System.Windows.Forms.CheckBox();
             this.chkLogLiveScan = new System.Windows.Forms.CheckBox();
             this.btnClose = new System.Windows.Forms.Button();
+            this.btnRestartApp = new System.Windows.Forms.Button();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.tabControlSettings.SuspendLayout();
             this.tabGeneral.SuspendLayout();
             this.grpSound.SuspendLayout();
@@ -147,12 +150,27 @@
             this.btnClose.UseVisualStyleBackColor = true;
             this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
             // 
+            // btnRestartApp
+            // 
+            this.btnRestartApp.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.btnRestartApp.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnRestartApp.ForeColor = System.Drawing.Color.DarkRed;
+            this.btnRestartApp.Location = new System.Drawing.Point(12, 197);
+            this.btnRestartApp.Name = "btnRestartApp";
+            this.btnRestartApp.Size = new System.Drawing.Size(130, 28);
+            this.btnRestartApp.TabIndex = 3;
+            this.btnRestartApp.Text = "Restart Application";
+            this.toolTip1.SetToolTip(this.btnRestartApp, "Closes and re-opens the application to completely reset its memory state.");
+            this.btnRestartApp.UseVisualStyleBackColor = true;
+            this.btnRestartApp.Click += new System.EventHandler(this.btnRestartApp_Click);
+            // 
             // SettingsForm
             // 
             this.AcceptButton = this.btnClose;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(344, 237);
+            this.Controls.Add(this.btnRestartApp);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.tabControlSettings);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -185,5 +203,7 @@
         private System.Windows.Forms.CheckBox chkLogLiveScan;
         private System.Windows.Forms.GroupBox grpSound;
         private System.Windows.Forms.CheckBox chkUseDefaultSounds;
+        private System.Windows.Forms.Button btnRestartApp;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }

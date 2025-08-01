@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace PointerFinder2.Emulators.PCSX2
 {
-    // Manages interaction with the PCSX2 emulator.
+    // Manages all interaction with the PCSX2 emulator.
     public class Pcsx2Manager : IEmulatorManager
     {
         private readonly DebugLogForm logger = DebugLogForm.Instance;
@@ -72,7 +72,7 @@ namespace PointerFinder2.Emulators.PCSX2
             return true;
         }
 
-        // Detaches from the emulator process.
+        // Detaches from the emulator process and cleans up resources.
         public void Detach()
         {
             if (ProcessHandle != IntPtr.Zero)
@@ -85,7 +85,6 @@ namespace PointerFinder2.Emulators.PCSX2
             EmulatorProcess = null;
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
         }
-
 
         // Reads a block of memory from the emulated PS2 RAM.
         public byte[] ReadMemory(uint ps2Address, int count)
@@ -119,7 +118,6 @@ namespace PointerFinder2.Emulators.PCSX2
         public uint? RecalculateFinalAddress(PointerPath path, uint expectedFinalAddress)
         {
             bool shouldLog = DebugSettings.LogFilterValidation;
-
             // Normalize the expected address for consistent comparison.
             if (expectedFinalAddress < PS2_EEMEM_START)
             {
@@ -145,7 +143,6 @@ namespace PointerFinder2.Emulators.PCSX2
                 if (shouldLog) logger.Log($"[{EmulatorName}] FAILURE: Could not read base address.");
                 return null;
             }
-
             if (!IsValidPointerTarget(currentAddress.Value))
             {
                 if (shouldLog) logger.Log($"[{EmulatorName}] FAILURE: Base address points to invalid memory 0x{currentAddress.Value:X8}.");
@@ -161,7 +158,7 @@ namespace PointerFinder2.Emulators.PCSX2
                 uint nextAddressToRead = currentAddress.Value + (uint)path.Offsets[i];
                 if (shouldLog) logger.Log($"  -> Calculating next address to read: 0x{currentAddress.Value:X8} + 0x{path.Offsets[i]:X} = 0x{nextAddressToRead:X8}");
 
-                // Some pointers might be in the "kernel" format, so normalize them to the EE RAM region.
+                // Some pointers might be in the "kernel" format (e.g. 0x00xxxxxx). We normalize them to the EE RAM region.
                 if (nextAddressToRead < PS2_EEMEM_START)
                 {
                     if (shouldLog) logger.Log($"  -> Normalizing address from 0x{nextAddressToRead:X8} to 0x{nextAddressToRead + PS2_EEMEM_START:X8}");
@@ -205,7 +202,7 @@ namespace PointerFinder2.Emulators.PCSX2
             return finalAddress;
         }
 
-        // Formats a full PS2 address into a shorter format relative to EE RAM.
+        // Formats a full PS2 address into a shorter format relative to EE RAM for display.
         public string FormatDisplayAddress(uint address)
         {
             if (address >= 0x20000000 && address < 0x22000000)
@@ -219,6 +216,7 @@ namespace PointerFinder2.Emulators.PCSX2
         public uint UnnormalizeAddress(string address)
         {
             uint parsedAddress = uint.Parse(address.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
+            // If the user enters a short address like "1A2B3C", assume it's in EE RAM.
             if (parsedAddress < 0x2000000)
             {
                 return parsedAddress + 0x20000000;
@@ -226,7 +224,7 @@ namespace PointerFinder2.Emulators.PCSX2
             return parsedAddress;
         }
 
-        // Provides a set of default settings for PCSX2.
+        // Provides a set of default settings specifically for PCSX2.
         public AppSettings GetDefaultSettings()
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");

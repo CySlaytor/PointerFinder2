@@ -2,21 +2,21 @@
 using System;
 using System.IO;
 using System.Media;
-using System.Reflection; 
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace PointerFinder2.Core
 {
     // Manages custom and default sound playback.
-    // It prioritizes external .wav files in a "Sounds" folder for user customization.
-    // If external files aren't found, it falls back to default sounds embedded in the application.
     public static class SoundManager
     {
         private static readonly SoundPlayer _successPlayer;
         private static readonly SoundPlayer _failPlayer;
         private static readonly SoundPlayer _notifyPlayer;
 
-        // The constructor loads all sounds on startup.
+        // The static constructor loads all sounds on application startup.
+        // It prioritizes external .wav files in a "Sounds" folder for user customization.
+        // If external files aren't found, it falls back to default sounds embedded in the application.
         static SoundManager()
         {
             _successPlayer = LoadPlayer("success.wav", "PointerFinder2.Sounds.success.wav");
@@ -44,7 +44,7 @@ namespace PointerFinder2.Core
                 }
             }
 
-            // 2. Fall back to the embedded resource.
+            // 2. If no custom sound exists, fall back to the embedded resource.
             var assembly = Assembly.GetExecutingAssembly();
             Stream resourceStream = assembly.GetManifestResourceStream(embeddedResourceName);
 
@@ -64,7 +64,7 @@ namespace PointerFinder2.Core
             return null;
         }
 
-        // Plays the success sound.
+        // Plays the success sound, or the system default if configured.
         public static void PlaySuccess()
         {
             if (GlobalSettings.UseWindowsDefaultSound)
@@ -75,7 +75,7 @@ namespace PointerFinder2.Core
             _successPlayer?.Play();
         }
 
-        // Plays the fail/no-results sound.
+        // Plays the fail/no-results sound, or the system default.
         public static void PlayFail()
         {
             if (GlobalSettings.UseWindowsDefaultSound)
@@ -86,7 +86,7 @@ namespace PointerFinder2.Core
             _failPlayer?.Play();
         }
 
-        // Plays the general notification sound.
+        // Plays the general notification sound, or the system default.
         public static void PlayNotify()
         {
             if (GlobalSettings.UseWindowsDefaultSound)

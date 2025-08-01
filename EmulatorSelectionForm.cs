@@ -7,7 +7,7 @@ using System.Windows.Forms;
 
 namespace PointerFinder2
 {
-    // A form that is displayed when multiple supported emulators/instances are running.
+    // A form that is displayed when multiple supported emulators or instances are running.
     // It prompts the user to select which specific process they want to attach to.
     public partial class EmulatorSelectionForm : Form
     {
@@ -15,13 +15,14 @@ namespace PointerFinder2
         public EmulatorProfile SelectedProfile { get; private set; }
         public Process SelectedProcess { get; private set; }
 
-        // The list of found process instances to display.
+        // A flattened list of all found emulator instances to display.
         private readonly List<(EmulatorProfile profile, Process process)> _foundInstances;
 
         public EmulatorSelectionForm(Dictionary<EmulatorProfile, List<Process>> foundProcessMap)
         {
             InitializeComponent();
             _foundInstances = new List<(EmulatorProfile, Process)>();
+
             // Flatten the dictionary into a simple list for the ListBox.
             foreach (var kvp in foundProcessMap)
             {
@@ -32,7 +33,7 @@ namespace PointerFinder2
             }
         }
 
-        // When the form loads, populate the list box with user-friendly names for each process instance.
+        // When the form loads, populate the list box with user-friendly names for each process.
         private void EmulatorSelectionForm_Load(object sender, EventArgs e)
         {
             // Create a display string for each instance, including Name, PID, and Window Title.
@@ -51,7 +52,7 @@ namespace PointerFinder2
             }
         }
 
-        // When the user clicks OK, find the corresponding Profile and Process objects and set them.
+        // When the user clicks OK, set the selected profile and process and close the dialog.
         private void btnOK_Click(object sender, EventArgs e)
         {
             if (listBoxEmulators.SelectedIndex != -1)
