@@ -190,7 +190,16 @@ namespace PointerFinder2
 
             if (_currentManager.Attach(process))
             {
-                this.Text = $"Pointer Finder 2.0 - [{_activeProfile.Name} Mode]";
+                string windowTitle = process.MainWindowTitle;
+                if (!string.IsNullOrWhiteSpace(windowTitle))
+                {
+                    this.Text = $"Pointer Finder 2.0 - [{windowTitle}]";
+                }
+                else
+                {
+                    // Fallback if the title is empty, keep the old behavior
+                    this.Text = $"Pointer Finder 2.0 - [{_activeProfile.Name} Mode]";
+                }
                 lblStatus.Text = $"Status: Attached to {_activeProfile.Name} (PID: {process.Id})";
                 lblBaseAddress.Text = $"{_activeProfile.Name} Base (PC): {_currentManager.MemoryBasePC:X}";
                 menuAttach.Text = $"Detach from {_activeProfile.Name}";
