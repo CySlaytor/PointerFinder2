@@ -12,6 +12,8 @@ namespace PointerFinder2.Emulators
     {
         // The user-friendly name of the emulator (e.g., "PCSX2").
         string EmulatorName { get; }
+        // The total size of the primary scannable memory region (e.g., PS2's 32MB EE RAM).
+        uint MainMemorySize { get; }
         // The prefix for RetroAchievements memory addresses ("X" for PS2, "W" for PS1).
         string RetroAchievementsPrefix { get; }
         // The Process object for the attached emulator.
@@ -22,7 +24,6 @@ namespace PointerFinder2.Emulators
         nint ProcessHandle { get; }
         // The base address of the emulated RAM within the host PC's memory.
         nint MemoryBasePC { get; }
-
         // Attaches to a specific instance of the emulator process.
         bool Attach(Process process);
         // Detaches from the emulator process.

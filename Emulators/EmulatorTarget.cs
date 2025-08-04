@@ -5,6 +5,7 @@
     public enum EmulatorTarget
     {
         PCSX2,
-        DuckStation
+        DuckStation,
+        RALibretroNDS
     }
 }

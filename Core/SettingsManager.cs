@@ -19,10 +19,10 @@ namespace PointerFinder2.Core
         public bool ScanForStructureBase { get; set; }
         public int MaxNegativeOffset { get; set; }
         public bool Use16ByteAlignment { get; set; }
+        public bool UseSliderRange { get; set; } // For persistence
     }
 
     // Handles loading and saving all settings to the settings.ini file.
-    // It's a static class because we only ever need one instance of it.
     public static class SettingsManager
     {
         private static readonly string _settingsFile = Path.Combine(Application.StartupPath, "settings.ini");
@@ -33,7 +33,6 @@ namespace PointerFinder2.Core
             var logger = DebugLogForm.Instance;
             if (DebugSettings.LogLiveScan) logger.Log("Saving global settings only.");
             var ini = new IniFile(_settingsFile);
-
             ini.Write("UseWindowsDefaultSound", GlobalSettings.UseWindowsDefaultSound.ToString(), "Global");
             if (DebugSettings.LogLiveScan) logger.Log("Global settings saved successfully.");
         }
@@ -44,7 +43,6 @@ namespace PointerFinder2.Core
             var logger = DebugLogForm.Instance;
             if (DebugSettings.LogLiveScan) logger.Log("Saving debug settings only.");
             var ini = new IniFile(_settingsFile);
-
             ini.Write("LogLiveScan", DebugSettings.LogLiveScan.ToString(), "Debug");
             ini.Write("LogFilterValidation", DebugSettings.LogFilterValidation.ToString(), "Debug");
             ini.Write("LogRefineScan", DebugSettings.LogRefineScan.ToString(), "Debug");
@@ -71,6 +69,7 @@ namespace PointerFinder2.Core
                 ini.Write("ScanForStructureBase", settings.ScanForStructureBase.ToString(), section);
                 ini.Write("Use16ByteAlignment", settings.Use16ByteAlignment.ToString(), section);
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
+                ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -96,54 +95,33 @@ namespace PointerFinder2.Core
 
             // Load scanner settings with robust TryParse to prevent crashes from a corrupted INI.
             settings.LastTargetAddress = ini.Read("LastTargetAddress", section, defaultSettings.LastTargetAddress);
-
-            if (!int.TryParse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()), out int maxOffset))
-                maxOffset = defaultSettings.MaxOffset;
+            if (!int.TryParse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()), out int maxOffset)) maxOffset = defaultSettings.MaxOffset;
             settings.MaxOffset = maxOffset;
-
-            if (!int.TryParse(ini.Read("MaxLevel", section, defaultSettings.MaxLevel.ToString()), out int maxLevel))
-                maxLevel = defaultSettings.MaxLevel;
+            if (!int.TryParse(ini.Read("MaxLevel", section, defaultSettings.MaxLevel.ToString()), out int maxLevel)) maxLevel = defaultSettings.MaxLevel;
             settings.MaxLevel = maxLevel;
-
-            if (!int.TryParse(ini.Read("MaxResults", section, defaultSettings.MaxResults.ToString()), out int maxResults))
-                maxResults = defaultSettings.MaxResults;
+            if (!int.TryParse(ini.Read("MaxResults", section, defaultSettings.MaxResults.ToString()), out int maxResults)) maxResults = defaultSettings.MaxResults;
             settings.MaxResults = maxResults;
-
             settings.StaticAddressStart = ini.Read("StaticAddressStart", section, defaultSettings.StaticAddressStart);
             settings.StaticAddressEnd = ini.Read("StaticAddressEnd", section, defaultSettings.StaticAddressEnd);
-
-            if (!bool.TryParse(ini.Read("AnalyzeStructures", section, defaultSettings.AnalyzeStructures.ToString()), out bool analyzeStructures))
-                analyzeStructures = defaultSettings.AnalyzeStructures;
+            if (!bool.TryParse(ini.Read("AnalyzeStructures", section, defaultSettings.AnalyzeStructures.ToString()), out bool analyzeStructures)) analyzeStructures = defaultSettings.AnalyzeStructures;
             settings.AnalyzeStructures = analyzeStructures;
-
-            if (!bool.TryParse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()), out bool scanForStructureBase))
-                scanForStructureBase = defaultSettings.ScanForStructureBase;
+            if (!bool.TryParse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()), out bool scanForStructureBase)) scanForStructureBase = defaultSettings.ScanForStructureBase;
             settings.ScanForStructureBase = scanForStructureBase;
-
-            if (!bool.TryParse(ini.Read("Use16ByteAlignment", section, defaultSettings.Use16ByteAlignment.ToString()), out bool use16ByteAlignment))
-                use16ByteAlignment = defaultSettings.Use16ByteAlignment;
+            if (!bool.TryParse(ini.Read("Use16ByteAlignment", section, defaultSettings.Use16ByteAlignment.ToString()), out bool use16ByteAlignment)) use16ByteAlignment = defaultSettings.Use16ByteAlignment;
             settings.Use16ByteAlignment = use16ByteAlignment;
-
-            if (!int.TryParse(ini.Read("MaxNegativeOffset", section, defaultSettings.MaxNegativeOffset.ToString()), out int maxNegativeOffset))
-                maxNegativeOffset = defaultSettings.MaxNegativeOffset;
+            if (!int.TryParse(ini.Read("MaxNegativeOffset", section, defaultSettings.MaxNegativeOffset.ToString()), out int maxNegativeOffset)) maxNegativeOffset = defaultSettings.MaxNegativeOffset;
             settings.MaxNegativeOffset = maxNegativeOffset;
+            if (!bool.TryParse(ini.Read("UseSliderRange", section, defaultSettings.UseSliderRange.ToString()), out bool useSliderRange)) useSliderRange = defaultSettings.UseSliderRange;
+            settings.UseSliderRange = useSliderRange;
 
-            // Load global app settings.
-            if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound))
-                useDefaultSound = false;
+            if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound)) useDefaultSound = false;
             GlobalSettings.UseWindowsDefaultSound = useDefaultSound;
 
-            // Load global debug settings.
-            if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan))
-                logLiveScan = false;
+            if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan)) logLiveScan = false;
             DebugSettings.LogLiveScan = logLiveScan;
-
-            if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation))
-                logFilterValidation = false;
+            if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation)) logFilterValidation = false;
             DebugSettings.LogFilterValidation = logFilterValidation;
-
-            if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan))
-                logRefineScan = false;
+            if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan)) logRefineScan = false;
             DebugSettings.LogRefineScan = logRefineScan;
 
             if (DebugSettings.LogLiveScan) logger.Log("Settings loaded successfully.");

@@ -4,28 +4,35 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 
-namespace PointerFinder2.Emulators.DuckStation
+namespace PointerFinder2.Emulators.RALibretro
 {
-    // Manages all interaction with the DuckStation emulator.
-    public class DuckStationManager : IEmulatorManager
+    // Manages all interaction with the RALibretro emulator for Nintendo DS cores.
+    public class RALibretroNDSManager : IEmulatorManager
     {
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
-        // PS1 Memory Layout Constants.
-        public const uint PS1_RAM_START = 0x80000000;
-        public const uint PS1_RAM_SIZE = 0x200000; // 2MB
-        public const uint PS1_RAM_END = PS1_RAM_START + PS1_RAM_SIZE;
+        // NDS Memory Layout Constants.
+        public const uint NDS_RAM_START = 0x02000000;
+        public const uint NDS_RAM_SIZE = 0x400000; // 4MB
+        public const uint NDS_RAM_END = NDS_RAM_START + NDS_RAM_SIZE;
+        public const uint NDS_STATIC_START = 0x00100000;
+        public const uint NDS_STATIC_END = 0x003FFFFF + 1;
+
+        // For attachment to RALibretro v1.8.1. Newer versions may require updating this offset.
+        private const int RAM_POINTER_OFFSET = 0x212D30;
+        private readonly string[] SUPPORTED_CORES = { "desmume_libretro.dll", "melondsds_libretro.dll" };
 
         #region Interface Implementation
-        public string EmulatorName => "DuckStation";
-        public uint MainMemorySize => 2 * 1024 * 1024; // 2MB
-        public string RetroAchievementsPrefix => "W";
+        public string EmulatorName => "RALibretro (NDS)";
+        public uint MainMemorySize => 4 * 1024 * 1024; // 4MB
+        public string RetroAchievementsPrefix => "D";
         public Process EmulatorProcess { get; private set; }
         public bool IsAttached => ProcessHandle != IntPtr.Zero && MemoryBasePC != IntPtr.Zero;
         public nint ProcessHandle { get; private set; } = IntPtr.Zero;
         public nint MemoryBasePC { get; private set; } = IntPtr.Zero;
+        private nint NdsMemoryBaseInPC { get; set; } = IntPtr.Zero;
 
-        // Attaches by finding DuckStation's exported "RAM" variable, which points to the emulated RAM.
+        // Attaches by finding the loaded NDS core and then reading a pointer at a hardcoded offset.
         public bool Attach(Process process)
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
@@ -39,6 +46,25 @@ namespace PointerFinder2.Emulators.DuckStation
             }
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
+            // RALibretro is a 64-bit process, so this tool must be as well.
+            if (!Environment.Is64BitProcess)
+            {
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: This tool must be built for x64 to attach to RALibretro.");
+                return false;
+            }
+
+            // Check if a supported NDS core is loaded into the process.
+            var activeCoreModule = EmulatorProcess.Modules.Cast<ProcessModule>()
+                .FirstOrDefault(m => SUPPORTED_CORES.Any(c => c.Equals(m.ModuleName, StringComparison.OrdinalIgnoreCase)));
+
+            if (activeCoreModule == null)
+            {
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: No supported NDS core (DeSmuME or melonDS) found loaded in RALibretro.");
+                return false;
+            }
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Found active core '{activeCoreModule.ModuleName}'.");
+
+
             ProcessHandle = Memory.OpenProcessHandle(EmulatorProcess);
             if (ProcessHandle == IntPtr.Zero)
             {
@@ -47,24 +73,23 @@ namespace PointerFinder2.Emulators.DuckStation
             }
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
-            // DuckStation conveniently exports a pointer to its emulated RAM.
-            nint ramExportAddress = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "RAM");
-            if (ramExportAddress == IntPtr.Zero)
-            {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'RAM' export. Ensure the game is fully loaded.");
-                return false;
-            }
+            // This attachment method relies on a hardcoded offset from the emulator's main module base address.
+            nint moduleBaseAddress = EmulatorProcess.MainModule.BaseAddress;
+            nint pointerAddress = IntPtr.Add(moduleBaseAddress, RAM_POINTER_OFFSET);
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Reading RAM pointer from address 0x{pointerAddress:X}.");
 
-            // The exported address contains a pointer to the actual memory block, which we must read.
-            long? ramPtr = Memory.ReadInt64(ProcessHandle, ramExportAddress);
-            if (!ramPtr.HasValue)
+            long? ramPtr = Memory.ReadInt64(ProcessHandle, pointerAddress);
+            if (!ramPtr.HasValue || ramPtr.Value == 0)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'RAM' export address.");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from 0x{pointerAddress:X}. Ensure the game is fully loaded. This offset may be outdated for your RALibretro version.");
                 return false;
             }
 
             this.MemoryBasePC = (nint)ramPtr.Value;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: PS1 RAM base found in PC memory at 0x{this.MemoryBasePC:X}.");
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: NDS RAM base (0x02000000) found in PC memory at 0x{this.MemoryBasePC:X}.");
+
+            // Calculate a base address to translate any NDS address to a PC address.
+            NdsMemoryBaseInPC = IntPtr.Subtract(MemoryBasePC, (int)NDS_RAM_START);
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
@@ -78,33 +103,31 @@ namespace PointerFinder2.Emulators.DuckStation
             }
             ProcessHandle = IntPtr.Zero;
             MemoryBasePC = IntPtr.Zero;
+            NdsMemoryBaseInPC = IntPtr.Zero;
             EmulatorProcess = null;
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
-        // Reads a block of memory from the emulated PS1 RAM.
-        public byte[] ReadMemory(uint ps1Address, int count)
+        // Reads a block of memory from the emulated NDS system.
+        public byte[] ReadMemory(uint ndsAddress, int count)
         {
-            if (!IsAttached || ps1Address < PS1_RAM_START || ps1Address >= PS1_RAM_END) return null;
-
-            // Translate the PS1 address to an address in our program's memory space.
-            nint addressInPC = IntPtr.Add(this.MemoryBasePC, (int)(ps1Address - PS1_RAM_START));
-
+            if (!IsAttached) return null;
+            nint addressInPC = IntPtr.Add(NdsMemoryBaseInPC, (int)ndsAddress);
             return Memory.ReadBytes(this.ProcessHandle, addressInPC, count);
         }
 
-        // Reads a 32-bit unsigned integer from a PS1 memory address.
-        public uint? ReadUInt32(uint ps1Address)
+        // Reads a 32-bit unsigned integer from an NDS memory address.
+        public uint? ReadUInt32(uint ndsAddress)
         {
-            byte[] buffer = ReadMemory(ps1Address, 4);
+            byte[] buffer = ReadMemory(ndsAddress, 4);
             return buffer != null ? BitConverter.ToUInt32(buffer, 0) : null;
         }
 
-        // Checks if a value is a valid pointer target within the PS1's RAM.
+        // Checks if a value is a valid pointer target within the NDS's RAM.
         public bool IsValidPointerTarget(uint value)
         {
-            // A valid pointer must be 4-byte aligned and fall within the 2MB RAM range.
-            return (value & 3) == 0 && (value >= PS1_RAM_START && value < PS1_RAM_END);
+            // A valid pointer must be 4-byte aligned and fall within the 4MB RAM range.
+            return (value & 3) == 0 && (value >= NDS_RAM_START && value < NDS_RAM_END);
         }
 
         // Traverses a pointer path to verify its final address. Used for filtering.
@@ -172,42 +195,43 @@ namespace PointerFinder2.Emulators.DuckStation
             return finalAddress;
         }
 
-        // Formats a full PS1 address into a shorter, user-friendly format (e.g., "1B4A0").
+        // Formats a full NDS address into a shorter, user-friendly format.
         public string FormatDisplayAddress(uint address)
         {
-            if (address >= PS1_RAM_START && address < PS1_RAM_END)
+            if (address >= NDS_RAM_START && address < NDS_RAM_END)
             {
-                return (address - PS1_RAM_START).ToString("X");
+                return (address - NDS_RAM_START).ToString("X");
             }
             return address.ToString("X8");
         }
 
-        // Converts a user-entered address (e.g., "1B4A0") into a full PS1 address.
+        // Converts a user-entered address into a full NDS address.
         public uint UnnormalizeAddress(string address)
         {
             uint parsedAddress = uint.Parse(address.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
-            if (parsedAddress < PS1_RAM_SIZE)
+            // If the user enters a short address, assume it's in the main RAM region.
+            if (parsedAddress < NDS_RAM_SIZE)
             {
-                return parsedAddress + PS1_RAM_START;
+                return parsedAddress + NDS_RAM_START;
             }
             return parsedAddress;
         }
 
-        // Provides a set of default settings specifically for DuckStation.
+        // Provides a set of default settings specifically for NDS on RALibretro.
         public AppSettings GetDefaultSettings()
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");
             return new AppSettings
             {
-                StaticAddressStart = "10000",
-                StaticAddressEnd = "7FFFF",
+                StaticAddressStart = "100000",
+                StaticAddressEnd = "3FFFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
                 MaxResults = 5000,
                 AnalyzeStructures = true,
                 ScanForStructureBase = true,
                 MaxNegativeOffset = 1024,
-                Use16ByteAlignment = false // Not applicable to PS1
+                Use16ByteAlignment = false // Not applicable to NDS
             };
         }
         #endregion

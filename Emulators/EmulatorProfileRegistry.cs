@@ -1,6 +1,7 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.Emulators.DuckStation;
 using PointerFinder2.Emulators.PCSX2;
+using PointerFinder2.Emulators.RALibretro;
 using System.Collections.Generic;
 
 namespace PointerFinder2.Emulators
@@ -30,6 +31,15 @@ namespace PointerFinder2.Emulators
                 ProcessNames = new[] { "duckstation-qt-x64-ReleaseLTCG" },
                 ManagerFactory = () => new DuckStationManager(),
                 ScannerFactory = () => new DuckStationScannerStrategy()
+            },
+            // Profile for RALibretro (NDS Cores).
+            new EmulatorProfile
+            {
+                Name = "RALibretro (NDS)",
+                Target = EmulatorTarget.RALibretroNDS,
+                ProcessNames = new[] { "RALibretro" },
+                ManagerFactory = () => new RALibretroNDSManager(),
+                ScannerFactory = () => new RALibretroNDSScannerStrategy()
             }
         };
     }

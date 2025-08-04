@@ -28,24 +28,47 @@ namespace PointerFinder2.DataModels
         public string ToRetroAchievementsString(IEmulatorManager manager)
         {
             var sb = new StringBuilder();
-            string prefix = manager.RetroAchievementsPrefix;
+
+            // Determine the correct memory access size prefix based on the emulator target.
+            // This provides a much smarter default for the user.
+            string sizePrefix;
+
+            // Find the profile for the current manager to get its target type.
+            var profile = EmulatorProfileRegistry.Profiles.Find(p => p.Name == manager.EmulatorName);
+
+            switch (profile?.Target)
+            {
+                // For PS1 and NDS, default to 24-bit ("W") to automatically handle memory regions
+                // like 0x80... (PS1) and 0x02... (NDS) without needing manual masking.
+                case EmulatorTarget.DuckStation:
+                case EmulatorTarget.RALibretroNDS:
+                    sizePrefix = "W"; // 24-bit memory access
+                    break;
+
+                // For PS2, pointers are typically in the 0x00... range, so a standard
+                // 32-bit read ("X") is the correct and most useful default.
+                case EmulatorTarget.PCSX2:
+                default: // Default to 32-bit for any other or future systems.
+                    sizePrefix = "X"; // 32-bit memory access
+                    break;
+            }
 
             // 1. Base Address (indirect memory reference).
             string normalizedBaseAddress = manager.FormatDisplayAddress(this.BaseAddress);
-            sb.Append($"I:0x{prefix}{normalizedBaseAddress}");
+            sb.Append($"I:0x{sizePrefix}{normalizedBaseAddress}");
 
             // 2. Intermediate Pointer Offsets (all but the last one).
             for (int i = 0; i < Offsets.Count - 1; i++)
             {
                 string formattedOffset = $"{Math.Abs(Offsets[i]):x}";
-                sb.Append($"_I:0x{prefix}{formattedOffset}");
+                sb.Append($"_I:0x{sizePrefix}{formattedOffset}");
             }
 
             // 3. Final Offset (direct offset).
             if (Offsets.Any())
             {
                 string formattedLastOffset = $"{Math.Abs(Offsets.Last()):x}";
-                sb.Append($"_0x{prefix}{formattedLastOffset}");
+                sb.Append($"_0x{sizePrefix}{formattedLastOffset}");
             }
 
             // 4. Add a default trigger condition.

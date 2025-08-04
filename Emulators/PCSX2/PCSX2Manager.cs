@@ -19,6 +19,7 @@ namespace PointerFinder2.Emulators.PCSX2
 
         #region Interface Implementation
         public string EmulatorName => "PCSX2";
+        public uint MainMemorySize => 32 * 1024 * 1024; // 32MB
         public string RetroAchievementsPrefix => "X";
         public Process EmulatorProcess { get; private set; }
         public bool IsAttached => ProcessHandle != IntPtr.Zero && MemoryBasePC != IntPtr.Zero;
