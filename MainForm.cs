@@ -162,6 +162,37 @@ namespace PointerFinder2
             }
         }
 
+        // A dedicated method to aggressively release memory back to the OS.
+        // This is necessary because the .NET Garbage Collector is lazy and won't
+        // immediately return memory, causing high RAM usage to persist.
+        public void PurgeMemory()
+        {
+            try
+            {
+                if (DebugSettings.LogLiveScan) logger.Log("--- Purging Application Memory ---");
+
+                // Force a full garbage collection. This tells the .NET runtime to find and
+                // mark all unreferenced objects (like the huge pointer map from a previous scan) for cleanup.
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect(); // Call it a second time to catch objects finalized in the first pass.
+
+                // Force the process to release the unused memory pages back to the OS.
+                // This is the crucial step that makes the RAM usage drop in Task Manager.
+                // Using -1 for both min and max is the documented way to tell the system to trim the working set.
+                using (Process currentProcess = Process.GetCurrentProcess())
+                {
+                    SetProcessWorkingSetSize(currentProcess.Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
+                }
+
+                if (DebugSettings.LogLiveScan) logger.Log("--- Memory Purge Complete ---");
+            }
+            catch (Exception ex)
+            {
+                logger.Log($"[ERROR] Failed to purge memory: {ex.Message}");
+            }
+        }
+
         // A lightweight cleanup routine used between normal scans, which does not do a full memory purge.
         private void ClearSessionDataOnly()
         {
@@ -395,6 +426,9 @@ namespace PointerFinder2
                 if (optionsForm.ShowDialog() == DialogResult.OK)
                 {
                     ClearSessionDataOnly();
+                    // Proactively purge memory before a new scan to ensure a clean slate
+                    // and prevent RAM usage from compounding over multiple scans.
+                    PurgeMemory();
                     _lastScanParams = optionsForm.GetScanParameters();
                     if (_lastScanParams == null) return;
                     _currentSettings = optionsForm.GetCurrentSettings();
@@ -488,6 +522,7 @@ namespace PointerFinder2
         }
 
         // Handles the "Refine with New Scan" button click.
+        // This method is now async to allow for non-blocking UI while preparing results.
         private async void btnRefineScan_Click(object sender, EventArgs e)
         {
             if (_scanCts != null || _activeProfile == null) return;
@@ -496,12 +531,20 @@ namespace PointerFinder2
                 MessageBox.Show("Please perform an initial scan and have results before refining.", "Initial Scan Required", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                 return;
             }
-            var existingPaths = new HashSet<string>(_currentResults.Select(p => $"{p.BaseAddress:X8}:{p.GetOffsetsString()}"));
+
+            // Prepare the existing results on a background thread to prevent UI hangs.
+            // This is crucial when the result set is very large.
+            UpdateStatus("Preparing existing results for refinement...");
+            var existingPaths = await Task.Run(() => new HashSet<PointerPath>(_currentResults));
+            UpdateStatus("Ready for refinement. Please configure the new scan.");
+
             using (var optionsForm = new ScannerOptionsForm(_currentManager, _currentSettings))
             {
                 if (optionsForm.ShowDialog() == DialogResult.OK)
                 {
                     ClearSessionDataOnly();
+                    // Also purge memory before a refine scan, as it performs a full new scan internally.
+                    PurgeMemory();
                     var newScanParams = optionsForm.GetScanParameters();
                     if (newScanParams == null) return;
                     _lastScanParams = newScanParams;
@@ -524,7 +567,8 @@ namespace PointerFinder2
         }
 
         // Manages the execution of a refine scan and finds the intersection with existing results.
-        private async Task RunRefineScan(Task<List<PointerPath>> scanTask, HashSet<string> existingPaths)
+        // The signature is updated to accept a HashSet of PointerPath objects directly.
+        private async Task RunRefineScan(Task<List<PointerPath>> scanTask, HashSet<PointerPath> existingPaths)
         {
             _isRefining = true;
             lblResultCount.Visible = false;
@@ -545,7 +589,9 @@ namespace PointerFinder2
                 _scanTimer.Stop();
                 if (shouldLog) logger.Log($"New scan completed, found {newResults.Count} potential paths. Performing intersection...");
 
-                var finalResults = newResults.Where(p => existingPaths.Contains($"{p.BaseAddress:X8}:{p.GetOffsetsString()}")).ToList();
+                // The intersection logic is now much cleaner and more efficient.
+                // It uses the custom Equals/GetHashCode methods on PointerPath for a fast lookup.
+                var finalResults = newResults.Where(p => existingPaths.Contains(p)).ToList();
                 PopulateResultsGrid(finalResults);
 
                 if (scanTask.IsCanceled)
@@ -578,7 +624,8 @@ namespace PointerFinder2
                 var newResults = scanTask.Result;
                 var elapsed = _scanStopwatch.Elapsed;
                 _scanTimer.Stop();
-                var finalResults = newResults.Where(p => existingPaths.Contains($"{p.BaseAddress:X8}:{p.GetOffsetsString()}")).ToList();
+                // Updated intersection logic for the cancellation case as well.
+                var finalResults = newResults.Where(p => existingPaths.Contains(p)).ToList();
                 PopulateResultsGrid(finalResults);
                 UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
                 SoundManager.PlayNotify();
@@ -1041,6 +1088,8 @@ namespace PointerFinder2
         {
             Application.Exit();
         }
+
+
 
         private void debugConsoleToolStripMenuItem_Click(object sender, EventArgs e)
         {

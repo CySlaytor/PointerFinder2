@@ -30,6 +30,7 @@
             this.btnClose = new System.Windows.Forms.Button();
             this.btnRestartApp = new System.Windows.Forms.Button();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            this.btnPurgeMemory = new System.Windows.Forms.Button();
             this.tabControlSettings.SuspendLayout();
             this.tabGeneral.SuspendLayout();
             this.grpSound.SuspendLayout();
@@ -164,12 +165,25 @@
             this.btnRestartApp.UseVisualStyleBackColor = true;
             this.btnRestartApp.Click += new System.EventHandler(this.btnRestartApp_Click);
             // 
+            // btnPurgeMemory
+            // 
+            this.btnPurgeMemory.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.btnPurgeMemory.Location = new System.Drawing.Point(148, 197);
+            this.btnPurgeMemory.Name = "btnPurgeMemory";
+            this.btnPurgeMemory.Size = new System.Drawing.Size(91, 28);
+            this.btnPurgeMemory.TabIndex = 4;
+            this.btnPurgeMemory.Text = "Purge Memory";
+            this.toolTip1.SetToolTip(this.btnPurgeMemory, "Forces the application to release unused RAM back to the operating system.");
+            this.btnPurgeMemory.UseVisualStyleBackColor = true;
+            this.btnPurgeMemory.Click += new System.EventHandler(this.btnPurgeMemory_Click);
+            // 
             // SettingsForm
             // 
             this.AcceptButton = this.btnClose;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(344, 237);
+            this.Controls.Add(this.btnPurgeMemory);
             this.Controls.Add(this.btnRestartApp);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.tabControlSettings);
@@ -205,5 +219,6 @@
         private System.Windows.Forms.CheckBox chkUseDefaultSounds;
         private System.Windows.Forms.Button btnRestartApp;
         private System.Windows.Forms.ToolTip toolTip1;
+        private System.Windows.Forms.Button btnPurgeMemory;
     }
 }

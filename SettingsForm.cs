@@ -49,6 +49,18 @@ namespace PointerFinder2
             }
         }
 
+        // Event handler for the new "Purge Memory" button.
+        private void btnPurgeMemory_Click(object sender, EventArgs e)
+        {
+            // Call the public PurgeMemory method on the MainForm instance.
+            _mainForm?.PurgeMemory();
+            MessageBox.Show(
+                "Application memory has been purged.\n\nYou should see the RAM usage drop in Task Manager.",
+                "Success",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
         #region Settings Event Handlers
         private void chkUseDefaultSounds_CheckedChanged(object sender, EventArgs e)
         {
