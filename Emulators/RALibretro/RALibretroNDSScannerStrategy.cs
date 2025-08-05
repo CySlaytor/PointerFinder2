@@ -43,9 +43,9 @@ namespace PointerFinder2.Emulators.RALibretro
                 if (cancellationToken.IsCancellationRequested) return _foundPaths.ToList();
                 if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] Pointer map built with {_pointerMap.Count} unique pointers. Resolving paths...");
 
-                // Phase 2: Work backwards from the target address to find valid chains.
+                // Phase 2: Work backwards from the target address using a hybrid parallel DFS.
                 ReportProgress("Resolving paths...", 0, 1, 0);
-                await Task.Run(() => ResolvePathsBackward(_params.TargetAddress, new List<int>(), 1), cancellationToken);
+                await Task.Run(() => ParallelResolveLauncher(), cancellationToken);
 
                 if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN COMPLETE: Found {_foundPaths.Count} paths. ---");
             }
@@ -62,69 +62,104 @@ namespace PointerFinder2.Emulators.RALibretro
             return _foundPaths.ToList();
         }
 
-        // Recursively searches backwards for pointers that could lead to the target address.
-        private void ResolvePathsBackward(uint addressToFind, List<int> previousOffsets, int level)
+        private void ParallelResolveLauncher()
         {
-            if (_cancellationToken.IsCancellationRequested || _params == null || previousOffsets.Count >= _params.MaxLevel || _foundPathsCounter >= _params.MaxResults)
+            var workItems = new List<(uint startAddress, List<int> initialOffsets)>();
+
+            var searchItems = new List<(uint valueToSearch, int offset)>();
+            searchItems.Add((_params.TargetAddress, 0));
+            for (int offset = 4; offset <= _params.MaxOffset; offset += 4)
+            {
+                searchItems.Add((_params.TargetAddress - (uint)offset, offset));
+            }
+            if (_params.ScanForStructureBase)
+            {
+                for (int offset = -4; offset >= -_params.MaxNegativeOffset; offset -= 4)
+                {
+                    searchItems.Add((_params.TargetAddress - (uint)offset, offset));
+                }
+            }
+
+            foreach (var item in searchItems)
+            {
+                if (_pointerMap.TryGetValue(item.valueToSearch, out var sources))
+                {
+                    foreach (var source in sources)
+                    {
+                        workItems.Add((source, new List<int> { item.offset }));
+                    }
+                }
+            }
+
+            var parallelOptions = new ParallelOptions { CancellationToken = _cancellationToken };
+            if (_params.LimitCpuUsage)
+            {
+                int coreCount = Math.Max(1, Environment.ProcessorCount / 2);
+                parallelOptions.MaxDegreeOfParallelism = coreCount;
+            }
+
+            Parallel.ForEach(workItems, parallelOptions, item =>
+            {
+                if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) return;
+
+                if (item.startAddress >= _params.StaticBaseStart && item.startAddress <= _params.StaticBaseEnd)
+                {
+                    var finalOffsets = new List<int>(item.initialOffsets);
+                    finalOffsets.Reverse();
+                    var newPath = new PointerPath { BaseAddress = item.startAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
+                    _foundPaths.Add(newPath);
+                    Interlocked.Increment(ref _foundPathsCounter);
+                }
+                else
+                {
+                    ResolvePathsBackward(item.startAddress, item.initialOffsets, 2);
+                }
+            });
+        }
+
+        private void ResolvePathsBackward(uint addressToFind, List<int> currentOffsets, int level)
+        {
+            if (_cancellationToken.IsCancellationRequested || currentOffsets.Count >= _params.MaxLevel || _foundPathsCounter >= _params.MaxResults)
             {
                 return;
             }
 
             var searchItems = new List<(uint valueToSearch, int offset)>();
             searchItems.Add((addressToFind, 0));
-
             for (int offset = 4; offset <= _params.MaxOffset; offset += 4)
             {
                 searchItems.Add((addressToFind - (uint)offset, offset));
             }
 
-            // On the first level, also search for pointers with negative offsets to find structure bases.
-            if (previousOffsets.Count == 0 && _params.ScanForStructureBase)
-            {
-                for (int offset = -4; offset >= -_params.MaxNegativeOffset; offset -= 4)
-                {
-                    searchItems.Add((addressToFind - (uint)offset, offset));
-                }
-            }
-
-            // This loop is intentionally serial as the work items are too small for efficient parallelization here.
             foreach (var item in searchItems)
             {
                 if (_cancellationToken.IsCancellationRequested) return;
-                CheckPointerAndRecurse(item.valueToSearch, item.offset, previousOffsets, level);
-            }
-        }
 
-        // Checks if a given pointer value exists in our map and, if so, continues the search.
-        private void CheckPointerAndRecurse(uint pointerValueToSearch, int offset, List<int> previousOffsets, int level)
-        {
-            if (!_pointerMap.TryGetValue(pointerValueToSearch, out var sources)) return;
-
-            var newOffsets = new List<int>(previousOffsets) { offset };
-
-            foreach (uint sourceAddress in sources)
-            {
-                if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) break;
-
-                // Check if we've hit a static base address. If so, we found a complete path.
-                if (sourceAddress >= _params.StaticBaseStart && sourceAddress <= _params.StaticBaseEnd)
+                if (_pointerMap.TryGetValue(item.valueToSearch, out var sources))
                 {
-                    var finalOffsets = new List<int>(newOffsets);
-                    finalOffsets.Reverse();
-                    var newPath = new PointerPath { BaseAddress = sourceAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
-
-                    _foundPaths.Add(newPath);
-                    long currentCount = Interlocked.Increment(ref _foundPathsCounter);
-
-                    if (currentCount % 100 == 0 || currentCount == _params.MaxResults)
+                    currentOffsets.Add(item.offset);
+                    foreach (uint sourceAddress in sources)
                     {
-                        ReportProgress(null, 0, 0, (int)currentCount);
+                        if (_foundPathsCounter >= _params.MaxResults) break;
+
+                        if (sourceAddress >= _params.StaticBaseStart && sourceAddress <= _params.StaticBaseEnd)
+                        {
+                            var finalOffsets = new List<int>(currentOffsets);
+                            finalOffsets.Reverse();
+                            var newPath = new PointerPath { BaseAddress = sourceAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
+                            _foundPaths.Add(newPath);
+                            long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+                            if (currentCount % 1000 == 0)
+                            {
+                                ReportProgress(null, 0, 0, (int)currentCount);
+                            }
+                        }
+                        else
+                        {
+                            ResolvePathsBackward(sourceAddress, currentOffsets, level + 1);
+                        }
                     }
-                }
-                else
-                {
-                    // If it's not a static address, continue searching backwards from this new address.
-                    ResolvePathsBackward(sourceAddress, newOffsets, level + 1);
+                    currentOffsets.RemoveAt(currentOffsets.Count - 1);
                 }
             }
         }
@@ -154,8 +189,15 @@ namespace PointerFinder2.Emulators.RALibretro
 
             await Task.Run(() =>
             {
+                var parallelOptions = new ParallelOptions { CancellationToken = _cancellationToken };
+                if (_params.LimitCpuUsage)
+                {
+                    int coreCount = Math.Max(1, Environment.ProcessorCount / 2);
+                    parallelOptions.MaxDegreeOfParallelism = coreCount;
+                }
+
                 Parallel.ForEach(allChunks,
-                    new ParallelOptions { CancellationToken = _cancellationToken },
+                    parallelOptions,
                     () => new Dictionary<uint, List<uint>>(),
                     (chunkInfo, loopState, localMap) =>
                     {

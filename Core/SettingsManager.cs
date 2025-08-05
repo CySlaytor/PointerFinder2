@@ -20,6 +20,9 @@ namespace PointerFinder2.Core
         public int MaxNegativeOffset { get; set; }
         public bool Use16ByteAlignment { get; set; }
         public bool UseSliderRange { get; set; } // For persistence
+
+        // NEW: Add a setting to control CPU usage during scans. Defaults to false (unlimited).
+        public bool LimitCpuUsage { get; set; } = false;
     }
 
     // Handles loading and saving all settings to the settings.ini file.
@@ -70,6 +73,8 @@ namespace PointerFinder2.Core
                 ini.Write("Use16ByteAlignment", settings.Use16ByteAlignment.ToString(), section);
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
                 ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
+                // NEW: Save the CPU limit setting to the INI file.
+                ini.Write("LimitCpuUsage", settings.LimitCpuUsage.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -113,6 +118,9 @@ namespace PointerFinder2.Core
             settings.MaxNegativeOffset = maxNegativeOffset;
             if (!bool.TryParse(ini.Read("UseSliderRange", section, defaultSettings.UseSliderRange.ToString()), out bool useSliderRange)) useSliderRange = defaultSettings.UseSliderRange;
             settings.UseSliderRange = useSliderRange;
+            // NEW: Load the CPU limit setting from the INI file, defaulting to false if not found.
+            if (!bool.TryParse(ini.Read("LimitCpuUsage", section, defaultSettings.LimitCpuUsage.ToString()), out bool limitCpuUsage)) limitCpuUsage = defaultSettings.LimitCpuUsage;
+            settings.LimitCpuUsage = limitCpuUsage;
 
             if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound)) useDefaultSound = false;
             GlobalSettings.UseWindowsDefaultSound = useDefaultSound;

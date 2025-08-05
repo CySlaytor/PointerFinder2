@@ -45,9 +45,9 @@ namespace PointerFinder2.Emulators.PCSX2
                 if (cancellationToken.IsCancellationRequested) return _foundPaths.ToList();
                 if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] Pointer map built with {_intelligentPointerMap.Count} unique pointers. Resolving paths...");
 
-                // Phase 2: Work backwards from the target address to find valid chains.
+                // Phase 2: Work backwards from the target address using a hybrid parallel DFS.
                 ReportProgress("Resolving paths...", 0, 1, 0);
-                await Task.Run(() => ResolvePathsBackward(_params.TargetAddress, new List<int>(), 1), cancellationToken);
+                await Task.Run(() => ParallelResolveLauncher(), cancellationToken);
 
                 if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN COMPLETE: Found {_foundPaths.Count} paths. ---");
             }
@@ -64,22 +64,83 @@ namespace PointerFinder2.Emulators.PCSX2
             return _foundPaths.ToList();
         }
 
-        // Recursively searches backwards for pointers that could lead to the target address.
-        private void ResolvePathsBackward(uint addressToFind, List<int> previousOffsets, int level)
+        // HYBRID PARALLEL DFS LAUNCHER: This method performs the first level of the search
+        // and then launches the memory-efficient recursive DFS for each sub-problem in parallel.
+        private void ParallelResolveLauncher()
         {
-            if (_cancellationToken.IsCancellationRequested || _params == null || previousOffsets.Count >= _params.MaxLevel || _foundPathsCounter >= _params.MaxResults)
+            var workItems = new List<(uint startAddress, List<int> initialOffsets)>();
+
+            // --- Step 1: Find all Level 1 pointers ---
+            var searchItems = new List<(uint valueToSearch, int offset)>();
+            searchItems.Add((_params.TargetAddress, 0));
+            int step = _params.Use16ByteAlignment ? 16 : 4;
+            uint startAddress = _params.Use16ByteAlignment ? _params.TargetAddress & 0xFFFFFFF0 : _params.TargetAddress;
+            for (uint currentAddress = startAddress; currentAddress > 4096 && currentAddress >= _params.TargetAddress - _params.MaxOffset; currentAddress -= (uint)step)
+            {
+                int offset = (int)(_params.TargetAddress - currentAddress);
+                if (offset == 0) continue;
+                searchItems.Add((currentAddress, offset));
+            }
+            if (_params.ScanForStructureBase)
+            {
+                for (int offset = -4; offset >= -_params.MaxNegativeOffset; offset -= 4)
+                {
+                    searchItems.Add((_params.TargetAddress - (uint)offset, offset));
+                }
+            }
+
+            foreach (var item in searchItems)
+            {
+                if (!_intelligentPointerMap.TryGetValue(item.valueToSearch, out var sources) &&
+                    !(item.valueToSearch >= Pcsx2Manager.PS2_EEMEM_START && _intelligentPointerMap.TryGetValue(item.valueToSearch - Pcsx2Manager.PS2_EEMEM_START, out sources)))
+                {
+                    continue;
+                }
+                foreach (var source in sources)
+                {
+                    workItems.Add((source, new List<int> { item.offset }));
+                }
+            }
+
+            // --- Step 2: Process work items in parallel ---
+            var parallelOptions = new ParallelOptions { CancellationToken = _cancellationToken };
+            if (_params.LimitCpuUsage)
+            {
+                int coreCount = Math.Max(1, Environment.ProcessorCount / 2);
+                parallelOptions.MaxDegreeOfParallelism = coreCount;
+            }
+
+            Parallel.ForEach(workItems, parallelOptions, item =>
+            {
+                if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) return;
+
+                if (item.startAddress >= _params.StaticBaseStart && item.startAddress <= _params.StaticBaseEnd)
+                {
+                    var finalOffsets = new List<int>(item.initialOffsets);
+                    finalOffsets.Reverse();
+                    var newPath = new PointerPath { BaseAddress = item.startAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
+                    _foundPaths.Add(newPath);
+                    Interlocked.Increment(ref _foundPathsCounter);
+                }
+                else
+                {
+                    ResolvePathsBackward(item.startAddress, item.initialOffsets, 2);
+                }
+            });
+        }
+
+        // Memory-efficient recursive Depth-First Search. Called in parallel by the launcher.
+        private void ResolvePathsBackward(uint addressToFind, List<int> currentOffsets, int level)
+        {
+            if (_cancellationToken.IsCancellationRequested || currentOffsets.Count >= _params.MaxLevel || _foundPathsCounter >= _params.MaxResults)
             {
                 return;
             }
 
             var searchItems = new List<(uint valueToSearch, int offset)>();
             searchItems.Add((addressToFind, 0));
-
-            // For PCSX2, we can optimize by searching in 16-byte aligned steps if the user enables it.
-            // This is much faster and often more accurate for structure-based data.
             int step = _params.Use16ByteAlignment ? 16 : 4;
             uint startAddress = _params.Use16ByteAlignment ? addressToFind & 0xFFFFFFF0 : addressToFind;
-
             for (uint currentAddress = startAddress; currentAddress > 4096 && currentAddress >= addressToFind - _params.MaxOffset; currentAddress -= (uint)step)
             {
                 int offset = (int)(addressToFind - currentAddress);
@@ -87,61 +148,39 @@ namespace PointerFinder2.Emulators.PCSX2
                 searchItems.Add((currentAddress, offset));
             }
 
-            // On the first level, also search for pointers with negative offsets to find structure bases.
-            if (previousOffsets.Count == 0 && _params.ScanForStructureBase)
-            {
-                for (int offset = -4; offset >= -_params.MaxNegativeOffset; offset -= 4)
-                {
-                    searchItems.Add((addressToFind - (uint)offset, offset));
-                }
-            }
-
-            // This loop is intentionally serial. The work items are too small for parallelization to be efficient here.
             foreach (var item in searchItems)
             {
                 if (_cancellationToken.IsCancellationRequested) return;
-                CheckPointerAndRecurse(item.valueToSearch, item.offset, previousOffsets, level);
-            }
-        }
 
-        // Checks our map for a given pointer value and continues the search if found.
-        private void CheckPointerAndRecurse(uint pointerValueToSearch, int offset, List<int> previousOffsets, int level)
-        {
-            // The check is complex because a PS2 pointer can be in kernel format (e.g. 0x00xxxxxx) or EE format (0x20xxxxxx).
-            // We need to check for both possibilities in our map.
-            if (!_intelligentPointerMap.TryGetValue(pointerValueToSearch, out var sources) &&
-                !(pointerValueToSearch >= Pcsx2Manager.PS2_EEMEM_START && _intelligentPointerMap.TryGetValue(pointerValueToSearch - Pcsx2Manager.PS2_EEMEM_START, out sources)))
-            {
-                return;
-            }
-
-            var newOffsets = new List<int>(previousOffsets) { offset };
-
-            foreach (uint sourceAddress in sources)
-            {
-                if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) break;
-
-                // Check if we've hit a static base address. If so, we found a complete path.
-                if (sourceAddress >= _params.StaticBaseStart && sourceAddress <= _params.StaticBaseEnd)
+                if (!_intelligentPointerMap.TryGetValue(item.valueToSearch, out var sources) &&
+                    !(item.valueToSearch >= Pcsx2Manager.PS2_EEMEM_START && _intelligentPointerMap.TryGetValue(item.valueToSearch - Pcsx2Manager.PS2_EEMEM_START, out sources)))
                 {
-                    var finalOffsets = new List<int>(newOffsets);
-                    finalOffsets.Reverse();
-                    var newPath = new PointerPath { BaseAddress = sourceAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
+                    continue;
+                }
 
-                    _foundPaths.Add(newPath);
-                    long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+                currentOffsets.Add(item.offset);
+                foreach (uint sourceAddress in sources)
+                {
+                    if (_foundPathsCounter >= _params.MaxResults) break;
 
-                    // Throttle UI updates.
-                    if (currentCount % 100 == 0 || currentCount == _params.MaxResults)
+                    if (sourceAddress >= _params.StaticBaseStart && sourceAddress <= _params.StaticBaseEnd)
                     {
-                        ReportProgress(null, 0, 0, (int)currentCount);
+                        var finalOffsets = new List<int>(currentOffsets);
+                        finalOffsets.Reverse();
+                        var newPath = new PointerPath { BaseAddress = sourceAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
+                        _foundPaths.Add(newPath);
+                        long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+                        if (currentCount % 1000 == 0)
+                        {
+                            ReportProgress(null, 0, 0, (int)currentCount);
+                        }
+                    }
+                    else
+                    {
+                        ResolvePathsBackward(sourceAddress, currentOffsets, level + 1);
                     }
                 }
-                else
-                {
-                    // If it's not a static address, continue searching backwards from this new address.
-                    ResolvePathsBackward(sourceAddress, newOffsets, level + 1);
-                }
+                currentOffsets.RemoveAt(currentOffsets.Count - 1);
             }
         }
 
@@ -170,9 +209,16 @@ namespace PointerFinder2.Emulators.PCSX2
 
             await Task.Run(() =>
             {
+                var parallelOptions = new ParallelOptions { CancellationToken = _cancellationToken };
+                if (_params.LimitCpuUsage)
+                {
+                    int coreCount = Math.Max(1, Environment.ProcessorCount / 2);
+                    parallelOptions.MaxDegreeOfParallelism = coreCount;
+                }
+
                 Parallel.ForEach(
                     allChunks,
-                    new ParallelOptions { CancellationToken = _cancellationToken },
+                    parallelOptions,
                     () => new Dictionary<uint, List<uint>>(),
                     (chunkInfo, loopState, localMap) =>
                     {

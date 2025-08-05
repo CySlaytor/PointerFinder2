@@ -32,5 +32,8 @@
 
         // If true, the scanner will use 16-byte steps for faster, aligned searching (primarily for PCSX2).
         public bool Use16ByteAlignment { get; set; } = true;
+
+        // NEW: If true, the scanner will limit the number of threads used for parallel operations.
+        public bool LimitCpuUsage { get; set; } = false;
     }
 }

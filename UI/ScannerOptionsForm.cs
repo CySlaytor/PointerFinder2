@@ -66,6 +66,8 @@ namespace PointerFinder2
             chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
             txtMaxNegativeOffset.Text = _currentSettings.MaxNegativeOffset.ToString("X");
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;
+            // NEW: Load the saved state of the CPU limit checkbox.
+            chkLimitCpuUsage.Checked = _currentSettings.LimitCpuUsage;
 
             // --- Configure Slider and set initial state ---
             SetupRangeSlider();
@@ -119,7 +121,9 @@ namespace PointerFinder2
                     AnalyzeStructures = chkAnalyzeStructures.Checked,
                     ScanForStructureBase = chkScanForStructureBase.Checked,
                     MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
-                    Use16ByteAlignment = chkUse16ByteAlignment.Checked
+                    Use16ByteAlignment = chkUse16ByteAlignment.Checked,
+                    // NEW: Pass the value of the checkbox to the scan parameters.
+                    LimitCpuUsage = chkLimitCpuUsage.Checked
                 };
             }
             catch (Exception ex)
@@ -143,7 +147,9 @@ namespace PointerFinder2
                 AnalyzeStructures = chkAnalyzeStructures.Checked,
                 ScanForStructureBase = chkScanForStructureBase.Checked,
                 MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
-                Use16ByteAlignment = chkUse16ByteAlignment.Checked
+                Use16ByteAlignment = chkUse16ByteAlignment.Checked,
+                // NEW: Save the state of the checkbox for the next time the form is opened.
+                LimitCpuUsage = chkLimitCpuUsage.Checked
             };
         }
 
