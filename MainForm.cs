@@ -289,7 +289,7 @@ namespace PointerFinder2
             if (_filterCts != null && !_filterCts.IsCancellationRequested)
             {
                 // In Virtual Mode, we just need to update the status and tell the grid its row count has changed.
-                UpdateStatus($"Filtering... {_validFilteredPaths.Count} paths remain.");
+                UpdateStatus($"Filtering... {_validFilteredPaths.Count:N0} paths remain.");
                 dgvResults.RowCount = _validFilteredPaths.Count;
                 // Invalidate forces the grid to repaint, requesting cell values for the now-visible rows.
                 dgvResults.Invalidate();
@@ -452,8 +452,8 @@ namespace PointerFinder2
         // Manages the execution of a scan task and handles its completion, cancellation, or failure.
         private async Task RunScan(Task<List<PointerPath>> scanTask)
         {
-            lblProgressPercentage.Text = $"0 / {_lastScanParams.MaxResults}";
-            progressBar.Maximum = _lastScanParams.MaxResults;
+            lblProgressPercentage.Text = $"0 / {_lastScanParams.MaxResults:N0}";
+            progressBar.Maximum = (int)_lastScanParams.MaxResults;
             progressBar.Value = 0;
 
             SwitchToScanUI(isScanningOrFiltering: true);
@@ -469,7 +469,7 @@ namespace PointerFinder2
 
                 if (scanTask.IsCanceled)
                 {
-                    UpdateStatus($"Scan stopped by user. Found {_currentResults.Count} paths {FormatDuration(elapsed)}.");
+                    UpdateStatus($"Scan stopped by user. Found {_currentResults.Count:N0} paths {FormatDuration(elapsed)}.");
                     SoundManager.PlayNotify();
                 }
                 else
@@ -488,11 +488,11 @@ namespace PointerFinder2
                         if ((_lastScanParams?.AnalyzeStructures ?? true))
                         {
                             structureCount = AnalyzeAndDisplayStructures(_currentResults);
-                            UpdateStatus($"Scan complete. Found {_currentResults.Count} paths and {structureCount} potential structures {FormatDuration(elapsed)}.");
+                            UpdateStatus($"Scan complete. Found {_currentResults.Count:N0} paths and {structureCount:N0} potential structures {FormatDuration(elapsed)}.");
                         }
                         else
                         {
-                            UpdateStatus($"Scan complete. Found {_currentResults.Count} paths {FormatDuration(elapsed)}.");
+                            UpdateStatus($"Scan complete. Found {_currentResults.Count:N0} paths {FormatDuration(elapsed)}.");
                         }
                     }
                 }
@@ -503,7 +503,7 @@ namespace PointerFinder2
                 var elapsed = _scanStopwatch.Elapsed;
                 _scanTimer.Stop();
                 PopulateResultsGrid(results);
-                UpdateStatus($"Scan stopped by user. Found {_currentResults.Count} paths {FormatDuration(elapsed)}.");
+                UpdateStatus($"Scan stopped by user. Found {_currentResults.Count:N0} paths {FormatDuration(elapsed)}.");
                 SoundManager.PlayNotify();
             }
             catch (Exception ex)
@@ -572,8 +572,8 @@ namespace PointerFinder2
         {
             _isRefining = true;
             lblResultCount.Visible = false;
-            lblProgressPercentage.Text = $"0 / {_lastScanParams.MaxResults}";
-            progressBar.Maximum = _lastScanParams.MaxResults;
+            lblProgressPercentage.Text = $"0 / {_lastScanParams.MaxResults:N0}";
+            progressBar.Maximum = (int)_lastScanParams.MaxResults;
             progressBar.Value = 0;
 
             SwitchToScanUI(true, "Refining results...");
@@ -583,11 +583,11 @@ namespace PointerFinder2
 
             try
             {
-                if (shouldLog) logger.Log($"--- STARTING REFINE SCAN: {existingPaths.Count} initial paths to verify. ---");
+                if (shouldLog) logger.Log($"--- STARTING REFINE SCAN: {existingPaths.Count:N0} initial paths to verify. ---");
                 var newResults = await scanTask;
                 var elapsed = _scanStopwatch.Elapsed;
                 _scanTimer.Stop();
-                if (shouldLog) logger.Log($"New scan completed, found {newResults.Count} potential paths. Performing intersection...");
+                if (shouldLog) logger.Log($"New scan completed, found {newResults.Count:N0} potential paths. Performing intersection...");
 
                 // The intersection logic is now much cleaner and more efficient.
                 // It uses the custom Equals/GetHashCode methods on PointerPath for a fast lookup.
@@ -596,7 +596,7 @@ namespace PointerFinder2
 
                 if (scanTask.IsCanceled)
                 {
-                    UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
+                    UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
                     SoundManager.PlayNotify();
                 }
                 else
@@ -604,7 +604,7 @@ namespace PointerFinder2
                     // For a refine scan, play success or fail based on results.
                     if (_currentResults.Any())
                     {
-                        UpdateStatus($"Refine scan complete. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
+                        UpdateStatus($"Refine scan complete. Found {_currentResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
                         // Safely check if structure analysis is enabled. If _lastScanParams is null, default to true.
                         if ((_lastScanParams?.AnalyzeStructures ?? true))
                         {
@@ -627,7 +627,7 @@ namespace PointerFinder2
                 // Updated intersection logic for the cancellation case as well.
                 var finalResults = newResults.Where(p => existingPaths.Contains(p)).ToList();
                 PopulateResultsGrid(finalResults);
-                UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count} matching paths {FormatDuration(elapsed)}.");
+                UpdateStatus($"Refine scan stopped by user. Found {_currentResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
                 SoundManager.PlayNotify();
             }
             catch (Exception ex)
@@ -770,9 +770,9 @@ namespace PointerFinder2
             if (!string.IsNullOrEmpty(report.StatusMessage)) UpdateStatus(report.StatusMessage);
             if (_lastScanParams != null)
             {
-                if (progressBar.Maximum != _lastScanParams.MaxResults) progressBar.Maximum = _lastScanParams.MaxResults;
-                progressBar.Value = Math.Min(report.FoundCount, progressBar.Maximum);
-                lblProgressPercentage.Text = $"{report.FoundCount} / {_lastScanParams.MaxResults}";
+                if (progressBar.Maximum != _lastScanParams.MaxResults) progressBar.Maximum = (int)_lastScanParams.MaxResults;
+                progressBar.Value = (int)Math.Min(report.FoundCount, progressBar.Maximum);
+                lblProgressPercentage.Text = $"{report.FoundCount:N0} / {_lastScanParams.MaxResults:N0}";
             }
         }
 
@@ -803,7 +803,7 @@ namespace PointerFinder2
             dgvResults.SuspendLayout();
             dgvResults.CellValueNeeded -= dgvResults_CellValueNeeded;
             dgvResults.Columns.Clear();
-            lblResultCount.Text = $"Results: {results.Count}";
+            lblResultCount.Text = $"Results: {results.Count:N0}";
             bool hasResults = results.Any();
             lblResultCount.Visible = hasResults;
             if (!hasResults)
@@ -858,7 +858,7 @@ namespace PointerFinder2
                 }
                 if (!deltas.Any()) continue;
                 var commonDelta = deltas.GroupBy(d => d).OrderByDescending(g => g.Count()).First().Key;
-                var rootNode = new TreeNode($"Structure Found ({group.Count()} members, Offsets: {group.Key})");
+                var rootNode = new TreeNode($"Structure Found ({group.Count():N0} members, Offsets: {group.Key})");
                 rootNode.Nodes.Add($"Common Delta (Stride): 0x{commonDelta:X}");
                 rootNode.Nodes.Add($"Base Address Range: {_currentManager.FormatDisplayAddress(members.First().BaseAddress)} - {_currentManager.FormatDisplayAddress(members.Last().BaseAddress)}");
                 var memberNode = rootNode.Nodes.Add("Member Base Addresses");
@@ -925,7 +925,7 @@ namespace PointerFinder2
                 _scanTimer.Stop();
                 _filterRefreshTimer.Stop();
                 PopulateResultsGrid(_validFilteredPaths.ToList());
-                UpdateStatus($"Filtering stopped {FormatDuration(elapsed)}. {_currentResults.Count} paths remain.");
+                UpdateStatus($"Filtering stopped {FormatDuration(elapsed)}. {_currentResults.Count:N0} paths remain.");
                 _filterCts?.Dispose();
                 _filterCts = null;
                 SwitchToScanUI(isScanningOrFiltering: false);
@@ -1040,7 +1040,7 @@ namespace PointerFinder2
             if (addresses.Any())
             {
                 Clipboard.SetText(string.Join(Environment.NewLine, addresses));
-                UpdateStatus($"Copied {addresses.Count()} base address(es) to clipboard.");
+                UpdateStatus($"Copied {addresses.Count():N0} base address(es) to clipboard.");
             }
         }
 
@@ -1080,8 +1080,8 @@ namespace PointerFinder2
             dgvResults.ClearSelection();
             dgvResults.RowCount = _currentResults.Count;
             dgvResults.Invalidate();
-            lblResultCount.Text = $"Results: {_currentResults.Count}";
-            UpdateStatus($"Deleted {originalCount - _currentResults.Count} row(s).");
+            lblResultCount.Text = $"Results: {_currentResults.Count:N0}";
+            UpdateStatus($"Deleted {(originalCount - _currentResults.Count):N0} row(s).");
         }
 
         private void menuExit_Click(object sender, EventArgs e)

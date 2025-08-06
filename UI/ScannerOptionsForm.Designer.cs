@@ -69,7 +69,7 @@
             // 
             this.numMaxLevel.Location = new System.Drawing.Point(14, 76);
             this.numMaxLevel.Maximum = new decimal(new int[] {
-            15,
+            100,
             0,
             0,
             0});
@@ -192,7 +192,7 @@
             // 
             this.numMaxResults.Location = new System.Drawing.Point(170, 76);
             this.numMaxResults.Maximum = new decimal(new int[] {
-            1000000000,
+            100000000,
             0,
             0,
             0});
@@ -204,6 +204,7 @@
             this.numMaxResults.Name = "numMaxResults";
             this.numMaxResults.Size = new System.Drawing.Size(126, 22);
             this.numMaxResults.TabIndex = 3;
+            this.numMaxResults.ThousandsSeparator = true;
             this.numMaxResults.Value = new decimal(new int[] {
             5000,
             0,

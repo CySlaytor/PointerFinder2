@@ -41,17 +41,17 @@ namespace PointerFinder2.Emulators.DuckStation
                 // Phase 1: Scan all of RAM to build a map of what points to where.
                 await BuildPointerMapAsync();
                 if (cancellationToken.IsCancellationRequested) return _foundPaths.ToList();
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] Pointer map built with {_pointerMap.Count} unique pointers. Resolving paths...");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] Pointer map built with {_pointerMap.Count:N0} unique pointers. Resolving paths...");
 
                 // Phase 2: Work backwards from the target address using a hybrid parallel DFS.
                 ReportProgress("Resolving paths...", 0, 1, 0);
                 await Task.Run(() => ParallelResolveLauncher(), cancellationToken);
 
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN COMPLETE: Found {_foundPaths.Count} paths. ---");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN COMPLETE: Found {_foundPaths.Count:N0} paths. ---");
             }
             catch (OperationCanceledException)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN CANCELLED. Found {_foundPaths.Count} paths. ---");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{_manager.EmulatorName}] --- SCAN CANCELLED. Found {_foundPaths.Count:N0} paths. ---");
             }
             finally
             {
