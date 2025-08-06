@@ -7,13 +7,21 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImplicitUsings>enable</ImplicitUsings>
 
-		<!-- Version and Metadata Information -->
-		<AssemblyVersion>2.2.1.0</AssemblyVersion>
-		<FileVersion>2.2.1.0</FileVersion>
-		<Company>CySlaytor</Company>
-		<Product>Pointer Finder 2</Product>
+		<!-- General Info -->
+		<Company>RetroAchievements</Company>
+		<Authors>CySlaytor</Authors>
+		<Product>Pointer Finder 2.0</Product>
+		<Copyright>2025 © RetroAchievements</Copyright>
 		<Description>A powerful and versatile pointer scanning tool for game reverse engineering and achievement development.</Description>
-		<Copyright>Copyright © CySlaytor 2024</Copyright>
+
+		<!-- === VERSIONING=== -->
+		<!-- FileVersion and InformationalVersion will use this. -->
+		<Version>2.2.3.0</Version>
+		<!-- AssemblyVersion defaults to a stripped version of <Version> -->
+		<AssemblyVersion>2.2.3.0</AssemblyVersion>
+
+		<!-- Prevent the Git hash from being added to the Product Version -->
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
 	</PropertyGroup>
 
