@@ -20,6 +20,8 @@
             this.components = new System.ComponentModel.Container();
             this.tabControlSettings = new System.Windows.Forms.TabControl();
             this.tabGeneral = new System.Windows.Forms.TabPage();
+            this.grpPerformance = new System.Windows.Forms.GroupBox();
+            this.chkLimitCpuUsage = new System.Windows.Forms.CheckBox();
             this.grpSound = new System.Windows.Forms.GroupBox();
             this.chkUseDefaultSounds = new System.Windows.Forms.CheckBox();
             this.tabDebug = new System.Windows.Forms.TabPage();
@@ -33,6 +35,7 @@
             this.btnPurgeMemory = new System.Windows.Forms.Button();
             this.tabControlSettings.SuspendLayout();
             this.tabGeneral.SuspendLayout();
+            this.grpPerformance.SuspendLayout();
             this.grpSound.SuspendLayout();
             this.tabDebug.SuspendLayout();
             this.grpLogging.SuspendLayout();
@@ -48,19 +51,42 @@
             this.tabControlSettings.Location = new System.Drawing.Point(12, 12);
             this.tabControlSettings.Name = "tabControlSettings";
             this.tabControlSettings.SelectedIndex = 0;
-            this.tabControlSettings.Size = new System.Drawing.Size(320, 179);
+            this.tabControlSettings.Size = new System.Drawing.Size(320, 203);
             this.tabControlSettings.TabIndex = 0;
             // 
             // tabGeneral
             // 
+            this.tabGeneral.Controls.Add(this.grpPerformance);
             this.tabGeneral.Controls.Add(this.grpSound);
             this.tabGeneral.Location = new System.Drawing.Point(4, 24);
             this.tabGeneral.Name = "tabGeneral";
             this.tabGeneral.Padding = new System.Windows.Forms.Padding(3);
-            this.tabGeneral.Size = new System.Drawing.Size(312, 151);
+            this.tabGeneral.Size = new System.Drawing.Size(312, 175);
             this.tabGeneral.TabIndex = 0;
             this.tabGeneral.Text = "General";
             this.tabGeneral.UseVisualStyleBackColor = true;
+            // 
+            // grpPerformance
+            // 
+            this.grpPerformance.Controls.Add(this.chkLimitCpuUsage);
+            this.grpPerformance.Location = new System.Drawing.Point(6, 77);
+            this.grpPerformance.Name = "grpPerformance";
+            this.grpPerformance.Size = new System.Drawing.Size(299, 65);
+            this.grpPerformance.TabIndex = 1;
+            this.grpPerformance.TabStop = false;
+            this.grpPerformance.Text = "Performance";
+            // 
+            // chkLimitCpuUsage
+            // 
+            this.chkLimitCpuUsage.AutoSize = true;
+            this.chkLimitCpuUsage.Location = new System.Drawing.Point(16, 28);
+            this.chkLimitCpuUsage.Name = "chkLimitCpuUsage";
+            this.chkLimitCpuUsage.Size = new System.Drawing.Size(206, 19);
+            this.chkLimitCpuUsage.TabIndex = 0;
+            this.chkLimitCpuUsage.Text = "Limit CPU Usage (approx. 50%)";
+            this.toolTip1.SetToolTip(this.chkLimitCpuUsage, "Reduces the number of CPU cores used during the scan.\r\nHelpful for multitasking, but the scan will take longer.");
+            this.chkLimitCpuUsage.UseVisualStyleBackColor = true;
+            this.chkLimitCpuUsage.CheckedChanged += new System.EventHandler(this.chkLimitCpuUsage_CheckedChanged);
             // 
             // grpSound
             // 
@@ -89,7 +115,7 @@
             this.tabDebug.Location = new System.Drawing.Point(4, 24);
             this.tabDebug.Name = "tabDebug";
             this.tabDebug.Padding = new System.Windows.Forms.Padding(3);
-            this.tabDebug.Size = new System.Drawing.Size(312, 151);
+            this.tabDebug.Size = new System.Drawing.Size(312, 175);
             this.tabDebug.TabIndex = 1;
             this.tabDebug.Text = "Debug";
             this.tabDebug.UseVisualStyleBackColor = true;
@@ -143,7 +169,7 @@
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnClose.DialogResult = System.Windows.Forms.DialogResult.OK;
-            this.btnClose.Location = new System.Drawing.Point(245, 197);
+            this.btnClose.Location = new System.Drawing.Point(245, 221);
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(87, 28);
             this.btnClose.TabIndex = 2;
@@ -156,7 +182,7 @@
             this.btnRestartApp.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.btnRestartApp.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
             this.btnRestartApp.ForeColor = System.Drawing.Color.DarkRed;
-            this.btnRestartApp.Location = new System.Drawing.Point(12, 197);
+            this.btnRestartApp.Location = new System.Drawing.Point(12, 221);
             this.btnRestartApp.Name = "btnRestartApp";
             this.btnRestartApp.Size = new System.Drawing.Size(130, 28);
             this.btnRestartApp.TabIndex = 3;
@@ -168,7 +194,7 @@
             // btnPurgeMemory
             // 
             this.btnPurgeMemory.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.btnPurgeMemory.Location = new System.Drawing.Point(148, 197);
+            this.btnPurgeMemory.Location = new System.Drawing.Point(148, 221);
             this.btnPurgeMemory.Name = "btnPurgeMemory";
             this.btnPurgeMemory.Size = new System.Drawing.Size(91, 28);
             this.btnPurgeMemory.TabIndex = 4;
@@ -182,7 +208,7 @@
             this.AcceptButton = this.btnClose;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(344, 237);
+            this.ClientSize = new System.Drawing.Size(344, 261);
             this.Controls.Add(this.btnPurgeMemory);
             this.Controls.Add(this.btnRestartApp);
             this.Controls.Add(this.btnClose);
@@ -196,6 +222,8 @@
             this.Load += new System.EventHandler(this.SettingsForm_Load);
             this.tabControlSettings.ResumeLayout(false);
             this.tabGeneral.ResumeLayout(false);
+            this.grpPerformance.ResumeLayout(false);
+            this.grpPerformance.PerformLayout();
             this.grpSound.ResumeLayout(false);
             this.grpSound.PerformLayout();
             this.tabDebug.ResumeLayout(false);
@@ -220,5 +248,7 @@
         private System.Windows.Forms.Button btnRestartApp;
         private System.Windows.Forms.ToolTip toolTip1;
         private System.Windows.Forms.Button btnPurgeMemory;
+        private System.Windows.Forms.GroupBox grpPerformance;
+        private System.Windows.Forms.CheckBox chkLimitCpuUsage;
     }
 }

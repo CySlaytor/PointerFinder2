@@ -1,6 +1,7 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
+using PointerFinder2.UI;
 using PointerFinder2.UI.Controls;
 using System;
 using System.Collections.Concurrent;
@@ -12,6 +13,7 @@ using System.Linq;
 using System.Media;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -54,9 +56,12 @@ namespace PointerFinder2
         private int _pidToAutoAttach = -1;
         private string _targetToAutoAttach = null;
 
-        // --- UI State for Sorting ---
+        // --- UI State for Sorting & Searching ---
         private DataGridViewColumn _sortedColumn;
         private SortOrder _sortOrder = SortOrder.None;
+        private string _currentSearchTerm = string.Empty;
+        private readonly Stack<string> _undoSearchStack = new Stack<string>();
+        private readonly Stack<string> _redoSearchStack = new Stack<string>();
         #endregion
 
         public MainForm(string[] args)
@@ -343,7 +348,7 @@ namespace PointerFinder2
 
         #endregion
 
-        #region Attachment Logic
+        #region Menu Item Handlers (File, Edit, View)
 
         // Handles the "Attach/Detach" menu item click.
         private void menuAttach_Click(object sender, EventArgs e)
@@ -407,6 +412,78 @@ namespace PointerFinder2
 
             PerformAttachment(selectedProfile, selectedProcess);
         }
+
+        private void menuExit_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void saveSessionToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            SaveSession();
+        }
+
+        private void loadSessionToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            LoadSession();
+        }
+
+        private void editToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
+        {
+            bool hasResults = _currentResults.Any();
+            findToolStripMenuItem.Enabled = hasResults;
+            undoToolStripMenuItem.Enabled = _undoSearchStack.Any();
+            redoToolStripMenuItem.Enabled = _redoSearchStack.Any();
+        }
+
+        private void findToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (var searchForm = new AddressSearchForm(_currentSearchTerm))
+            {
+                if (searchForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    if (_currentSearchTerm != searchForm.SearchAddress)
+                    {
+                        _undoSearchStack.Push(_currentSearchTerm);
+                        _redoSearchStack.Clear();
+                    }
+                    _currentSearchTerm = searchForm.SearchAddress;
+                    PerformSearch(_currentSearchTerm);
+                }
+            }
+        }
+
+        private void undoToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (_undoSearchStack.Any())
+            {
+                _redoSearchStack.Push(_currentSearchTerm);
+                _currentSearchTerm = _undoSearchStack.Pop();
+                PerformSearch(_currentSearchTerm);
+            }
+        }
+
+        private void redoToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (_redoSearchStack.Any())
+            {
+                _undoSearchStack.Push(_currentSearchTerm);
+                _currentSearchTerm = _redoSearchStack.Pop();
+                PerformSearch(_currentSearchTerm);
+            }
+        }
+
+        private void debugConsoleToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            DebugLogForm.Instance.Show();
+            DebugLogForm.Instance.BringToFront();
+        }
+
+        private void debugOptionsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            new SettingsForm(this).ShowDialog(this);
+        }
+
         #endregion
 
         #region Scanning and Refining Logic
@@ -648,6 +725,125 @@ namespace PointerFinder2
 
         #endregion
 
+        #region Session Management (Save/Load)
+
+        // Saves the current results, scan parameters, and attachment state to a JSON file.
+        private void SaveSession()
+        {
+            if (!_currentResults.Any())
+            {
+                MessageBox.Show("There are no results to save.", "Nothing to Save", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var sfd = new SaveFileDialog())
+            {
+                sfd.Filter = "Pointer Finder Session (*.pfs)|*.pfs";
+                sfd.Title = "Save Session";
+                sfd.FileName = $"session_{DateTime.Now:yyyyMMdd_HHmmss}.pfs";
+
+                if (sfd.ShowDialog(this) == DialogResult.OK)
+                {
+                    try
+                    {
+                        var sessionData = new SessionData
+                        {
+                            EmulatorTargetName = _activeProfile?.Target.ToString(),
+                            ProcessId = _currentManager?.EmulatorProcess?.Id ?? -1,
+                            LastScanParameters = _lastScanParams,
+                            Results = _currentResults,
+                            SortedColumnName = _sortedColumn?.Name,
+                            SortDirection = _sortOrder
+                        };
+
+                        var options = new JsonSerializerOptions { WriteIndented = true };
+                        string json = JsonSerializer.Serialize(sessionData, options);
+                        File.WriteAllText(sfd.FileName, json);
+                        UpdateStatus($"Session saved to {Path.GetFileName(sfd.FileName)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to save session: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        logger.Log($"[ERROR] Session save failed: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        // Loads a session from a JSON file, restoring results and attempting to re-attach to the emulator.
+        private void LoadSession()
+        {
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "Pointer Finder Session (*.pfs)|*.pfs|All files (*.*)|*.*";
+                ofd.Title = "Load Session";
+                if (ofd.ShowDialog(this) == DialogResult.OK)
+                {
+                    try
+                    {
+                        string json = File.ReadAllText(ofd.FileName);
+                        var sessionData = JsonSerializer.Deserialize<SessionData>(json);
+
+                        // 1. Start with a clean slate
+                        if (_currentManager != null && _currentManager.IsAttached) DetachAndReset();
+                        ClearSessionDataOnly();
+
+                        // 2. Load data into memory
+                        _lastScanParams = sessionData.LastScanParameters;
+                        _currentResults = sessionData.Results;
+
+                        // 3. Set the emulator context (profile/manager) without attaching yet
+                        var profile = EmulatorProfileRegistry.Profiles.FirstOrDefault(p => p.Target.ToString() == sessionData.EmulatorTargetName);
+                        if (profile != null)
+                        {
+                            _activeProfile = profile;
+                            _currentManager = _activeProfile.ManagerFactory();
+                            SetUIStateDetached(); // Reset UI to a known state
+                            this.Text = $"Pointer Finder 2.0 - [Loaded: {Path.GetFileName(ofd.FileName)}]";
+                            menuAttach.Text = $"Attach to {_activeProfile.Name}";
+                        }
+
+                        // 4. Populate the grid (requires a valid _currentManager for formatting)
+                        PopulateResultsGrid(_currentResults);
+
+                        // 5. Restore sorting
+                        if (profile != null && !string.IsNullOrEmpty(sessionData.SortedColumnName) && dgvResults.Columns.Contains(sessionData.SortedColumnName))
+                        {
+                            var column = dgvResults.Columns[sessionData.SortedColumnName];
+                            SortResults(column, sessionData.SortDirection);
+                        }
+
+                        // 6. Attempt to auto-attach to the original process
+                        if (profile != null && sessionData.ProcessId != -1)
+                        {
+                            try
+                            {
+                                var process = Process.GetProcessById(sessionData.ProcessId);
+                                if (profile.ProcessNames.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    PerformAttachment(profile, process); // This will update UI to "Attached"
+                                }
+                            }
+                            catch
+                            {
+                                // Process not found or access denied, which is an expected scenario.
+                                UpdateStatus($"Session loaded. Emulator (PID: {sessionData.ProcessId}) not found. Attach manually.");
+                                return; // Exit after setting status
+                            }
+                        }
+                        UpdateStatus($"Session loaded successfully. Found {sessionData.Results.Count:N0} results.");
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to load session: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        logger.Log($"[ERROR] Session load failed: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        #endregion
+
         #region UI Updates and Interaction
 
         // Event handler for Virtual Mode. It provides cell data to the DataGridView on demand.
@@ -681,17 +877,24 @@ namespace PointerFinder2
             var column = dgvResults.Columns[e.ColumnIndex];
             if (column == null || !_currentResults.Any()) return;
 
-            // Determine the new sort order
+            SortOrder newOrder;
             if (_sortedColumn == column)
             {
-                _sortOrder = (_sortOrder == SortOrder.Ascending) ? SortOrder.Descending : SortOrder.Ascending;
+                newOrder = (_sortOrder == SortOrder.Ascending) ? SortOrder.Descending : SortOrder.Ascending;
             }
             else
             {
-                _sortOrder = SortOrder.Ascending;
+                newOrder = SortOrder.Ascending;
                 if (_sortedColumn != null) _sortedColumn.HeaderCell.SortGlyphDirection = SortOrder.None;
             }
-            _sortedColumn = column;
+
+            SortResults(column, newOrder);
+        }
+
+        // Sorts the internal result list and updates the UI.
+        private void SortResults(DataGridViewColumn column, SortOrder order)
+        {
+            if (column == null || order == SortOrder.None || !_currentResults.Any()) return;
 
             // Sort the backing data list based on the selected column and order
             _currentResults.Sort((p1, p2) =>
@@ -709,12 +912,14 @@ namespace PointerFinder2
                     compareResult = offset1.CompareTo(offset2);
                 }
                 // Reverse the result if sorting in descending order
-                return (_sortOrder == SortOrder.Descending) ? -compareResult : compareResult;
+                return (order == SortOrder.Descending) ? -compareResult : compareResult;
             });
 
-            // Update the visual glyph on the column header
+            _sortedColumn = column;
+            _sortOrder = order;
+
+            // Update the visual glyph on the column header and repaint the grid
             _sortedColumn.HeaderCell.SortGlyphDirection = _sortOrder;
-            // Invalidate the grid to force it to repaint with the newly sorted data
             dgvResults.Invalidate();
         }
 
@@ -792,13 +997,17 @@ namespace PointerFinder2
         // Populates the grid using Virtual Mode.
         private void PopulateResultsGrid(List<PointerPath> results)
         {
-            // Reset sorting state when new data is loaded
+            // Reset sorting and searching state when new data is loaded
             if (_sortedColumn != null)
             {
                 _sortedColumn.HeaderCell.SortGlyphDirection = SortOrder.None;
                 _sortedColumn = null;
                 _sortOrder = SortOrder.None;
             }
+            _undoSearchStack.Clear();
+            _redoSearchStack.Clear();
+            _currentSearchTerm = string.Empty;
+
             _currentResults = results;
             dgvResults.SuspendLayout();
             dgvResults.CellValueNeeded -= dgvResults_CellValueNeeded;
@@ -966,20 +1175,26 @@ namespace PointerFinder2
             else _scanCts?.Cancel();
         }
 
-        // Handles the "Find" button to search for a base address.
-        private void btnSearch_Click(object sender, EventArgs e)
+        // Finds and highlights a row with the given base address.
+        private void PerformSearch(string searchText)
         {
-            string searchText = txtSearchBaseAddress.Text.Trim();
-            if (string.IsNullOrEmpty(searchText)) return;
+            if (string.IsNullOrEmpty(searchText))
+            {
+                dgvResults.ClearSelection();
+                UpdateStatus("Search cleared.");
+                return;
+            }
+
+            if (_currentManager == null) return;
+
             for (int i = 0; i < _currentResults.Count; i++)
             {
                 string baseAddr = _currentManager.FormatDisplayAddress(_currentResults[i].BaseAddress);
                 if (baseAddr.Equals(searchText, StringComparison.OrdinalIgnoreCase))
                 {
                     dgvResults.ClearSelection();
-                    // In Virtual Mode, setting the CurrentCell is the most reliable way to navigate.
-                    dgvResults.CurrentCell = dgvResults.Rows[i].Cells[0];
                     dgvResults.Rows[i].Selected = true;
+                    dgvResults.CurrentCell = dgvResults.Rows[i].Cells[0];
                     UpdateStatus($"Found and selected base address '{searchText}'.");
                     return;
                 }
@@ -987,23 +1202,6 @@ namespace PointerFinder2
             UpdateStatus($"Base address '{searchText}' not found in results.");
         }
 
-        private void btnClearSearch_Click(object sender, EventArgs e)
-        {
-            txtSearchBaseAddress.Clear();
-            dgvResults.ClearSelection();
-            if (dgvResults.Rows.Count > 0) dgvResults.FirstDisplayedScrollingRowIndex = 0;
-            UpdateStatus("Search cleared.");
-            txtSearchBaseAddress.Focus();
-        }
-
-        private void txtSearchBaseAddress_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Enter)
-            {
-                btnSearch.PerformClick();
-                e.SuppressKeyPress = true;
-            }
-        }
 
         // Handles keyboard shortcuts within the DataGridView.
         private void dgvResults_KeyDown(object sender, KeyEventArgs e)
@@ -1083,25 +1281,6 @@ namespace PointerFinder2
             lblResultCount.Text = $"Results: {_currentResults.Count:N0}";
             UpdateStatus($"Deleted {(originalCount - _currentResults.Count):N0} row(s).");
         }
-
-        private void menuExit_Click(object sender, EventArgs e)
-        {
-            Application.Exit();
-        }
-
-
-
-        private void debugConsoleToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            DebugLogForm.Instance.Show();
-            DebugLogForm.Instance.BringToFront();
-        }
-
-        private void debugOptionsToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            new SettingsForm(this).ShowDialog(this);
-        }
-
         #endregion
     }
 }

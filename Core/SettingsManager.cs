@@ -6,25 +6,6 @@ using System.Windows.Forms;
 
 namespace PointerFinder2.Core
 {
-    // Holds the saved settings for a specific emulator profile.
-    public class AppSettings
-    {
-        public string LastTargetAddress { get; set; } = "0";
-        public int MaxOffset { get; set; }
-        public int MaxLevel { get; set; }
-        public int MaxResults { get; set; }
-        public string StaticAddressStart { get; set; }
-        public string StaticAddressEnd { get; set; }
-        public bool AnalyzeStructures { get; set; }
-        public bool ScanForStructureBase { get; set; }
-        public int MaxNegativeOffset { get; set; }
-        public bool Use16ByteAlignment { get; set; }
-        public bool UseSliderRange { get; set; } // For persistence
-
-        // NEW: Add a setting to control CPU usage during scans. Defaults to false (unlimited).
-        public bool LimitCpuUsage { get; set; } = false;
-    }
-
     // Handles loading and saving all settings to the settings.ini file.
     public static class SettingsManager
     {
@@ -37,6 +18,7 @@ namespace PointerFinder2.Core
             if (DebugSettings.LogLiveScan) logger.Log("Saving global settings only.");
             var ini = new IniFile(_settingsFile);
             ini.Write("UseWindowsDefaultSound", GlobalSettings.UseWindowsDefaultSound.ToString(), "Global");
+            ini.Write("LimitCpuUsage", GlobalSettings.LimitCpuUsage.ToString(), "Global");
             if (DebugSettings.LogLiveScan) logger.Log("Global settings saved successfully.");
         }
 
@@ -73,8 +55,6 @@ namespace PointerFinder2.Core
                 ini.Write("Use16ByteAlignment", settings.Use16ByteAlignment.ToString(), section);
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
                 ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
-                // NEW: Save the CPU limit setting to the INI file.
-                ini.Write("LimitCpuUsage", settings.LimitCpuUsage.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -118,13 +98,14 @@ namespace PointerFinder2.Core
             settings.MaxNegativeOffset = maxNegativeOffset;
             if (!bool.TryParse(ini.Read("UseSliderRange", section, defaultSettings.UseSliderRange.ToString()), out bool useSliderRange)) useSliderRange = defaultSettings.UseSliderRange;
             settings.UseSliderRange = useSliderRange;
-            // NEW: Load the CPU limit setting from the INI file, defaulting to false if not found.
-            if (!bool.TryParse(ini.Read("LimitCpuUsage", section, defaultSettings.LimitCpuUsage.ToString()), out bool limitCpuUsage)) limitCpuUsage = defaultSettings.LimitCpuUsage;
-            settings.LimitCpuUsage = limitCpuUsage;
 
+            // Load global settings
             if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound)) useDefaultSound = false;
             GlobalSettings.UseWindowsDefaultSound = useDefaultSound;
+            if (!bool.TryParse(ini.Read("LimitCpuUsage", "Global", GlobalSettings.LimitCpuUsage.ToString()), out bool limitCpuUsage)) limitCpuUsage = false;
+            GlobalSettings.LimitCpuUsage = limitCpuUsage;
 
+            // Load debug settings
             if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan)) logLiveScan = false;
             DebugSettings.LogLiveScan = logLiveScan;
             if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation)) logFilterValidation = false;
