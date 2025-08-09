@@ -22,6 +22,7 @@ namespace PointerFinder2
         {
             // --- Load General Settings ---
             chkUseDefaultSounds.Checked = GlobalSettings.UseWindowsDefaultSound;
+            chkLimitCpuUsage.Checked = GlobalSettings.LimitCpuUsage;
 
             // --- Load Debug Settings ---
             chkLogLiveScan.Checked = DebugSettings.LogLiveScan;
@@ -65,6 +66,12 @@ namespace PointerFinder2
         private void chkUseDefaultSounds_CheckedChanged(object sender, EventArgs e)
         {
             GlobalSettings.UseWindowsDefaultSound = chkUseDefaultSounds.Checked;
+            SettingsManager.SaveGlobalSettingsOnly();
+        }
+
+        private void chkLimitCpuUsage_CheckedChanged(object sender, EventArgs e)
+        {
+            GlobalSettings.LimitCpuUsage = chkLimitCpuUsage.Checked;
             SettingsManager.SaveGlobalSettingsOnly();
         }
 

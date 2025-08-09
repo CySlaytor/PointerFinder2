@@ -42,7 +42,6 @@
             this.panelSlider = new System.Windows.Forms.Panel();
             this.lblSliderRange = new System.Windows.Forms.Label();
             this.rangeSlider = new PointerFinder2.UI.Controls.RangeSlider();
-            this.chkLimitCpuUsage = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.numMaxLevel)).BeginInit();
             this.groupBoxRange.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numMaxResults)).BeginInit();
@@ -115,7 +114,7 @@
             // btnOK
             // 
             this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOK.Location = new System.Drawing.Point(125, 332);
+            this.btnOK.Location = new System.Drawing.Point(125, 305);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(83, 29);
             this.btnOK.TabIndex = 10;
@@ -127,7 +126,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(213, 332);
+            this.btnCancel.Location = new System.Drawing.Point(213, 305);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(83, 29);
             this.btnCancel.TabIndex = 11;
@@ -301,25 +300,13 @@
             this.rangeSlider.Value2 = 512;
             this.rangeSlider.ValueChanged += new System.EventHandler(this.rangeSlider_ValueChanged);
             // 
-            // chkLimitCpuUsage
-            // 
-            this.chkLimitCpuUsage.AutoSize = true;
-            this.chkLimitCpuUsage.Location = new System.Drawing.Point(14, 297);
-            this.chkLimitCpuUsage.Name = "chkLimitCpuUsage";
-            this.chkLimitCpuUsage.Size = new System.Drawing.Size(206, 19);
-            this.chkLimitCpuUsage.TabIndex = 8;
-            this.chkLimitCpuUsage.Text = "Limit CPU Usage (approx. 50%)";
-            this.toolTip1.SetToolTip(this.chkLimitCpuUsage, "Reduces the number of CPU cores used during the scan.\r\nHelpful for multitasking, but the scan will take longer.");
-            this.chkLimitCpuUsage.UseVisualStyleBackColor = true;
-            // 
             // ScannerOptionsForm
             // 
             this.AcceptButton = this.btnOK;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(310, 373);
-            this.Controls.Add(this.chkLimitCpuUsage);
+            this.ClientSize = new System.Drawing.Size(310, 346);
             this.Controls.Add(this.chkUseSliderRange);
             this.Controls.Add(this.txtMaxNegativeOffset);
             this.Controls.Add(this.chkUse16ByteAlignment);
@@ -352,7 +339,9 @@
             this.panelSlider.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
+
         #endregion
 
         private System.Windows.Forms.TextBox txtTargetAddress;
@@ -379,6 +368,5 @@
         private System.Windows.Forms.Panel panelSlider;
         private UI.Controls.RangeSlider rangeSlider;
         private System.Windows.Forms.Label lblSliderRange;
-        private System.Windows.Forms.CheckBox chkLimitCpuUsage;
     }
 }
