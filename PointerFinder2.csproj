@@ -16,9 +16,9 @@
 
 		<!-- === VERSIONING=== -->
 		<!-- FileVersion and InformationalVersion will use this. -->
-		<Version>2.2.3.0</Version>
+		<Version>0.2.0.0</Version>
 		<!-- AssemblyVersion defaults to a stripped version of <Version> -->
-		<AssemblyVersion>2.2.3.0</AssemblyVersion>
+		<AssemblyVersion>0.2.0.0</AssemblyVersion>
 
 		<!-- Prevent the Git hash from being added to the Product Version -->
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
