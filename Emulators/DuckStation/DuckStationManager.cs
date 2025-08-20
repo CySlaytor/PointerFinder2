@@ -203,9 +203,8 @@ namespace PointerFinder2.Emulators.DuckStation
                 StaticAddressEnd = "7FFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
-                MaxResults = 5000,
-                AnalyzeStructures = true,
-                ScanForStructureBase = true,
+                MaxResults = 500000,
+                ScanForStructureBase = false,
                 MaxNegativeOffset = 1024,
                 Use16ByteAlignment = false // Not applicable to PS1
             };

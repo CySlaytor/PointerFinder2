@@ -48,8 +48,6 @@
             copyBaseAddressToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             copyAsRetroAchievementsFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             deleteSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            tabAnalysis = new System.Windows.Forms.TabPage();
-            treeViewAnalysis = new System.Windows.Forms.TreeView();
             statusTableLayoutPanel = new System.Windows.Forms.TableLayoutPanel();
             lblStatus = new System.Windows.Forms.Label();
             lblBaseAddress = new System.Windows.Forms.Label();
@@ -63,7 +61,6 @@
             tabResults.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvResults).BeginInit();
             contextMenuResults.SuspendLayout();
-            tabAnalysis.SuspendLayout();
             statusTableLayoutPanel.SuspendLayout();
             SuspendLayout();
             // 
@@ -293,7 +290,6 @@
             // tabControlMain
             // 
             tabControlMain.Controls.Add(tabResults);
-            tabControlMain.Controls.Add(tabAnalysis);
             tabControlMain.Dock = System.Windows.Forms.DockStyle.Fill;
             tabControlMain.Location = new System.Drawing.Point(0, 24);
             tabControlMain.Name = "tabControlMain";
@@ -362,25 +358,6 @@
             deleteSelectedToolStripMenuItem.Size = new System.Drawing.Size(337, 22);
             deleteSelectedToolStripMenuItem.Text = "Delete Selected";
             deleteSelectedToolStripMenuItem.Click += new System.EventHandler(this.deleteSelectedToolStripMenuItem_Click);
-            // 
-            // tabAnalysis
-            // 
-            tabAnalysis.Controls.Add(treeViewAnalysis);
-            tabAnalysis.Location = new System.Drawing.Point(4, 24);
-            tabAnalysis.Name = "tabAnalysis";
-            tabAnalysis.Padding = new System.Windows.Forms.Padding(3);
-            tabAnalysis.Size = new System.Drawing.Size(958, 471);
-            tabAnalysis.TabIndex = 1;
-            tabAnalysis.Text = "Structure Analysis";
-            tabAnalysis.UseVisualStyleBackColor = true;
-            // 
-            // treeViewAnalysis
-            // 
-            treeViewAnalysis.Dock = System.Windows.Forms.DockStyle.Fill;
-            treeViewAnalysis.Location = new System.Drawing.Point(3, 3);
-            treeViewAnalysis.Name = "treeViewAnalysis";
-            treeViewAnalysis.Size = new System.Drawing.Size(952, 465);
-            treeViewAnalysis.TabIndex = 0;
             // 
             // statusTableLayoutPanel
             // 
@@ -453,7 +430,6 @@
             tabResults.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvResults).EndInit();
             contextMenuResults.ResumeLayout(false);
-            tabAnalysis.ResumeLayout(false);
             statusTableLayoutPanel.ResumeLayout(false);
             statusTableLayoutPanel.PerformLayout();
             ResumeLayout(false);
@@ -472,9 +448,7 @@
         private System.Windows.Forms.Panel panelBottom;
         private System.Windows.Forms.TabControl tabControlMain;
         private System.Windows.Forms.TabPage tabResults;
-        private System.Windows.Forms.TabPage tabAnalysis;
         private System.Windows.Forms.DataGridView dgvResults;
-        private System.Windows.Forms.TreeView treeViewAnalysis;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
         private System.Windows.Forms.Button btnScan;
         private System.Windows.Forms.Button btnFilter;

@@ -61,7 +61,6 @@ namespace PointerFinder2
             numMaxResults.Value = _currentSettings.MaxResults;
             txtStaticStart.Text = _currentSettings.StaticAddressStart;
             txtStaticEnd.Text = _currentSettings.StaticAddressEnd;
-            chkAnalyzeStructures.Checked = _currentSettings.AnalyzeStructures;
             chkScanForStructureBase.Checked = _currentSettings.ScanForStructureBase;
             chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
             txtMaxNegativeOffset.Text = _currentSettings.MaxNegativeOffset.ToString("X");
@@ -106,6 +105,20 @@ namespace PointerFinder2
                 uint staticStart = _manager.UnnormalizeAddress(txtStaticStart.Text);
                 uint staticEnd = _manager.UnnormalizeAddress(txtStaticEnd.Text);
 
+                // --- SAFETY CHECK ---
+                // A dynamic target address should never fall within the static memory range where the search originates.
+                if (targetAddress >= staticStart && targetAddress <= staticEnd)
+                {
+                    MessageBox.Show(
+                        $"The Target Address (0x{_manager.FormatDisplayAddress(targetAddress)}) falls within the specified Static Base Address Range (0x{_manager.FormatDisplayAddress(staticStart)} - 0x{_manager.FormatDisplayAddress(staticEnd)}).\n\n" +
+                        "A target address cannot be inside the static range where the search begins.\n\n" +
+                        "Please adjust the static range to not include the target address.",
+                        "Invalid Range",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return null; // Prevent the scan from starting.
+                }
+
                 if (DebugSettings.LogLiveScan) DebugLogForm.Instance.Log($"Parsed Scan Parameters: Target={targetAddress:X8}, StaticRange={staticStart:X8}-{staticEnd:X8}");
 
                 return new ScanParameters
@@ -116,7 +129,6 @@ namespace PointerFinder2
                     MaxResults = (int)numMaxResults.Value,
                     StaticBaseStart = staticStart,
                     StaticBaseEnd = staticEnd,
-                    AnalyzeStructures = chkAnalyzeStructures.Checked,
                     ScanForStructureBase = chkScanForStructureBase.Checked,
                     MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
                     Use16ByteAlignment = chkUse16ByteAlignment.Checked,
@@ -142,7 +154,6 @@ namespace PointerFinder2
                 StaticAddressStart = txtStaticStart.Text,
                 StaticAddressEnd = txtStaticEnd.Text,
                 UseSliderRange = chkUseSliderRange.Checked, // Save the checkbox state
-                AnalyzeStructures = chkAnalyzeStructures.Checked,
                 ScanForStructureBase = chkScanForStructureBase.Checked,
                 MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
                 Use16ByteAlignment = chkUse16ByteAlignment.Checked,

@@ -50,7 +50,6 @@ namespace PointerFinder2.Core
                 ini.Write("MaxResults", settings.MaxResults.ToString(), section);
                 ini.Write("StaticAddressStart", settings.StaticAddressStart, section);
                 ini.Write("StaticAddressEnd", settings.StaticAddressEnd, section);
-                ini.Write("AnalyzeStructures", settings.AnalyzeStructures.ToString(), section);
                 ini.Write("ScanForStructureBase", settings.ScanForStructureBase.ToString(), section);
                 ini.Write("Use16ByteAlignment", settings.Use16ByteAlignment.ToString(), section);
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
@@ -88,8 +87,6 @@ namespace PointerFinder2.Core
             settings.MaxResults = maxResults;
             settings.StaticAddressStart = ini.Read("StaticAddressStart", section, defaultSettings.StaticAddressStart);
             settings.StaticAddressEnd = ini.Read("StaticAddressEnd", section, defaultSettings.StaticAddressEnd);
-            if (!bool.TryParse(ini.Read("AnalyzeStructures", section, defaultSettings.AnalyzeStructures.ToString()), out bool analyzeStructures)) analyzeStructures = defaultSettings.AnalyzeStructures;
-            settings.AnalyzeStructures = analyzeStructures;
             if (!bool.TryParse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()), out bool scanForStructureBase)) scanForStructureBase = defaultSettings.ScanForStructureBase;
             settings.ScanForStructureBase = scanForStructureBase;
             if (!bool.TryParse(ini.Read("Use16ByteAlignment", section, defaultSettings.Use16ByteAlignment.ToString()), out bool use16ByteAlignment)) use16ByteAlignment = defaultSettings.Use16ByteAlignment;

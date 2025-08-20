@@ -212,7 +212,6 @@ namespace PointerFinder2
             _currentResults = new List<PointerPath>();
             _validFilteredPaths = null;
             PopulateResultsGrid(new List<PointerPath>(), true);
-            treeViewAnalysis.Nodes.Clear();
             GC.Collect();
         }
 
@@ -588,17 +587,7 @@ namespace PointerFinder2
                     }
                     else
                     {
-                        int structureCount = 0;
-                        // Safely check if structure analysis is enabled. If _lastScanParams is null, default to true.
-                        if ((_lastScanParams?.AnalyzeStructures ?? true))
-                        {
-                            structureCount = AnalyzeAndDisplayStructures(_currentResults);
-                            UpdateStatus($"Scan complete. Found {_currentResults.Count:N0} paths and {structureCount:N0} potential structures {FormatDuration(elapsed)}.");
-                        }
-                        else
-                        {
-                            UpdateStatus($"Scan complete. Found {_currentResults.Count:N0} paths {FormatDuration(elapsed)}.");
-                        }
+                        UpdateStatus($"Scan complete. Found {_currentResults.Count:N0} paths {FormatDuration(elapsed)}.");
                     }
                 }
             }
@@ -711,11 +700,6 @@ namespace PointerFinder2
                     if (_currentResults.Any())
                     {
                         UpdateStatus($"Refine scan complete. Found {_currentResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
-                        // Safely check if structure analysis is enabled. If _lastScanParams is null, default to true.
-                        if ((_lastScanParams?.AnalyzeStructures ?? true))
-                        {
-                            AnalyzeAndDisplayStructures(_currentResults);
-                        }
                         SoundManager.PlaySuccess();
                     }
                     else
@@ -1087,42 +1071,6 @@ namespace PointerFinder2
 
             // After populating, update the state of the buttons.
             SwitchToScanUI(false);
-        }
-
-        // Analyzes results to find data structures.
-        private int AnalyzeAndDisplayStructures(List<PointerPath> results)
-        {
-            treeViewAnalysis.Nodes.Clear();
-            treeViewAnalysis.BeginUpdate();
-            var structureGroups = from p in results
-                                  group p by p.GetOffsetsString() into g
-                                  where g.Count() > 1
-                                  orderby g.Count() descending
-                                  select g;
-            int structureCount = structureGroups.Count();
-            foreach (var group in structureGroups)
-            {
-                var members = group.OrderBy(p => p.BaseAddress).ToList();
-                if (members.Count < 2) continue;
-                var deltas = new List<long>();
-                for (int i = 1; i < members.Count; i++)
-                {
-                    deltas.Add((long)members[i].BaseAddress - members[i - 1].BaseAddress);
-                }
-                if (!deltas.Any()) continue;
-                var commonDelta = deltas.GroupBy(d => d).OrderByDescending(g => g.Count()).First().Key;
-                var rootNode = new TreeNode($"Structure Found ({group.Count():N0} members, Offsets: {group.Key})");
-                rootNode.Nodes.Add($"Common Delta (Stride): 0x{commonDelta:X}");
-                rootNode.Nodes.Add($"Base Address Range: {_currentManager.FormatDisplayAddress(members.First().BaseAddress)} - {_currentManager.FormatDisplayAddress(members.Last().BaseAddress)}");
-                var memberNode = rootNode.Nodes.Add("Member Base Addresses");
-                foreach (var member in members)
-                {
-                    memberNode.Nodes.Add(_currentManager.FormatDisplayAddress(member.BaseAddress));
-                }
-                treeViewAnalysis.Nodes.Add(rootNode);
-            }
-            treeViewAnalysis.EndUpdate();
-            return structureCount;
         }
 
         // Formats a TimeSpan into a user-friendly string.

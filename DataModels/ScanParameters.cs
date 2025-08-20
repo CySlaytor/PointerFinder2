@@ -24,9 +24,6 @@
         // The maximum number of pointer paths to find before stopping the scan.
         public int MaxResults { get; set; } = 5000;
 
-        // If true, the application will analyze the results to find potential data structures.
-        public bool AnalyzeStructures { get; set; } = true;
-
         // If true, the scanner will also search using negative offsets on the first level.
         public bool ScanForStructureBase { get; set; } = true;
 

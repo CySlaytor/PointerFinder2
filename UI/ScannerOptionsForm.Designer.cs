@@ -33,7 +33,6 @@
             this.label4 = new System.Windows.Forms.Label();
             this.label6 = new System.Windows.Forms.Label();
             this.numMaxResults = new System.Windows.Forms.NumericUpDown();
-            this.chkAnalyzeStructures = new System.Windows.Forms.CheckBox();
             this.chkScanForStructureBase = new System.Windows.Forms.CheckBox();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.chkUse16ByteAlignment = new System.Windows.Forms.CheckBox();
@@ -114,7 +113,7 @@
             // btnOK
             // 
             this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOK.Location = new System.Drawing.Point(125, 305);
+            this.btnOK.Location = new System.Drawing.Point(125, 275);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(83, 29);
             this.btnOK.TabIndex = 10;
@@ -126,7 +125,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(213, 305);
+            this.btnCancel.Location = new System.Drawing.Point(213, 275);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(83, 29);
             this.btnCancel.TabIndex = 11;
@@ -210,21 +209,10 @@
             0,
             0});
             // 
-            // chkAnalyzeStructures
-            // 
-            this.chkAnalyzeStructures.AutoSize = true;
-            this.chkAnalyzeStructures.Location = new System.Drawing.Point(14, 219);
-            this.chkAnalyzeStructures.Name = "chkAnalyzeStructures";
-            this.chkAnalyzeStructures.Size = new System.Drawing.Size(161, 19);
-            this.chkAnalyzeStructures.TabIndex = 5;
-            this.chkAnalyzeStructures.Text = "Analyze Pointer Structures";
-            this.toolTip1.SetToolTip(this.chkAnalyzeStructures, "Groups results by offset patterns to find arrays of data (e.g., all enemies).");
-            this.chkAnalyzeStructures.UseVisualStyleBackColor = true;
-            // 
             // chkScanForStructureBase
             // 
             this.chkScanForStructureBase.AutoSize = true;
-            this.chkScanForStructureBase.Location = new System.Drawing.Point(14, 244);
+            this.chkScanForStructureBase.Location = new System.Drawing.Point(14, 219);
             this.chkScanForStructureBase.Name = "chkScanForStructureBase";
             this.chkScanForStructureBase.Size = new System.Drawing.Size(176, 19);
             this.chkScanForStructureBase.TabIndex = 6;
@@ -237,7 +225,7 @@
             // chkUse16ByteAlignment
             // 
             this.chkUse16ByteAlignment.AutoSize = true;
-            this.chkUse16ByteAlignment.Location = new System.Drawing.Point(14, 272);
+            this.chkUse16ByteAlignment.Location = new System.Drawing.Point(14, 244);
             this.chkUse16ByteAlignment.Name = "chkUse16ByteAlignment";
             this.chkUse16ByteAlignment.Size = new System.Drawing.Size(193, 19);
             this.chkUse16ByteAlignment.TabIndex = 7;
@@ -249,7 +237,7 @@
             // 
             // txtMaxNegativeOffset
             // 
-            this.txtMaxNegativeOffset.Location = new System.Drawing.Point(196, 242);
+            this.txtMaxNegativeOffset.Location = new System.Drawing.Point(196, 217);
             this.txtMaxNegativeOffset.Name = "txtMaxNegativeOffset";
             this.txtMaxNegativeOffset.Size = new System.Drawing.Size(100, 22);
             this.txtMaxNegativeOffset.TabIndex = 11;
@@ -306,12 +294,11 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(310, 346);
+            this.ClientSize = new System.Drawing.Size(310, 316);
             this.Controls.Add(this.chkUseSliderRange);
             this.Controls.Add(this.txtMaxNegativeOffset);
             this.Controls.Add(this.chkUse16ByteAlignment);
             this.Controls.Add(this.chkScanForStructureBase);
-            this.Controls.Add(this.chkAnalyzeStructures);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.numMaxResults);
             this.Controls.Add(this.btnCancel);
@@ -359,7 +346,6 @@
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.NumericUpDown numMaxResults;
-        private System.Windows.Forms.CheckBox chkAnalyzeStructures;
         private System.Windows.Forms.CheckBox chkScanForStructureBase;
         private System.Windows.Forms.ToolTip toolTip1;
         private System.Windows.Forms.CheckBox chkUse16ByteAlignment;
