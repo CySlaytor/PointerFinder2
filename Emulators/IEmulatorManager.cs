@@ -12,6 +12,8 @@ namespace PointerFinder2.Emulators
     {
         // The user-friendly name of the emulator (e.g., "PCSX2").
         string EmulatorName { get; }
+        // The start address of the primary scannable memory region.
+        uint MainMemoryStart { get; }
         // The total size of the primary scannable memory region (e.g., PS2's 32MB EE RAM).
         uint MainMemorySize { get; }
         // The prefix for RetroAchievements memory addresses ("X" for PS2, "W" for PS1).
@@ -40,7 +42,13 @@ namespace PointerFinder2.Emulators
         string FormatDisplayAddress(uint address);
         // Converts a user-entered address into a full emulated address.
         uint UnnormalizeAddress(string address);
+        // Helper method to handle console-specific address normalization (e.g., PS2 mirroring).
+        (uint normalizedAddress, bool wasNormalized) NormalizeAddressForRead(uint address);
+        // Helper method to compare two addresses, accounting for console-specific logic.
+        bool AreAddressesEquivalent(uint addr1, uint addr2);
         // Provides a set of default settings for this emulator.
         AppSettings GetDefaultSettings();
+        // Added method to translate a game address to an index within a state dump byte array.
+        long GetIndexForStateDump(uint address);
     }
 }

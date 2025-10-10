@@ -31,6 +31,7 @@ namespace PointerFinder2.Core
             ini.Write("LogLiveScan", DebugSettings.LogLiveScan.ToString(), "Debug");
             ini.Write("LogFilterValidation", DebugSettings.LogFilterValidation.ToString(), "Debug");
             ini.Write("LogRefineScan", DebugSettings.LogRefineScan.ToString(), "Debug");
+            ini.Write("LogStateBasedScanDetails", DebugSettings.LogStateBasedScanDetails.ToString(), "Debug");
             if (DebugSettings.LogLiveScan) logger.Log("Debug settings saved successfully.");
         }
 
@@ -54,6 +55,10 @@ namespace PointerFinder2.Core
                 ini.Write("Use16ByteAlignment", settings.Use16ByteAlignment.ToString(), section);
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
                 ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
+                ini.Write("StopOnFirstPathFound", settings.StopOnFirstPathFound.ToString(), section);
+                // Save the new setting for finding all path levels.
+                ini.Write("FindAllPathLevels", settings.FindAllPathLevels.ToString(), section);
+                ini.Write("CandidatesPerLevel", settings.CandidatesPerLevel.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -62,7 +67,6 @@ namespace PointerFinder2.Core
         }
 
         // Loads settings for a specific emulator and all global settings from the INI file.
-        // If the settings file or a value is missing/corrupt, it safely falls back to default values.
         public static AppSettings Load(EmulatorTarget target, AppSettings defaultSettings)
         {
             var logger = DebugLogForm.Instance;
@@ -95,6 +99,13 @@ namespace PointerFinder2.Core
             settings.MaxNegativeOffset = maxNegativeOffset;
             if (!bool.TryParse(ini.Read("UseSliderRange", section, defaultSettings.UseSliderRange.ToString()), out bool useSliderRange)) useSliderRange = defaultSettings.UseSliderRange;
             settings.UseSliderRange = useSliderRange;
+            if (!bool.TryParse(ini.Read("StopOnFirstPathFound", section, defaultSettings.StopOnFirstPathFound.ToString()), out bool stopOnFirst)) stopOnFirst = defaultSettings.StopOnFirstPathFound;
+            settings.StopOnFirstPathFound = stopOnFirst;
+            // Load the new setting for finding all path levels.
+            if (!bool.TryParse(ini.Read("FindAllPathLevels", section, defaultSettings.FindAllPathLevels.ToString()), out bool findAllLevels)) findAllLevels = defaultSettings.FindAllPathLevels;
+            settings.FindAllPathLevels = findAllLevels;
+            if (!int.TryParse(ini.Read("CandidatesPerLevel", section, defaultSettings.CandidatesPerLevel.ToString()), out int cpl)) cpl = defaultSettings.CandidatesPerLevel;
+            settings.CandidatesPerLevel = cpl;
 
             // Load global settings
             if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound)) useDefaultSound = false;
@@ -109,6 +120,8 @@ namespace PointerFinder2.Core
             DebugSettings.LogFilterValidation = logFilterValidation;
             if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan)) logRefineScan = false;
             DebugSettings.LogRefineScan = logRefineScan;
+            if (!bool.TryParse(ini.Read("LogStateBasedScanDetails", "Debug", DebugSettings.LogStateBasedScanDetails.ToString()), out bool logStateBasedScanDetails)) logStateBasedScanDetails = false;
+            DebugSettings.LogStateBasedScanDetails = logStateBasedScanDetails;
 
             if (DebugSettings.LogLiveScan) logger.Log("Settings loaded successfully.");
             return settings;

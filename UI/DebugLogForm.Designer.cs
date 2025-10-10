@@ -38,6 +38,9 @@
             this.txtLog.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
             | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
+            this.txtLog.BackColor = System.Drawing.SystemColors.Window;
+            this.txtLog.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
+            this.txtLog.HideSelection = false;
             this.txtLog.Location = new System.Drawing.Point(0, 0);
             this.txtLog.Margin = new System.Windows.Forms.Padding(4);
             this.txtLog.Multiline = true;
@@ -84,6 +87,7 @@
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.DebugLogForm_FormClosing);
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
         #endregion
     }

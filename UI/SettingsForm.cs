@@ -28,6 +28,7 @@ namespace PointerFinder2
             chkLogLiveScan.Checked = DebugSettings.LogLiveScan;
             chkLogFilter.Checked = DebugSettings.LogFilterValidation;
             chkLogRefineScan.Checked = DebugSettings.LogRefineScan;
+            chkLogStateScanDetails.Checked = DebugSettings.LogStateBasedScanDetails;
         }
 
         private void btnClose_Click(object sender, EventArgs e)
@@ -90,6 +91,12 @@ namespace PointerFinder2
         private void chkLogRefineScan_CheckedChanged(object sender, EventArgs e)
         {
             DebugSettings.LogRefineScan = chkLogRefineScan.Checked;
+            SettingsManager.SaveDebugSettingsOnly();
+        }
+
+        private void chkLogStateScanDetails_CheckedChanged(object sender, EventArgs e)
+        {
+            DebugSettings.LogStateBasedScanDetails = chkLogStateScanDetails.Checked;
             SettingsManager.SaveDebugSettingsOnly();
         }
         #endregion

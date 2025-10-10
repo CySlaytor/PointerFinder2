@@ -26,6 +26,7 @@
             this.chkUseDefaultSounds = new System.Windows.Forms.CheckBox();
             this.tabDebug = new System.Windows.Forms.TabPage();
             this.grpLogging = new System.Windows.Forms.GroupBox();
+            this.chkLogStateScanDetails = new System.Windows.Forms.CheckBox();
             this.chkLogRefineScan = new System.Windows.Forms.CheckBox();
             this.chkLogFilter = new System.Windows.Forms.CheckBox();
             this.chkLogLiveScan = new System.Windows.Forms.CheckBox();
@@ -84,7 +85,8 @@
             this.chkLimitCpuUsage.Size = new System.Drawing.Size(206, 19);
             this.chkLimitCpuUsage.TabIndex = 0;
             this.chkLimitCpuUsage.Text = "Limit CPU Usage (approx. 50%)";
-            this.toolTip1.SetToolTip(this.chkLimitCpuUsage, "Reduces the number of CPU cores used during the scan.\r\nHelpful for multitasking, but the scan will take longer.");
+            this.toolTip1.SetToolTip(this.chkLimitCpuUsage, "Reduces the number of CPU cores used during the scan.\r\nHelpful for multitasking," +
+        " but the scan will take longer.");
             this.chkLimitCpuUsage.UseVisualStyleBackColor = true;
             this.chkLimitCpuUsage.CheckedChanged += new System.EventHandler(this.chkLimitCpuUsage_CheckedChanged);
             // 
@@ -122,15 +124,28 @@
             // 
             // grpLogging
             // 
+            this.grpLogging.Controls.Add(this.chkLogStateScanDetails);
             this.grpLogging.Controls.Add(this.chkLogRefineScan);
             this.grpLogging.Controls.Add(this.chkLogFilter);
             this.grpLogging.Controls.Add(this.chkLogLiveScan);
             this.grpLogging.Location = new System.Drawing.Point(6, 6);
             this.grpLogging.Name = "grpLogging";
-            this.grpLogging.Size = new System.Drawing.Size(299, 138);
+            this.grpLogging.Size = new System.Drawing.Size(299, 154);
             this.grpLogging.TabIndex = 1;
             this.grpLogging.TabStop = false;
             this.grpLogging.Text = "Logging and Debug Toggles";
+            // 
+            // chkLogStateScanDetails
+            // 
+            this.chkLogStateScanDetails.AutoSize = true;
+            this.chkLogStateScanDetails.Location = new System.Drawing.Point(18, 110);
+            this.chkLogStateScanDetails.Name = "chkLogStateScanDetails";
+            this.chkLogStateScanDetails.Size = new System.Drawing.Size(199, 19);
+            this.chkLogStateScanDetails.TabIndex = 3;
+            this.chkLogStateScanDetails.Text = "Log State-Based Scan Details";
+            this.toolTip1.SetToolTip(this.chkLogStateScanDetails, "Outputs an extremely verbose log of the state-based scan validation process.");
+            this.chkLogStateScanDetails.UseVisualStyleBackColor = true;
+            this.chkLogStateScanDetails.CheckedChanged += new System.EventHandler(this.chkLogStateScanDetails_CheckedChanged);
             // 
             // chkLogRefineScan
             // 
@@ -250,5 +265,6 @@
         private System.Windows.Forms.Button btnPurgeMemory;
         private System.Windows.Forms.GroupBox grpPerformance;
         private System.Windows.Forms.CheckBox chkLimitCpuUsage;
+        private System.Windows.Forms.CheckBox chkLogStateScanDetails;
     }
 }

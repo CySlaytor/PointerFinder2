@@ -6,6 +6,7 @@
     {
         PCSX2,
         DuckStation,
-        RALibretroNDS
+        RALibretroNDS,
+        Dolphin
     }
 }

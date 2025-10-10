@@ -4,35 +4,30 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 
-namespace PointerFinder2.Emulators.RALibretro
+namespace PointerFinder2.Emulators.EmulatorManager
 {
-    // Manages all interaction with the RALibretro emulator for Nintendo DS cores.
-    public class RALibretroNDSManager : IEmulatorManager
+    public class Pcsx2Manager : IEmulatorManager
     {
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
-        // NDS Memory Layout Constants.
-        public const uint NDS_RAM_START = 0x02000000;
-        public const uint NDS_RAM_SIZE = 0x400000; // 4MB
-        public const uint NDS_RAM_END = NDS_RAM_START + NDS_RAM_SIZE;
-        public const uint NDS_STATIC_START = 0x00100000;
-        public const uint NDS_STATIC_END = 0x003FFFFF + 1;
-
-        // For attachment to RALibretro v1.8.1. Newer versions may require updating this offset.
-        private const int RAM_POINTER_OFFSET = 0x212D30;
-        private readonly string[] SUPPORTED_CORES = { "desmume_libretro.dll", "melondsds_libretro.dll" };
+        // PS2 Memory Layout Constants.
+        public const uint PS2_EEMEM_START = 0x20000000;
+        public const uint PS2_EEMEM_END = 0x21FFFFFF + 1; // 32MB of EE RAM
+        public const uint PS2_GAME_CODE_START = 0x00100000;
+        public const uint PS2_GAME_CODE_END = 0x01FFFFFF + 1; // Main game code region
 
         #region Interface Implementation
-        public string EmulatorName => "RALibretro (NDS)";
-        public uint MainMemorySize => 4 * 1024 * 1024; // 4MB
-        public string RetroAchievementsPrefix => "D";
+        public string EmulatorName => "PCSX2";
+        public uint MainMemoryStart => PS2_EEMEM_START;
+        public uint MainMemorySize => 32 * 1024 * 1024; // 32MB
+        public string RetroAchievementsPrefix => "X";
         public Process EmulatorProcess { get; private set; }
         public bool IsAttached => ProcessHandle != IntPtr.Zero && MemoryBasePC != IntPtr.Zero;
         public nint ProcessHandle { get; private set; } = IntPtr.Zero;
         public nint MemoryBasePC { get; private set; } = IntPtr.Zero;
-        private nint NdsMemoryBaseInPC { get; set; } = IntPtr.Zero;
+        private nint Ps2MemoryBaseInPC { get; set; } = IntPtr.Zero;
 
-        // Attaches by finding the loaded NDS core and then reading a pointer at a hardcoded offset.
+        // Attaches by finding PCSX2's exported "EEMem" variable, which points to the emulated RAM.
         public bool Attach(Process process)
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
@@ -46,25 +41,6 @@ namespace PointerFinder2.Emulators.RALibretro
             }
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
-            // RALibretro is a 64-bit process, so this tool must be as well.
-            if (!Environment.Is64BitProcess)
-            {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: This tool must be built for x64 to attach to RALibretro.");
-                return false;
-            }
-
-            // Check if a supported NDS core is loaded into the process.
-            var activeCoreModule = EmulatorProcess.Modules.Cast<ProcessModule>()
-                .FirstOrDefault(m => SUPPORTED_CORES.Any(c => c.Equals(m.ModuleName, StringComparison.OrdinalIgnoreCase)));
-
-            if (activeCoreModule == null)
-            {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: No supported NDS core (DeSmuME or melonDS) found loaded in RALibretro.");
-                return false;
-            }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Found active core '{activeCoreModule.ModuleName}'.");
-
-
             ProcessHandle = Memory.OpenProcessHandle(EmulatorProcess);
             if (ProcessHandle == IntPtr.Zero)
             {
@@ -73,23 +49,23 @@ namespace PointerFinder2.Emulators.RALibretro
             }
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
-            // This attachment method relies on a hardcoded offset from the emulator's main module base address.
-            nint moduleBaseAddress = EmulatorProcess.MainModule.BaseAddress;
-            nint pointerAddress = IntPtr.Add(moduleBaseAddress, RAM_POINTER_OFFSET);
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Reading RAM pointer from address 0x{pointerAddress:X}.");
-
-            long? ramPtr = Memory.ReadInt64(ProcessHandle, pointerAddress);
-            if (!ramPtr.HasValue || ramPtr.Value == 0)
+            nint eeMemBasePC = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "EEMem");
+            if (eeMemBasePC == IntPtr.Zero)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from 0x{pointerAddress:X}. Ensure the game is fully loaded. This offset may be outdated for your RALibretro version.");
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'EEMem' export. Ensure the game is fully loaded.");
                 return false;
             }
 
-            this.MemoryBasePC = (nint)ramPtr.Value;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: NDS RAM base (0x02000000) found in PC memory at 0x{this.MemoryBasePC:X}.");
+            long? eeMemPtr = Memory.ReadInt64(ProcessHandle, eeMemBasePC);
+            if (!eeMemPtr.HasValue)
+            {
+                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'EEMem' export address.");
+                return false;
+            }
+            MemoryBasePC = (nint)eeMemPtr.Value;
+            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: EEMem base found in PC memory at 0x{MemoryBasePC:X}.");
 
-            // Calculate a base address to translate any NDS address to a PC address.
-            NdsMemoryBaseInPC = IntPtr.Subtract(MemoryBasePC, (int)NDS_RAM_START);
+            Ps2MemoryBaseInPC = IntPtr.Subtract(MemoryBasePC, (int)PS2_EEMEM_START);
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
@@ -103,41 +79,50 @@ namespace PointerFinder2.Emulators.RALibretro
             }
             ProcessHandle = IntPtr.Zero;
             MemoryBasePC = IntPtr.Zero;
-            NdsMemoryBaseInPC = IntPtr.Zero;
+            Ps2MemoryBaseInPC = IntPtr.Zero;
             EmulatorProcess = null;
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
-        // Reads a block of memory from the emulated NDS system.
-        public byte[] ReadMemory(uint ndsAddress, int count)
+        // Reads a block of memory from the emulated PS2 RAM.
+        public byte[] ReadMemory(uint ps2Address, int count)
         {
             if (!IsAttached) return null;
-            nint addressInPC = IntPtr.Add(NdsMemoryBaseInPC, (int)ndsAddress);
-            return Memory.ReadBytes(this.ProcessHandle, addressInPC, count);
+            nint address = IntPtr.Add(Ps2MemoryBaseInPC, (int)ps2Address);
+            return Memory.ReadBytes(ProcessHandle, address, count);
         }
 
-        // Reads a 32-bit unsigned integer from an NDS memory address.
-        public uint? ReadUInt32(uint ndsAddress)
+        // Reads a 32-bit unsigned integer from a PS2 memory address.
+        public uint? ReadUInt32(uint ps2Address)
         {
-            byte[] buffer = ReadMemory(ndsAddress, 4);
-            return buffer != null ? BitConverter.ToUInt32(buffer, 0) : null;
+            byte[] buffer = ReadMemory(ps2Address, 4);
+            if (buffer == null)
+            {
+                return null;
+            }
+            return BitConverter.ToUInt32(buffer, 0);
         }
 
-        // Checks if a value is a valid pointer target within the NDS's RAM.
+        // Checks if a value is a valid pointer target within the PS2's main memory regions.
         public bool IsValidPointerTarget(uint value)
         {
-            // A valid pointer must be 4-byte aligned and fall within the 4MB RAM range.
-            return (value & 3) == 0 && (value >= NDS_RAM_START && value < NDS_RAM_END);
+            if ((value & 3) != 0) return false; // Must be 4-byte aligned.
+            bool isGameCode = value >= PS2_GAME_CODE_START && value < PS2_GAME_CODE_END;
+            bool isEeMem = value >= PS2_EEMEM_START && value < PS2_EEMEM_END;
+            return isGameCode || isEeMem;
         }
 
         // Traverses a pointer path to verify its final address. Used for filtering.
         public uint? RecalculateFinalAddress(PointerPath path, uint expectedFinalAddress)
         {
             bool shouldLog = DebugSettings.LogFilterValidation;
+
+            (expectedFinalAddress, _) = NormalizeAddressForRead(expectedFinalAddress);
+
             if (shouldLog)
             {
                 logger.Log("--------------------------------------------------");
-                logger.Log($"[{EmulatorName}] Validating Path: {FormatDisplayAddress(path.BaseAddress)} -> {path.GetOffsetsString()} (Expecting: {FormatDisplayAddress(expectedFinalAddress)})");
+                logger.Log($"[{EmulatorName}] Validating Path: {path.BaseAddress:X8} -> {path.GetOffsetsString()} (Expecting: 0x{expectedFinalAddress:X8})");
             }
 
             if (path == null || !path.Offsets.Any())
@@ -160,11 +145,16 @@ namespace PointerFinder2.Emulators.RALibretro
             }
             if (shouldLog) logger.Log($"  -> Value: 0x{currentAddress.Value:X8}");
 
-            // Traverse the chain of pointers and offsets.
             for (int i = 0; i < path.Offsets.Count - 1; i++)
             {
                 if (shouldLog) logger.Log($"[{EmulatorName}] Step {i + 1}: Applying Offset #{i + 1} ({path.Offsets[i]:+X;-X})");
+
                 uint nextAddressToRead = currentAddress.Value + (uint)path.Offsets[i];
+                if (shouldLog) logger.Log($"  -> Calculating next address to read: 0x{currentAddress.Value:X8} + 0x{path.Offsets[i]:X} = 0x{nextAddressToRead:X8}");
+
+                (nextAddressToRead, bool wasNorm) = NormalizeAddressForRead(nextAddressToRead);
+                if (wasNorm && shouldLog) logger.Log($"  -> Normalizing address to 0x{nextAddressToRead:X8}");
+
                 if (shouldLog) logger.Log($"  -> Reading from [0x{nextAddressToRead:X8}]");
                 currentAddress = ReadUInt32(nextAddressToRead);
 
@@ -181,10 +171,12 @@ namespace PointerFinder2.Emulators.RALibretro
                 if (shouldLog) logger.Log($"  -> Value: 0x{currentAddress.Value:X8}");
             }
 
-            // Apply the final offset to get the target address.
             if (shouldLog) logger.Log($"[{EmulatorName}] Step {path.Offsets.Count}: Applying Final Offset ({path.Offsets.Last():+X;-X})");
             uint finalAddress = currentAddress.Value + (uint)path.Offsets.Last();
             if (shouldLog) logger.Log($"  -> Final Calculation: 0x{currentAddress.Value:X8} + 0x{path.Offsets.Last():X} = 0x{finalAddress:X8}");
+
+            (finalAddress, bool finalNorm) = NormalizeAddressForRead(finalAddress);
+            if (finalNorm && shouldLog) logger.Log($"  -> Normalizing FINAL address to 0x{finalAddress:X8}");
 
             if (shouldLog)
             {
@@ -195,43 +187,73 @@ namespace PointerFinder2.Emulators.RALibretro
             return finalAddress;
         }
 
-        // Formats a full NDS address into a shorter, user-friendly format.
+        // Formats a full PS2 address into a shorter format relative to EE RAM for display.
         public string FormatDisplayAddress(uint address)
         {
-            if (address >= NDS_RAM_START && address < NDS_RAM_END)
+            if (address >= 0x20000000 && address < 0x22000000)
             {
-                return (address - NDS_RAM_START).ToString("X");
+                return (address - 0x20000000).ToString("X");
             }
             return address.ToString("X8");
         }
 
-        // Converts a user-entered address into a full NDS address.
+        // Converts a user-entered address into a full PS2 memory address.
         public uint UnnormalizeAddress(string address)
         {
             uint parsedAddress = uint.Parse(address.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
-            // If the user enters a short address, assume it's in the main RAM region.
-            if (parsedAddress < NDS_RAM_SIZE)
+            if (parsedAddress < 0x2000000)
             {
-                return parsedAddress + NDS_RAM_START;
+                return parsedAddress + 0x20000000;
             }
             return parsedAddress;
         }
 
-        // Provides a set of default settings specifically for NDS on RALibretro.
+        // Handles PS2's address mirroring (e.g., 0x0... -> 0x20...).
+        public (uint normalizedAddress, bool wasNormalized) NormalizeAddressForRead(uint address)
+        {
+            if (address < PS2_EEMEM_START)
+            {
+                return (address + PS2_EEMEM_START, true);
+            }
+            return (address, false);
+        }
+
+        // Compares two PS2 addresses, accounting for mirroring.
+        public bool AreAddressesEquivalent(uint addr1, uint addr2)
+        {
+            uint normAddr1 = (addr1 < PS2_EEMEM_START) ? addr1 + PS2_EEMEM_START : addr1;
+            uint normAddr2 = (addr2 < PS2_EEMEM_START) ? addr2 + PS2_EEMEM_START : addr2;
+            return normAddr1 == normAddr2;
+        }
+
+        // Provides a set of default settings specifically for PCSX2.
         public AppSettings GetDefaultSettings()
         {
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");
             return new AppSettings
             {
                 StaticAddressStart = "100000",
-                StaticAddressEnd = "1FFFFF",
+                StaticAddressEnd = "7FFFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
                 MaxResults = 500000,
                 ScanForStructureBase = false,
                 MaxNegativeOffset = 1024,
-                Use16ByteAlignment = false // Not applicable to NDS
+                Use16ByteAlignment = true,
+                StopOnFirstPathFound = false,
+                CandidatesPerLevel = 10
             };
+        }
+
+        // Added implementation for the new interface method.
+        public long GetIndexForStateDump(uint address)
+        {
+            (uint normalizedAddress, _) = NormalizeAddressForRead(address);
+            if (normalizedAddress >= MainMemoryStart && normalizedAddress < (MainMemoryStart + MainMemorySize))
+            {
+                return normalizedAddress - MainMemoryStart;
+            }
+            return -1;
         }
         #endregion
     }

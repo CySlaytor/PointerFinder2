@@ -32,6 +32,9 @@
             viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             debugConsoleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             debugOptionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            // Added the Tools menu item.
+            toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            staticRangeFinderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             panelBottom = new System.Windows.Forms.Panel();
             lblElapsedTime = new System.Windows.Forms.Label();
             lblProgressPercentage = new System.Windows.Forms.Label();
@@ -41,6 +44,7 @@
             btnScan = new System.Windows.Forms.Button();
             btnRefineScan = new System.Windows.Forms.Button();
             btnFilter = new System.Windows.Forms.Button();
+            btnCaptureState = new System.Windows.Forms.Button();
             tabControlMain = new System.Windows.Forms.TabControl();
             tabResults = new System.Windows.Forms.TabPage();
             dgvResults = new System.Windows.Forms.DataGridView();
@@ -77,7 +81,7 @@
             // menuStrip1
             // 
             menuStrip1.ImageScalingSize = new System.Drawing.Size(20, 20);
-            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { fileToolStripMenuItem, editToolStripMenuItem, viewToolStripMenuItem });
+            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { fileToolStripMenuItem, editToolStripMenuItem, viewToolStripMenuItem, toolsToolStripMenuItem });
             menuStrip1.Location = new System.Drawing.Point(0, 0);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Padding = new System.Windows.Forms.Padding(4, 2, 0, 2);
@@ -177,6 +181,21 @@
             debugOptionsToolStripMenuItem.Text = "Settings...";
             debugOptionsToolStripMenuItem.Click += new System.EventHandler(this.debugOptionsToolStripMenuItem_Click);
             // 
+            // toolsToolStripMenuItem
+            // 
+            toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { staticRangeFinderToolStripMenuItem });
+            toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
+            toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
+            toolsToolStripMenuItem.Text = "Tools";
+            toolsToolStripMenuItem.DropDownOpening += new System.EventHandler(this.toolsToolStripMenuItem_DropDownOpening);
+            // 
+            // staticRangeFinderToolStripMenuItem
+            // 
+            staticRangeFinderToolStripMenuItem.Name = "staticRangeFinderToolStripMenuItem";
+            staticRangeFinderToolStripMenuItem.Size = new System.Drawing.Size(181, 22);
+            staticRangeFinderToolStripMenuItem.Text = "Static Range Finder...";
+            staticRangeFinderToolStripMenuItem.Click += new System.EventHandler(this.staticRangeFinderToolStripMenuItem_Click);
+            // 
             // panelBottom
             // 
             panelBottom.Controls.Add(lblElapsedTime);
@@ -236,13 +255,15 @@
             // 
             // tableLayoutPanel1
             // 
-            tableLayoutPanel1.ColumnCount = 3;
-            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33333F));
-            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33333F));
-            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33333F));
+            tableLayoutPanel1.ColumnCount = 4;
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
             tableLayoutPanel1.Controls.Add(btnScan, 0, 0);
             tableLayoutPanel1.Controls.Add(btnRefineScan, 1, 0);
-            tableLayoutPanel1.Controls.Add(btnFilter, 2, 0);
+            tableLayoutPanel1.Controls.Add(btnFilter, 3, 0);
+            tableLayoutPanel1.Controls.Add(btnCaptureState, 2, 0);
             tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
             tableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
             tableLayoutPanel1.Name = "tableLayoutPanel1";
@@ -257,7 +278,7 @@
             btnScan.Enabled = false;
             btnScan.Location = new System.Drawing.Point(3, 3);
             btnScan.Name = "btnScan";
-            btnScan.Size = new System.Drawing.Size(316, 41);
+            btnScan.Size = new System.Drawing.Size(235, 41);
             btnScan.TabIndex = 0;
             btnScan.Text = "New Pointer Scan";
             btnScan.UseVisualStyleBackColor = true;
@@ -267,9 +288,9 @@
             // 
             btnRefineScan.Dock = System.Windows.Forms.DockStyle.Fill;
             btnRefineScan.Enabled = false;
-            btnRefineScan.Location = new System.Drawing.Point(325, 3);
+            btnRefineScan.Location = new System.Drawing.Point(244, 3);
             btnRefineScan.Name = "btnRefineScan";
-            btnRefineScan.Size = new System.Drawing.Size(316, 41);
+            btnRefineScan.Size = new System.Drawing.Size(235, 41);
             btnRefineScan.TabIndex = 3;
             btnRefineScan.Text = "Refine with New Scan";
             btnRefineScan.UseVisualStyleBackColor = true;
@@ -279,13 +300,25 @@
             // 
             btnFilter.Dock = System.Windows.Forms.DockStyle.Fill;
             btnFilter.Enabled = false;
-            btnFilter.Location = new System.Drawing.Point(647, 3);
+            btnFilter.Location = new System.Drawing.Point(726, 3);
             btnFilter.Name = "btnFilter";
-            btnFilter.Size = new System.Drawing.Size(316, 41);
+            btnFilter.Size = new System.Drawing.Size(237, 41);
             btnFilter.TabIndex = 2;
             btnFilter.Text = "Filter Dynamic Paths";
             btnFilter.UseVisualStyleBackColor = true;
             btnFilter.Click += new System.EventHandler(this.btnFilter_Click);
+            // 
+            // btnCaptureState
+            // 
+            btnCaptureState.Dock = System.Windows.Forms.DockStyle.Fill;
+            btnCaptureState.Enabled = false;
+            btnCaptureState.Location = new System.Drawing.Point(485, 3);
+            btnCaptureState.Name = "btnCaptureState";
+            btnCaptureState.Size = new System.Drawing.Size(235, 41);
+            btnCaptureState.TabIndex = 4;
+            btnCaptureState.Text = "Capture State";
+            btnCaptureState.UseVisualStyleBackColor = true;
+            btnCaptureState.Click += new System.EventHandler(this.btnCaptureState_Click);
             // 
             // tabControlMain
             // 
@@ -472,5 +505,8 @@
         private System.Windows.Forms.ToolStripMenuItem undoToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem redoToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem findToolStripMenuItem;
+        private System.Windows.Forms.Button btnCaptureState;
+        private System.Windows.Forms.ToolStripMenuItem toolsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem staticRangeFinderToolStripMenuItem;
     }
 }

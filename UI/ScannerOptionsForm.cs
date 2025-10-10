@@ -24,7 +24,7 @@ namespace PointerFinder2
         {
             InitializeComponent();
             _manager = manager;
-            _target = EmulatorProfileRegistry.Profiles.Find(p => p.Name == manager.EmulatorName).Target;
+            _target = EmulatorProfileRegistry.Profiles.Find(p => p.Name.StartsWith(manager.EmulatorName.Split(' ')[0])).Target;
             _currentSettings = settings;
             _defaultSettings = _manager.GetDefaultSettings(); // Store the core defaults.
 
@@ -47,12 +47,17 @@ namespace PointerFinder2
                 case EmulatorTarget.PCSX2: targetSystem = "PS2"; break;
                 case EmulatorTarget.DuckStation: targetSystem = "PS1"; break;
                 case EmulatorTarget.RALibretroNDS: targetSystem = "NDS"; break;
+                // Added Dolphin target system name.
+                case EmulatorTarget.Dolphin: targetSystem = "GC/Wii"; break;
                 default: targetSystem = "Mem"; break;
             }
             label1.Text = $"Target Address ({targetSystem}, Hex)";
             groupBoxRange.Text = $"Static Base Address Range ({targetSystem}, Hex)";
 
-            chkUse16ByteAlignment.Visible = (_target == EmulatorTarget.PCSX2);
+            // Show PCSX2-specific options only when the target is PCSX2.
+            bool isPcsx2 = (_target == EmulatorTarget.PCSX2);
+            chkUse16ByteAlignment.Visible = isPcsx2;
+
 
             // --- Populate controls with current settings ---
             txtTargetAddress.Text = _currentSettings.LastTargetAddress;
@@ -62,9 +67,14 @@ namespace PointerFinder2
             txtStaticStart.Text = _currentSettings.StaticAddressStart;
             txtStaticEnd.Text = _currentSettings.StaticAddressEnd;
             chkScanForStructureBase.Checked = _currentSettings.ScanForStructureBase;
-            chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
             txtMaxNegativeOffset.Text = _currentSettings.MaxNegativeOffset.ToString("X");
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;
+            // Populate PCSX2-specific controls
+            if (isPcsx2)
+            {
+                chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
+            }
+
 
             // --- Configure Slider and set initial state ---
             SetupRangeSlider();
@@ -145,7 +155,7 @@ namespace PointerFinder2
 
         public AppSettings GetCurrentSettings()
         {
-            return new AppSettings
+            var settings = new AppSettings
             {
                 LastTargetAddress = txtTargetAddress.Text,
                 MaxOffset = int.Parse(txtMaxOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
@@ -158,6 +168,8 @@ namespace PointerFinder2
                 MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
                 Use16ByteAlignment = chkUse16ByteAlignment.Checked,
             };
+
+            return settings;
         }
 
         // The OK button validates the input and closes the form if valid.

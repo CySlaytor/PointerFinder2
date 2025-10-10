@@ -4,20 +4,20 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 
-namespace PointerFinder2.Emulators.DuckStation
+namespace PointerFinder2.Emulators.EmulatorManager
 {
     // Manages all interaction with the DuckStation emulator.
     public class DuckStationManager : IEmulatorManager
     {
         private readonly DebugLogForm logger = DebugLogForm.Instance;
 
-        // PS1 Memory Layout Constants.
         public const uint PS1_RAM_START = 0x80000000;
         public const uint PS1_RAM_SIZE = 0x200000; // 2MB
         public const uint PS1_RAM_END = PS1_RAM_START + PS1_RAM_SIZE;
 
         #region Interface Implementation
         public string EmulatorName => "DuckStation";
+        public uint MainMemoryStart => PS1_RAM_START;
         public uint MainMemorySize => 2 * 1024 * 1024; // 2MB
         public string RetroAchievementsPrefix => "W";
         public Process EmulatorProcess { get; private set; }
@@ -47,7 +47,6 @@ namespace PointerFinder2.Emulators.DuckStation
             }
             if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
-            // DuckStation conveniently exports a pointer to its emulated RAM.
             nint ramExportAddress = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "RAM");
             if (ramExportAddress == IntPtr.Zero)
             {
@@ -55,7 +54,6 @@ namespace PointerFinder2.Emulators.DuckStation
                 return false;
             }
 
-            // The exported address contains a pointer to the actual memory block, which we must read.
             long? ramPtr = Memory.ReadInt64(ProcessHandle, ramExportAddress);
             if (!ramPtr.HasValue)
             {
@@ -87,7 +85,6 @@ namespace PointerFinder2.Emulators.DuckStation
         {
             if (!IsAttached || ps1Address < PS1_RAM_START || ps1Address >= PS1_RAM_END) return null;
 
-            // Translate the PS1 address to an address in our program's memory space.
             nint addressInPC = IntPtr.Add(this.MemoryBasePC, (int)(ps1Address - PS1_RAM_START));
 
             return Memory.ReadBytes(this.ProcessHandle, addressInPC, count);
@@ -103,7 +100,6 @@ namespace PointerFinder2.Emulators.DuckStation
         // Checks if a value is a valid pointer target within the PS1's RAM.
         public bool IsValidPointerTarget(uint value)
         {
-            // A valid pointer must be 4-byte aligned and fall within the 2MB RAM range.
             return (value & 3) == 0 && (value >= PS1_RAM_START && value < PS1_RAM_END);
         }
 
@@ -137,7 +133,6 @@ namespace PointerFinder2.Emulators.DuckStation
             }
             if (shouldLog) logger.Log($"  -> Value: 0x{currentAddress.Value:X8}");
 
-            // Traverse the chain of pointers and offsets.
             for (int i = 0; i < path.Offsets.Count - 1; i++)
             {
                 if (shouldLog) logger.Log($"[{EmulatorName}] Step {i + 1}: Applying Offset #{i + 1} ({path.Offsets[i]:+X;-X})");
@@ -158,7 +153,6 @@ namespace PointerFinder2.Emulators.DuckStation
                 if (shouldLog) logger.Log($"  -> Value: 0x{currentAddress.Value:X8}");
             }
 
-            // Apply the final offset to get the target address.
             if (shouldLog) logger.Log($"[{EmulatorName}] Step {path.Offsets.Count}: Applying Final Offset ({path.Offsets.Last():+X;-X})");
             uint finalAddress = currentAddress.Value + (uint)path.Offsets.Last();
             if (shouldLog) logger.Log($"  -> Final Calculation: 0x{currentAddress.Value:X8} + 0x{path.Offsets.Last():X} = 0x{finalAddress:X8}");
@@ -193,6 +187,18 @@ namespace PointerFinder2.Emulators.DuckStation
             return parsedAddress;
         }
 
+        // No normalization needed for DuckStation.
+        public (uint normalizedAddress, bool wasNormalized) NormalizeAddressForRead(uint address)
+        {
+            return (address, false);
+        }
+
+        // No special comparison needed for DuckStation.
+        public bool AreAddressesEquivalent(uint addr1, uint addr2)
+        {
+            return addr1 == addr2;
+        }
+
         // Provides a set of default settings specifically for DuckStation.
         public AppSettings GetDefaultSettings()
         {
@@ -206,8 +212,20 @@ namespace PointerFinder2.Emulators.DuckStation
                 MaxResults = 500000,
                 ScanForStructureBase = false,
                 MaxNegativeOffset = 1024,
-                Use16ByteAlignment = false // Not applicable to PS1
+                Use16ByteAlignment = false,
+                StopOnFirstPathFound = false,
+                CandidatesPerLevel = 10
             };
+        }
+
+        // Added implementation for the new interface method.
+        public long GetIndexForStateDump(uint address)
+        {
+            if (address >= MainMemoryStart && address < (MainMemoryStart + MainMemorySize))
+            {
+                return address - MainMemoryStart;
+            }
+            return -1;
         }
         #endregion
     }

@@ -18,6 +18,12 @@ namespace PointerFinder2
         // A UI timer to periodically process the queue and update the textbox, preventing UI lockup.
         private readonly System.Windows.Forms.Timer _logTimer = new System.Windows.Forms.Timer();
 
+        // Safeguards to prevent UI hanging from log floods.
+        private const int MAX_QUEUE_SIZE = 50000;
+        private const int MAX_TEXTBOX_LENGTH = 1_000_000;
+        private const int TEXTBOX_TRIM_LENGTH = 500_000;
+        private bool _isTrimming = false;
+
         // Public accessor for the singleton instance.
         public static DebugLogForm Instance
         {
@@ -45,6 +51,13 @@ namespace PointerFinder2
         public void Log(string message)
         {
             if (DebugSettings.IsLoggingPaused) return;
+
+            // If the queue is getting too large, start dropping old messages to prevent memory explosion.
+            if (_logQueue.Count > MAX_QUEUE_SIZE)
+            {
+                _logQueue.TryDequeue(out _);
+            }
+
             // Add a timestamp and enqueue the formatted message.
             _logQueue.Enqueue($"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
         }
@@ -66,15 +79,31 @@ namespace PointerFinder2
         // The timer's tick event handler, which runs on the UI thread.
         private void LogTimer_Tick(object sender, EventArgs e)
         {
-            if (_logQueue.IsEmpty) return;
+            if (_logQueue.IsEmpty || _isTrimming) return;
+
+            // Trim the textbox text if it gets too long, to keep the UI responsive.
+            if (txtLog.TextLength > MAX_TEXTBOX_LENGTH)
+            {
+                _isTrimming = true; // Prevent re-entry while trimming
+                // Use AppendText/Clear for better performance with large textboxes
+                string textToKeep = txtLog.Text.Substring(txtLog.TextLength - TEXTBOX_TRIM_LENGTH);
+                txtLog.Clear();
+                txtLog.AppendText(textToKeep);
+                _isTrimming = false;
+            }
 
             // Use a StringBuilder for efficient string concatenation when batching messages.
             var sb = new StringBuilder();
-            while (_logQueue.TryDequeue(out var message))
+            int messagesToProcess = 0;
+            // Process messages in chunks to prevent the UI thread from being blocked for too long.
+            while (_logQueue.TryDequeue(out var message) && messagesToProcess < 1000)
             {
                 sb.Append(message);
+                messagesToProcess++;
             }
             txtLog.AppendText(sb.ToString());
+            txtLog.SelectionStart = txtLog.TextLength;
+            txtLog.ScrollToCaret();
         }
 
         // Override the form closing event to simply hide the window instead of disposing it.
@@ -92,8 +121,6 @@ namespace PointerFinder2
         {
             ClearLog();
         }
-
-
 
         private void btnToggleLogging_Click(object sender, EventArgs e)
         {

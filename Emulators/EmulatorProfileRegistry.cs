@@ -1,8 +1,14 @@
-﻿using PointerFinder2.Core;
-using PointerFinder2.Emulators.DuckStation;
-using PointerFinder2.Emulators.PCSX2;
-using PointerFinder2.Emulators.RALibretro;
+﻿using PointerFinder2.Emulators.EmulatorManager;
+using PointerFinder2.Emulators.LiveScan.DuckStation;
+using PointerFinder2.Emulators.LiveScan.PCSX2;
+using PointerFinder2.Emulators.LiveScan.RALibretro;
+using PointerFinder2.Emulators.StateBased.DuckStation;
+using PointerFinder2.Emulators.StateBased.PCSX2;
+using PointerFinder2.Emulators.StateBased.RALibretro;
 using System.Collections.Generic;
+// Added using statements for the new Dolphin scanner strategies.
+using PointerFinder2.Emulators.LiveScan.Dolphin;
+using PointerFinder2.Emulators.StateBased.Dolphin;
 
 namespace PointerFinder2.Emulators
 {
@@ -14,32 +20,42 @@ namespace PointerFinder2.Emulators
     {
         public static readonly List<EmulatorProfile> Profiles = new List<EmulatorProfile>
         {
-            // Profile for PCSX2.
             new EmulatorProfile
             {
                 Name = "PCSX2",
                 Target = EmulatorTarget.PCSX2,
                 ProcessNames = new[] { "pcsx2-qt", "pcsx2" },
                 ManagerFactory = () => new Pcsx2Manager(),
-                ScannerFactory = () => new Pcsx2ScannerStrategy()
+                ScannerFactory = () => new Pcsx2ScannerStrategy(),
+                StateBasedScannerFactory = () => new Pcsx2StateBasedScannerStrategy()
             },
-            // Profile for DuckStation.
             new EmulatorProfile
             {
                 Name = "DuckStation",
                 Target = EmulatorTarget.DuckStation,
                 ProcessNames = new[] { "duckstation-qt-x64-ReleaseLTCG" },
                 ManagerFactory = () => new DuckStationManager(),
-                ScannerFactory = () => new DuckStationScannerStrategy()
+                ScannerFactory = () => new DuckStationScannerStrategy(),
+                StateBasedScannerFactory = () => new DuckStationStateBasedScannerStrategy()
             },
-            // Profile for RALibretro (NDS Cores).
             new EmulatorProfile
             {
                 Name = "RALibretro (NDS)",
                 Target = EmulatorTarget.RALibretroNDS,
                 ProcessNames = new[] { "RALibretro" },
                 ManagerFactory = () => new RALibretroNDSManager(),
-                ScannerFactory = () => new RALibretroNDSScannerStrategy()
+                ScannerFactory = () => new RALibretroNDSScannerStrategy(),
+                StateBasedScannerFactory = () => new RALibretroNDSStateBasedScannerStrategy()
+            },
+            // Added the new profile for Dolphin.
+            new EmulatorProfile
+            {
+                Name = "Dolphin",
+                Target = EmulatorTarget.Dolphin,
+                ProcessNames = new[] { "Dolphin" },
+                ManagerFactory = () => new DolphinManager(),
+                ScannerFactory = () => new DolphinLiveScannerStrategy(),
+                StateBasedScannerFactory = () => new DolphinStateBasedScannerStrategy()
             }
         };
     }

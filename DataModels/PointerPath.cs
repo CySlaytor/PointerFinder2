@@ -34,9 +34,11 @@ namespace PointerFinder2.DataModels
             // Determine the correct memory access size prefix based on the emulator target.
             // This provides a much smarter default for the user.
             string sizePrefix;
+            // Added a mask variable to hold the system-specific mask string.
+            string pointerMask = "";
 
             // Find the profile for the current manager to get its target type.
-            var profile = EmulatorProfileRegistry.Profiles.Find(p => p.Name == manager.EmulatorName);
+            var profile = EmulatorProfileRegistry.Profiles.FirstOrDefault(p => p.Name.StartsWith(manager.EmulatorName.Split(' ')[0]));
 
             switch (profile?.Target)
             {
@@ -45,6 +47,13 @@ namespace PointerFinder2.DataModels
                 case EmulatorTarget.DuckStation:
                 case EmulatorTarget.RALibretroNDS:
                     sizePrefix = "W"; // 24-bit memory access
+                    break;
+
+                // Added Dolphin support, using "G" for 32-bit Big-Endian reads as requested.
+                case EmulatorTarget.Dolphin:
+                    sizePrefix = "G"; // 32-bit Big-Endian memory access
+                    // Set the mask specifically for Dolphin.
+                    pointerMask = "&536870911"; // This is 0x1FFFFFFF
                     break;
 
                 // For PS2, pointers are typically in the 0x00... range, so a standard
@@ -57,19 +66,22 @@ namespace PointerFinder2.DataModels
 
             // 1. Base Address (indirect memory reference).
             string normalizedBaseAddress = manager.FormatDisplayAddress(this.BaseAddress);
-            sb.Append($"I:0x{sizePrefix}{normalizedBaseAddress}");
+            // Append the mask to the base address.
+            sb.Append($"I:0x{sizePrefix}{normalizedBaseAddress}{pointerMask}");
 
             // 2. Intermediate Pointer Offsets (all but the last one).
             for (int i = 0; i < Offsets.Count - 1; i++)
             {
                 string formattedOffset = $"{Math.Abs(Offsets[i]):x}";
-                sb.Append($"_I:0x{sizePrefix}{formattedOffset}");
+                // Append the mask to each intermediate pointer offset.
+                sb.Append($"_I:0x{sizePrefix}{formattedOffset}{pointerMask}");
             }
 
             // 3. Final Offset (direct offset).
             if (Offsets.Any())
             {
                 string formattedLastOffset = $"{Math.Abs(Offsets.Last()):x}";
+                // The final offset does NOT get the mask.
                 sb.Append($"_0x{sizePrefix}{formattedLastOffset}");
             }
 
@@ -97,7 +109,7 @@ namespace PointerFinder2.DataModels
             return BaseAddress == other.BaseAddress && Offsets.SequenceEqual(other.Offsets);
         }
 
-        // tandard override for object.Equals.
+        // Standard override for object.Equals.
         public override bool Equals(object obj)
         {
             return Equals(obj as PointerPath);

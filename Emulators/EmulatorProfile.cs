@@ -19,7 +19,10 @@ namespace PointerFinder2.Emulators
         // A factory function that creates an instance of the emulator's manager.
         public Func<IEmulatorManager> ManagerFactory { get; set; }
 
-        // A factory function that creates an instance of the emulator's scanning strategy.
+        // A factory function that creates an instance of the emulator's live-memory scanning strategy.
         public Func<IPointerScannerStrategy> ScannerFactory { get; set; }
+
+        // A factory function that creates an instance of the emulator's state-based scanning strategy.
+        public Func<IPointerScannerStrategy> StateBasedScannerFactory { get; set; }
     }
 }

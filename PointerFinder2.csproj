@@ -11,14 +11,14 @@
 		<Company>RetroAchievements</Company>
 		<Authors>CySlaytor</Authors>
 		<Product>Pointer Finder 2.0</Product>
-		<Copyright>2025 © RetroAchievements</Copyright>
+		<Copyright>© 2025 RetroAchievements</Copyright>
 		<Description>A powerful and versatile pointer scanning tool for game reverse engineering and achievement development.</Description>
 
 		<!-- === VERSIONING=== -->
 		<!-- FileVersion and InformationalVersion will use this. -->
-		<Version>1.0.1.0</Version>
+		<Version>1.2.1.0</Version>
 		<!-- AssemblyVersion defaults to a stripped version of <Version> -->
-		<AssemblyVersion>1.0.1.0</AssemblyVersion>
+		<AssemblyVersion>1.2.1.0</AssemblyVersion>
 
 		<!-- Prevent the Git hash from being added to the Product Version -->
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

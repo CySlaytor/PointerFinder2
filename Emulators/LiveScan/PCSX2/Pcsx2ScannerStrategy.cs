@@ -1,6 +1,6 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.DataModels;
-using PointerFinder2.Emulators.PCSX2;
+using PointerFinder2.Emulators.EmulatorManager;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -8,7 +8,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PointerFinder2.Emulators.PCSX2
+// Changed namespace to align with project structure and resolve compilation errors.
+namespace PointerFinder2.Emulators.LiveScan.PCSX2
 {
     // Implements the pointer scanning strategy specifically for the PCSX2 emulator.
     // This strategy is "intelligent" as it considers multiple memory regions (EE RAM, Game Code)
@@ -110,23 +111,33 @@ namespace PointerFinder2.Emulators.PCSX2
                 parallelOptions.MaxDegreeOfParallelism = coreCount;
             }
 
-            Parallel.ForEach(workItems, parallelOptions, item =>
+            // Wrap the parallel loop in a try-catch block to gracefully handle cancellation.
+            // This prevents the debugger from breaking on an "unhandled" OperationCanceledException
+            // when the user stops the scan.
+            try
             {
-                if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) return;
+                Parallel.ForEach(workItems, parallelOptions, item =>
+                {
+                    if (_cancellationToken.IsCancellationRequested || _foundPathsCounter >= _params.MaxResults) return;
 
-                if (item.startAddress >= _params.StaticBaseStart && item.startAddress <= _params.StaticBaseEnd)
-                {
-                    var finalOffsets = new List<int>(item.initialOffsets);
-                    finalOffsets.Reverse();
-                    var newPath = new PointerPath { BaseAddress = item.startAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
-                    _foundPaths.Add(newPath);
-                    Interlocked.Increment(ref _foundPathsCounter);
-                }
-                else
-                {
-                    ResolvePathsBackward(item.startAddress, item.initialOffsets, 2);
-                }
-            });
+                    if (item.startAddress >= _params.StaticBaseStart && item.startAddress <= _params.StaticBaseEnd)
+                    {
+                        var finalOffsets = new List<int>(item.initialOffsets);
+                        finalOffsets.Reverse();
+                        var newPath = new PointerPath { BaseAddress = item.startAddress, Offsets = finalOffsets, FinalAddress = _params.TargetAddress };
+                        _foundPaths.Add(newPath);
+                        Interlocked.Increment(ref _foundPathsCounter);
+                    }
+                    else
+                    {
+                        ResolvePathsBackward(item.startAddress, item.initialOffsets, 2);
+                    }
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // This is expected when the scan is cancelled by the user. Absorb it.
+            }
         }
 
         // Memory-efficient recursive Depth-First Search. Called in parallel by the launcher.
@@ -184,22 +195,23 @@ namespace PointerFinder2.Emulators.PCSX2
             }
         }
 
-        // Scans both PS2 EE RAM and the Game Code region in parallel to build the pointer map.
+        // Scans PS2 EE RAM to build the pointer map. The Game Code region is intentionally
+        // excluded to maintain fast scan performance.
         private async Task BuildIntelligentPointerMapAsync()
         {
-            long totalSize = (Pcsx2Manager.PS2_EEMEM_END - Pcsx2Manager.PS2_EEMEM_START) +
-                             (Pcsx2Manager.PS2_GAME_CODE_END - Pcsx2Manager.PS2_GAME_CODE_START);
+            // Reverted to only scan the EE RAM region to ensure fast, focused scans.
+            // The more thorough "Game Code" scan was removed based on user feedback.
+            var regionsToScan = new List<(uint Start, uint End)>
+            {
+                (Pcsx2Manager.PS2_EEMEM_START, Pcsx2Manager.PS2_EEMEM_END)
+            };
+
+            long totalSize = regionsToScan.Sum(r => (long)r.End - r.Start);
             long processedSize = 0;
             int chunkSize = 131072; // 128K chunks.
 
             var allChunks = new List<(uint, int)>();
-            var regions = new[]
-            {
-                new { Start = Pcsx2Manager.PS2_EEMEM_START, End = Pcsx2Manager.PS2_EEMEM_END },
-                new { Start = Pcsx2Manager.PS2_GAME_CODE_START, End = Pcsx2Manager.PS2_GAME_CODE_END }
-            };
-
-            foreach (var region in regions)
+            foreach (var region in regionsToScan)
             {
                 for (uint addr = region.Start; addr < region.End; addr += (uint)chunkSize)
                 {
@@ -216,49 +228,56 @@ namespace PointerFinder2.Emulators.PCSX2
                     parallelOptions.MaxDegreeOfParallelism = coreCount;
                 }
 
-                Parallel.ForEach(
-                    allChunks,
-                    parallelOptions,
-                    () => new Dictionary<uint, List<uint>>(),
-                    (chunkInfo, loopState, localMap) =>
-                    {
-                        var (addr, size) = chunkInfo;
-                        byte[] chunk = _manager.ReadMemory(addr, size);
-                        if (chunk != null)
+                try
+                {
+                    Parallel.ForEach(
+                        allChunks,
+                        parallelOptions,
+                        () => new Dictionary<uint, List<uint>>(),
+                        (chunkInfo, loopState, localMap) =>
                         {
-                            for (int i = 0; i + 3 < chunk.Length; i += 4)
+                            var (addr, size) = chunkInfo;
+                            byte[] chunk = _manager.ReadMemory(addr, size);
+                            if (chunk != null)
                             {
-                                uint value = BitConverter.ToUInt32(chunk, i);
-                                if (_manager.IsValidPointerTarget(value))
+                                for (int i = 0; i + 3 < chunk.Length; i += 4)
                                 {
-                                    if (!localMap.TryGetValue(value, out var list))
+                                    uint value = BitConverter.ToUInt32(chunk, i);
+                                    if (_manager.IsValidPointerTarget(value))
                                     {
-                                        list = new List<uint>();
-                                        localMap[value] = list;
+                                        if (!localMap.TryGetValue(value, out var list))
+                                        {
+                                            list = new List<uint>();
+                                            localMap[value] = list;
+                                        }
+                                        list.Add(addr + (uint)i);
                                     }
-                                    list.Add(addr + (uint)i);
+                                }
+                            }
+                            long currentProcessed = Interlocked.Add(ref processedSize, size);
+                            if (currentProcessed % (chunkSize * 16) == 0)
+                            {
+                                ReportProgress($"Building pointer map... {((double)currentProcessed / totalSize):P0}", currentProcessed, totalSize, 0);
+                            }
+                            return localMap;
+                        },
+                        (finalLocalMap) =>
+                        {
+                            foreach (var kvp in finalLocalMap)
+                            {
+                                var list = _intelligentPointerMap.GetOrAdd(kvp.Key, _ => new List<uint>());
+                                lock (list)
+                                {
+                                    list.AddRange(kvp.Value);
                                 }
                             }
                         }
-                        long currentProcessed = Interlocked.Add(ref processedSize, size);
-                        if (currentProcessed % (chunkSize * 16) == 0)
-                        {
-                            ReportProgress($"Building pointer map... {((double)currentProcessed / totalSize):P0}", currentProcessed, totalSize, 0);
-                        }
-                        return localMap;
-                    },
-                    (finalLocalMap) =>
-                    {
-                        foreach (var kvp in finalLocalMap)
-                        {
-                            var list = _intelligentPointerMap.GetOrAdd(kvp.Key, _ => new List<uint>());
-                            lock (list)
-                            {
-                                list.AddRange(kvp.Value);
-                            }
-                        }
-                    }
-                );
+                    );
+                }
+                catch (OperationCanceledException)
+                {
+                    // This is expected when the scan is cancelled by the user. Absorb it.
+                }
             }, _cancellationToken);
             ReportProgress($"Building pointer map... 100%", totalSize, totalSize, 0);
         }

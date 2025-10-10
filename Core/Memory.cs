@@ -127,7 +127,7 @@ namespace PointerFinder2.Core
             return Encoding.ASCII.GetString(buffer).Split('\0')[0];
         }
 
-        // Determines if the target process is a 32-bit application.
+        // Determines if the target process is a 32-bit application running on a 64-bit OS.
         private static bool Wow64Process(Process process)
         {
             if (Environment.Is64BitOperatingSystem && Environment.Is64BitProcess)
