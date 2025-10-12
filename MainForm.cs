@@ -1265,6 +1265,28 @@ namespace PointerFinder2
             lblResultCount.Text = $"Results: {_currentResults.Count:N0}";
             UpdateStatus($"Deleted {(originalCount - _currentResults.Count):N0} row(s).");
         }
+        private void videoTutorialToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            const string tutorialUrl = "https://youtu.be/QwHTML0kRtI";
+            try
+            {
+                // This is the most reliable way to open a URL in the user's default browser.
+                var ps = new ProcessStartInfo(tutorialUrl)
+                {
+                    UseShellExecute = true,
+                    Verb = "open"
+                };
+                Process.Start(ps);
+            }
+            catch (Exception ex)
+            {
+                // If it fails for any reason, show an error with the link so the user can copy it.
+                MessageBox.Show($"Could not open the video link automatically.\n\nPlease copy and paste this URL into your browser:\n\n{tutorialUrl}\n\nError: {ex.Message}",
+                    "Error Opening Link",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
         #endregion
     }
 }
