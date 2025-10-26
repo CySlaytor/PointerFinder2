@@ -1203,12 +1203,26 @@ namespace PointerFinder2
             }
         }
 
+        // Helper method to reset the visual sorting indicators on the DataGridView headers.
+        private void ClearSortGlyphs()
+        {
+            if (_sortedColumn != null)
+            {
+                _sortedColumn.HeaderCell.SortGlyphDirection = SortOrder.None;
+            }
+            _sortedColumn = null;
+            _sortOrder = SortOrder.None;
+        }
+
         private void contextMenuResults_Opening(object sender, CancelEventArgs e)
         {
             bool hasSelection = dgvResults.SelectedRows.Count > 0;
+            bool hasResults = _currentResults.Any();
             copyBaseAddressToolStripMenuItem.Enabled = hasSelection;
             deleteSelectedToolStripMenuItem.Enabled = hasSelection;
             copyAsRetroAchievementsFormatToolStripMenuItem.Enabled = dgvResults.SelectedRows.Count == 1;
+            // Enable the new sort option only if there are results to sort.
+            sortByLowestOffsetsToolStripMenuItem.Enabled = hasResults;
         }
 
         private void copyBaseAddressToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1236,6 +1250,72 @@ namespace PointerFinder2
             {
                 Clipboard.SetText(path.ToRetroAchievementsString(_currentManager));
                 UpdateStatus("Copied path in RetroAchievements format.");
+            }
+        }
+
+        private async void sortByLowestOffsetsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!_currentResults.Any()) return;
+
+            PushUndoState();
+            ClearSortGlyphs();
+
+            // Prevent user interaction during the sort and show a wait cursor.
+            this.Enabled = false;
+            this.UseWaitCursor = true;
+            UpdateStatus("Sorting by lowest offsets... this may take a moment.");
+
+            try
+            {
+                // Perform the potentially heavy sorting logic on a background thread.
+                var sortedResults = await Task.Run(() =>
+                {
+                    // Step 1: Create a temporary list with pre-calculated sorted offsets for efficiency.
+                    var sortableResults = _currentResults
+                        .Select(p => new
+                        {
+                            Path = p,
+                            SortedOffsets = p.Offsets.Select(o => Math.Abs(o)).OrderBy(o => o).ToList()
+                        })
+                        .ToList();
+
+                    // Step 2: Sort the temporary list using a lexicographical comparison.
+                    sortableResults.Sort((item1, item2) =>
+                    {
+                        var p1Offsets = item1.SortedOffsets;
+                        var p2Offsets = item2.SortedOffsets;
+
+                        int minCount = Math.Min(p1Offsets.Count, p2Offsets.Count);
+                        for (int i = 0; i < minCount; i++)
+                        {
+                            int comparison = p1Offsets[i].CompareTo(p2Offsets[i]);
+                            if (comparison != 0)
+                            {
+                                return comparison; // Found a difference, return it.
+                            }
+                        }
+                        // If all common offsets are equal, the path with fewer levels is smaller.
+                        return p1Offsets.Count.CompareTo(p2Offsets.Count);
+                    });
+
+                    // Step 3: Extract the sorted PointerPath objects into a new list.
+                    return sortableResults.Select(item => item.Path).ToList();
+                });
+
+                _currentResults = sortedResults;
+                dgvResults.Invalidate(); // Force the grid to redraw with the new order.
+                UpdateStatus($"Sorted by lowest offsets. {_currentResults.Count:N0} results.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred during sorting: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateStatus("Sorting failed.");
+            }
+            finally
+            {
+                // Re-enable the UI.
+                this.Enabled = true;
+                this.UseWaitCursor = false;
             }
         }
 

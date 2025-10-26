@@ -19,6 +19,7 @@
             components = new System.ComponentModel.Container();
             System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
             System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
+            System.Windows.Forms.ToolStripSeparator toolStripSeparator3;
             this.helpToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.videoTutorialToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             menuStrip1 = new System.Windows.Forms.MenuStrip();
@@ -34,7 +35,6 @@
             viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             debugConsoleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             debugOptionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            // Added the Tools menu item.
             toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             staticRangeFinderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             panelBottom = new System.Windows.Forms.Panel();
@@ -54,12 +54,14 @@
             copyBaseAddressToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             copyAsRetroAchievementsFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             deleteSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            sortByLowestOffsetsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             statusTableLayoutPanel = new System.Windows.Forms.TableLayoutPanel();
             lblStatus = new System.Windows.Forms.Label();
             lblBaseAddress = new System.Windows.Forms.Label();
             lblResultCount = new System.Windows.Forms.Label();
             toolStripSeparator2 = new System.Windows.Forms.ToolStripSeparator();
             toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
+            toolStripSeparator3 = new System.Windows.Forms.ToolStripSeparator();
             menuStrip1.SuspendLayout();
             panelBottom.SuspendLayout();
             tableLayoutPanel1.SuspendLayout();
@@ -80,10 +82,29 @@
             toolStripSeparator1.Name = "toolStripSeparator1";
             toolStripSeparator1.Size = new System.Drawing.Size(169, 6);
             // 
+            // toolStripSeparator3
+            // 
+            toolStripSeparator3.Name = "toolStripSeparator3";
+            toolStripSeparator3.Size = new System.Drawing.Size(334, 6);
+            // 
+            // helpToolStripMenuItem
+            // 
+            this.helpToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { this.videoTutorialToolStripMenuItem });
+            this.helpToolStripMenuItem.Name = "helpToolStripMenuItem";
+            this.helpToolStripMenuItem.Size = new System.Drawing.Size(44, 20);
+            this.helpToolStripMenuItem.Text = "&Help";
+            // 
+            // videoTutorialToolStripMenuItem
+            // 
+            this.videoTutorialToolStripMenuItem.Name = "videoTutorialToolStripMenuItem";
+            this.videoTutorialToolStripMenuItem.Size = new System.Drawing.Size(170, 22);
+            this.videoTutorialToolStripMenuItem.Text = "Video Tutorial...";
+            this.videoTutorialToolStripMenuItem.Click += new System.EventHandler(this.videoTutorialToolStripMenuItem_Click);
+            // 
             // menuStrip1
             // 
             menuStrip1.ImageScalingSize = new System.Drawing.Size(20, 20);
-            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { fileToolStripMenuItem, editToolStripMenuItem, viewToolStripMenuItem, toolsToolStripMenuItem, helpToolStripMenuItem });
+            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { fileToolStripMenuItem, editToolStripMenuItem, viewToolStripMenuItem, toolsToolStripMenuItem, this.helpToolStripMenuItem });
             menuStrip1.Location = new System.Drawing.Point(0, 0);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Padding = new System.Windows.Forms.Padding(4, 2, 0, 2);
@@ -168,20 +189,6 @@
             viewToolStripMenuItem.Name = "viewToolStripMenuItem";
             viewToolStripMenuItem.Size = new System.Drawing.Size(44, 20);
             viewToolStripMenuItem.Text = "View";
-            //
-            // helpToolStripMenuItem
-            // 
-            helpToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { videoTutorialToolStripMenuItem });
-            helpToolStripMenuItem.Name = "helpToolStripMenuItem";
-            helpToolStripMenuItem.Size = new System.Drawing.Size(44, 20);
-            helpToolStripMenuItem.Text = "&Help";
-            // 
-            // videoTutorialToolStripMenuItem
-            // 
-            videoTutorialToolStripMenuItem.Name = "videoTutorialToolStripMenuItem";
-            videoTutorialToolStripMenuItem.Size = new System.Drawing.Size(170, 22);
-            videoTutorialToolStripMenuItem.Text = "Video Tutorial...";
-            videoTutorialToolStripMenuItem.Click += new System.EventHandler(this.videoTutorialToolStripMenuItem_Click);
             // 
             // debugConsoleToolStripMenuItem
             // 
@@ -378,9 +385,9 @@
             // contextMenuResults
             // 
             contextMenuResults.ImageScalingSize = new System.Drawing.Size(20, 20);
-            contextMenuResults.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { copyBaseAddressToolStripMenuItem, copyAsRetroAchievementsFormatToolStripMenuItem, deleteSelectedToolStripMenuItem });
+            contextMenuResults.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { copyBaseAddressToolStripMenuItem, copyAsRetroAchievementsFormatToolStripMenuItem, deleteSelectedToolStripMenuItem, toolStripSeparator3, sortByLowestOffsetsToolStripMenuItem });
             contextMenuResults.Name = "contextMenuResults";
-            contextMenuResults.Size = new System.Drawing.Size(338, 70);
+            contextMenuResults.Size = new System.Drawing.Size(338, 98);
             contextMenuResults.Opening += new System.ComponentModel.CancelEventHandler(this.contextMenuResults_Opening);
             // 
             // copyBaseAddressToolStripMenuItem
@@ -407,6 +414,13 @@
             deleteSelectedToolStripMenuItem.Size = new System.Drawing.Size(337, 22);
             deleteSelectedToolStripMenuItem.Text = "Delete Selected";
             deleteSelectedToolStripMenuItem.Click += new System.EventHandler(this.deleteSelectedToolStripMenuItem_Click);
+            // 
+            // sortByLowestOffsetsToolStripMenuItem
+            // 
+            this.sortByLowestOffsetsToolStripMenuItem.Name = "sortByLowestOffsetsToolStripMenuItem";
+            this.sortByLowestOffsetsToolStripMenuItem.Size = new System.Drawing.Size(337, 22);
+            this.sortByLowestOffsetsToolStripMenuItem.Text = "Sort by Lowest Offsets";
+            this.sortByLowestOffsetsToolStripMenuItem.Click += new System.EventHandler(this.sortByLowestOffsetsToolStripMenuItem_Click);
             // 
             // statusTableLayoutPanel
             // 
@@ -526,5 +540,6 @@
         private System.Windows.Forms.ToolStripMenuItem staticRangeFinderToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem helpToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem videoTutorialToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem sortByLowestOffsetsToolStripMenuItem;
     }
 }
