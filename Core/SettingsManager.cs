@@ -19,6 +19,13 @@ namespace PointerFinder2.Core
             var ini = new IniFile(_settingsFile);
             ini.Write("UseWindowsDefaultSound", GlobalSettings.UseWindowsDefaultSound.ToString(), "Global");
             ini.Write("LimitCpuUsage", GlobalSettings.LimitCpuUsage.ToString(), "Global");
+
+            // Save new Code Note settings
+            ini.Write("CodeNotePrefix", GlobalSettings.CodeNotePrefix, "CodeNotes");
+            ini.Write("CodeNoteSuffix", GlobalSettings.CodeNoteSuffix, "CodeNotes");
+            ini.Write("CodeNoteAlignSuffixes", GlobalSettings.CodeNoteAlignSuffixes.ToString(), "CodeNotes");
+            ini.Write("CodeNoteSuffixOnLastLineOnly", GlobalSettings.CodeNoteSuffixOnLastLineOnly.ToString(), "CodeNotes");
+
             if (DebugSettings.LogLiveScan) logger.Log("Global settings saved successfully.");
         }
 
@@ -56,7 +63,6 @@ namespace PointerFinder2.Core
                 ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
                 ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
                 ini.Write("StopOnFirstPathFound", settings.StopOnFirstPathFound.ToString(), section);
-                // Save the new setting for finding all path levels.
                 ini.Write("FindAllPathLevels", settings.FindAllPathLevels.ToString(), section);
                 ini.Write("CandidatesPerLevel", settings.CandidatesPerLevel.ToString(), section);
             }
@@ -65,6 +71,43 @@ namespace PointerFinder2.Core
             SaveDebugSettingsOnly();
             if (DebugSettings.LogLiveScan) logger.Log("Settings saved successfully.");
         }
+
+        //New public method to be called once on application startup.
+        public static void InitializeGlobalSettings()
+        {
+            if (!File.Exists(_settingsFile)) return;
+            var ini = new IniFile(_settingsFile);
+            LoadGlobalAndDebugSections(ini);
+        }
+
+        //New private helper to contain the shared loading logic for global settings.
+        private static void LoadGlobalAndDebugSections(IniFile ini)
+        {
+            // Load global settings
+            if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound)) useDefaultSound = false;
+            GlobalSettings.UseWindowsDefaultSound = useDefaultSound;
+            if (!bool.TryParse(ini.Read("LimitCpuUsage", "Global", GlobalSettings.LimitCpuUsage.ToString()), out bool limitCpuUsage)) limitCpuUsage = false;
+            GlobalSettings.LimitCpuUsage = limitCpuUsage;
+
+            // Load Code Note settings
+            GlobalSettings.CodeNotePrefix = ini.Read("CodeNotePrefix", "CodeNotes", ".");
+            GlobalSettings.CodeNoteSuffix = ini.Read("CodeNoteSuffix", "CodeNotes", " |");
+            if (!bool.TryParse(ini.Read("CodeNoteAlignSuffixes", "CodeNotes", "True"), out bool align)) align = true;
+            GlobalSettings.CodeNoteAlignSuffixes = align;
+            if (!bool.TryParse(ini.Read("CodeNoteSuffixOnLastLineOnly", "CodeNotes", "False"), out bool suffixLastLine)) suffixLastLine = false;
+            GlobalSettings.CodeNoteSuffixOnLastLineOnly = suffixLastLine;
+
+            // Load debug settings
+            if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan)) logLiveScan = false;
+            DebugSettings.LogLiveScan = logLiveScan;
+            if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation)) logFilterValidation = false;
+            DebugSettings.LogFilterValidation = logFilterValidation;
+            if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan)) logRefineScan = false;
+            DebugSettings.LogRefineScan = logRefineScan;
+            if (!bool.TryParse(ini.Read("LogStateBasedScanDetails", "Debug", DebugSettings.LogStateBasedScanDetails.ToString()), out bool logStateBasedScanDetails)) logStateBasedScanDetails = false;
+            DebugSettings.LogStateBasedScanDetails = logStateBasedScanDetails;
+        }
+
 
         // Loads settings for a specific emulator and all global settings from the INI file.
         public static AppSettings Load(EmulatorTarget target, AppSettings defaultSettings)
@@ -101,27 +144,13 @@ namespace PointerFinder2.Core
             settings.UseSliderRange = useSliderRange;
             if (!bool.TryParse(ini.Read("StopOnFirstPathFound", section, defaultSettings.StopOnFirstPathFound.ToString()), out bool stopOnFirst)) stopOnFirst = defaultSettings.StopOnFirstPathFound;
             settings.StopOnFirstPathFound = stopOnFirst;
-            // Load the new setting for finding all path levels.
             if (!bool.TryParse(ini.Read("FindAllPathLevels", section, defaultSettings.FindAllPathLevels.ToString()), out bool findAllLevels)) findAllLevels = defaultSettings.FindAllPathLevels;
             settings.FindAllPathLevels = findAllLevels;
             if (!int.TryParse(ini.Read("CandidatesPerLevel", section, defaultSettings.CandidatesPerLevel.ToString()), out int cpl)) cpl = defaultSettings.CandidatesPerLevel;
             settings.CandidatesPerLevel = cpl;
 
-            // Load global settings
-            if (!bool.TryParse(ini.Read("UseWindowsDefaultSound", "Global", GlobalSettings.UseWindowsDefaultSound.ToString()), out bool useDefaultSound)) useDefaultSound = false;
-            GlobalSettings.UseWindowsDefaultSound = useDefaultSound;
-            if (!bool.TryParse(ini.Read("LimitCpuUsage", "Global", GlobalSettings.LimitCpuUsage.ToString()), out bool limitCpuUsage)) limitCpuUsage = false;
-            GlobalSettings.LimitCpuUsage = limitCpuUsage;
-
-            // Load debug settings
-            if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan)) logLiveScan = false;
-            DebugSettings.LogLiveScan = logLiveScan;
-            if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation)) logFilterValidation = false;
-            DebugSettings.LogFilterValidation = logFilterValidation;
-            if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan)) logRefineScan = false;
-            DebugSettings.LogRefineScan = logRefineScan;
-            if (!bool.TryParse(ini.Read("LogStateBasedScanDetails", "Debug", DebugSettings.LogStateBasedScanDetails.ToString()), out bool logStateBasedScanDetails)) logStateBasedScanDetails = false;
-            DebugSettings.LogStateBasedScanDetails = logStateBasedScanDetails;
+            //Re-load all global sections to ensure they are up-to-date.
+            LoadGlobalAndDebugSections(ini);
 
             if (DebugSettings.LogLiveScan) logger.Log("Settings loaded successfully.");
             return settings;

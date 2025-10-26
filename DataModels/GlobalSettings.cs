@@ -8,5 +8,12 @@
 
         // If true, the scanner will limit the number of threads used for parallel operations.
         public static bool LimitCpuUsage { get; set; } = false;
+
+        // --- New Settings for Code Note Formatting ---
+        public static string CodeNotePrefix { get; set; } = ".";
+        public static string CodeNoteSuffix { get; set; } = " |";
+        public static bool CodeNoteAlignSuffixes { get; set; } = true;
+        //New setting to control suffix application.
+        public static bool CodeNoteSuffixOnLastLineOnly { get; set; } = false;
     }
 }

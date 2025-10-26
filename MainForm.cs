@@ -75,6 +75,9 @@ namespace PointerFinder2
             InitializeComponent();
             ParseCommandLineArgs(args);
 
+            // Load global settings on startup to ensure consistency.
+            SettingsManager.InitializeGlobalSettings();
+
             // Wire up the Load event to our auto-attach method. This is crucial for the smart restart to work.
             this.Load += new System.EventHandler(this.MainForm_Load);
 
@@ -471,6 +474,14 @@ namespace PointerFinder2
                         _currentSettings = SettingsManager.Load(_activeProfile.Target, _currentManager.GetDefaultSettings());
                     }
                 }
+            }
+        }
+        private void codeNoteConverterToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // Pass the current manager to the constructor for intelligent defaults.
+            using (var form = new CodeNoteConverterForm(_currentManager))
+            {
+                form.ShowDialog(this);
             }
         }
         #endregion
@@ -1201,6 +1212,20 @@ namespace PointerFinder2
             {
                 deleteSelectedToolStripMenuItem_Click(sender, e);
             }
+            if (e.Control && e.KeyCode == Keys.V)
+            {
+                e.SuppressKeyPress = true;
+                string clipboardText = Clipboard.GetText();
+                // Basic validation to see if it looks like a trigger.
+                if (!string.IsNullOrEmpty(clipboardText) && (clipboardText.Contains("I:0x") || clipboardText.Contains("0xH")))
+                {
+                    //Pass the current manager to the constructor.
+                    using (var form = new CodeNoteConverterForm(clipboardText, _currentManager))
+                    {
+                        form.ShowDialog(this);
+                    }
+                }
+            }
         }
 
         // Helper method to reset the visual sorting indicators on the DataGridView headers.
@@ -1221,6 +1246,7 @@ namespace PointerFinder2
             copyBaseAddressToolStripMenuItem.Enabled = hasSelection;
             deleteSelectedToolStripMenuItem.Enabled = hasSelection;
             copyAsRetroAchievementsFormatToolStripMenuItem.Enabled = dgvResults.SelectedRows.Count == 1;
+            copyAsCodeNoteToolStripMenuItem.Enabled = dgvResults.SelectedRows.Count == 1;
             // Enable the new sort option only if there are results to sort.
             sortByLowestOffsetsToolStripMenuItem.Enabled = hasResults;
         }
@@ -1250,6 +1276,20 @@ namespace PointerFinder2
             {
                 Clipboard.SetText(path.ToRetroAchievementsString(_currentManager));
                 UpdateStatus("Copied path in RetroAchievements format.");
+            }
+        }
+
+        private void copyAsCodeNoteToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (dgvResults.SelectedRows.Count != 1) return;
+
+            PointerPath path = _currentResults[dgvResults.SelectedRows[0].Index];
+            if (path != null)
+            {
+                var settings = CodeNoteSettings.GetFromGlobalSettings();
+                string codeNote = CodeNoteHelper.GenerateFromPointerPath(path, settings);
+                Clipboard.SetText(codeNote);
+                UpdateStatus("Copied path as custom code note.");
             }
         }
 

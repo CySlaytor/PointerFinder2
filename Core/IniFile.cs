@@ -26,13 +26,21 @@ namespace PointerFinder2.Core
         {
             var retVal = new StringBuilder(255);
             GetPrivateProfileString(section, key, defaultValue, retVal, 255, _path);
-            return retVal.ToString();
+
+            // Unwrap quotes from the value if they exist.
+            string result = retVal.ToString();
+            if (result.Length >= 2 && result.StartsWith("\"") && result.EndsWith("\""))
+            {
+                return result.Substring(1, result.Length - 2);
+            }
+            return result;
         }
 
         // Writes a value to the specified section and key.
         public void Write(string key, string value, string section)
         {
-            WritePrivateProfileString(section, key, value, _path);
+            // Wrap the value in double quotes to handle special characters and spaces robustly.
+            WritePrivateProfileString(section, key, $"\"{value}\"", _path);
         }
     }
 }

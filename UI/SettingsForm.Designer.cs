@@ -24,6 +24,16 @@
             this.chkLimitCpuUsage = new System.Windows.Forms.CheckBox();
             this.grpSound = new System.Windows.Forms.GroupBox();
             this.chkUseDefaultSounds = new System.Windows.Forms.CheckBox();
+            this.tabCodeNotes = new System.Windows.Forms.TabPage();
+            this.groupBox2 = new System.Windows.Forms.GroupBox();
+            this.richPreview = new System.Windows.Forms.RichTextBox();
+            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.chkSuffixOnLastLine = new System.Windows.Forms.CheckBox();
+            this.chkAlign = new System.Windows.Forms.CheckBox();
+            this.txtSuffix = new System.Windows.Forms.TextBox();
+            this.label2 = new System.Windows.Forms.Label();
+            this.txtPrefix = new System.Windows.Forms.TextBox();
+            this.label1 = new System.Windows.Forms.Label();
             this.tabDebug = new System.Windows.Forms.TabPage();
             this.grpLogging = new System.Windows.Forms.GroupBox();
             this.chkLogStateScanDetails = new System.Windows.Forms.CheckBox();
@@ -38,6 +48,9 @@
             this.tabGeneral.SuspendLayout();
             this.grpPerformance.SuspendLayout();
             this.grpSound.SuspendLayout();
+            this.tabCodeNotes.SuspendLayout();
+            this.groupBox2.SuspendLayout();
+            this.groupBox1.SuspendLayout();
             this.tabDebug.SuspendLayout();
             this.grpLogging.SuspendLayout();
             this.SuspendLayout();
@@ -48,11 +61,12 @@
             | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tabControlSettings.Controls.Add(this.tabGeneral);
+            this.tabControlSettings.Controls.Add(this.tabCodeNotes);
             this.tabControlSettings.Controls.Add(this.tabDebug);
             this.tabControlSettings.Location = new System.Drawing.Point(12, 12);
             this.tabControlSettings.Name = "tabControlSettings";
             this.tabControlSettings.SelectedIndex = 0;
-            this.tabControlSettings.Size = new System.Drawing.Size(320, 203);
+            this.tabControlSettings.Size = new System.Drawing.Size(460, 241);
             this.tabControlSettings.TabIndex = 0;
             // 
             // tabGeneral
@@ -62,7 +76,7 @@
             this.tabGeneral.Location = new System.Drawing.Point(4, 24);
             this.tabGeneral.Name = "tabGeneral";
             this.tabGeneral.Padding = new System.Windows.Forms.Padding(3);
-            this.tabGeneral.Size = new System.Drawing.Size(312, 175);
+            this.tabGeneral.Size = new System.Drawing.Size(452, 213);
             this.tabGeneral.TabIndex = 0;
             this.tabGeneral.Text = "General";
             this.tabGeneral.UseVisualStyleBackColor = true;
@@ -72,7 +86,7 @@
             this.grpPerformance.Controls.Add(this.chkLimitCpuUsage);
             this.grpPerformance.Location = new System.Drawing.Point(6, 77);
             this.grpPerformance.Name = "grpPerformance";
-            this.grpPerformance.Size = new System.Drawing.Size(299, 65);
+            this.grpPerformance.Size = new System.Drawing.Size(439, 65);
             this.grpPerformance.TabIndex = 1;
             this.grpPerformance.TabStop = false;
             this.grpPerformance.Text = "Performance";
@@ -95,7 +109,7 @@
             this.grpSound.Controls.Add(this.chkUseDefaultSounds);
             this.grpSound.Location = new System.Drawing.Point(6, 6);
             this.grpSound.Name = "grpSound";
-            this.grpSound.Size = new System.Drawing.Size(299, 65);
+            this.grpSound.Size = new System.Drawing.Size(439, 65);
             this.grpSound.TabIndex = 0;
             this.grpSound.TabStop = false;
             this.grpSound.Text = "Sound";
@@ -111,13 +125,124 @@
             this.chkUseDefaultSounds.UseVisualStyleBackColor = true;
             this.chkUseDefaultSounds.CheckedChanged += new System.EventHandler(this.chkUseDefaultSounds_CheckedChanged);
             // 
+            // tabCodeNotes
+            // 
+            this.tabCodeNotes.Controls.Add(this.groupBox2);
+            this.tabCodeNotes.Controls.Add(this.groupBox1);
+            this.tabCodeNotes.Location = new System.Drawing.Point(4, 24);
+            this.tabCodeNotes.Name = "tabCodeNotes";
+            this.tabCodeNotes.Padding = new System.Windows.Forms.Padding(3);
+            this.tabCodeNotes.Size = new System.Drawing.Size(452, 213);
+            this.tabCodeNotes.TabIndex = 2;
+            this.tabCodeNotes.Text = "Code Notes";
+            this.tabCodeNotes.UseVisualStyleBackColor = true;
+            // 
+            // groupBox2
+            // 
+            this.groupBox2.Controls.Add(this.richPreview);
+            this.groupBox2.Location = new System.Drawing.Point(220, 6);
+            this.groupBox2.Name = "groupBox2";
+            this.groupBox2.Size = new System.Drawing.Size(226, 201);
+            this.groupBox2.TabIndex = 1;
+            this.groupBox2.TabStop = false;
+            this.groupBox2.Text = "Live Preview";
+            // 
+            // richPreview
+            // 
+            this.richPreview.BackColor = System.Drawing.SystemColors.ControlLight;
+            this.richPreview.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.richPreview.Font = new System.Drawing.Font("Consolas", 9F);
+            this.richPreview.Location = new System.Drawing.Point(3, 19);
+            this.richPreview.Name = "richPreview";
+            this.richPreview.ReadOnly = true;
+            this.richPreview.Size = new System.Drawing.Size(220, 179);
+            this.richPreview.TabIndex = 0;
+            this.richPreview.Text = "";
+            this.richPreview.WordWrap = false;
+            // 
+            // groupBox1
+            // 
+            this.groupBox1.Controls.Add(this.chkSuffixOnLastLine);
+            this.groupBox1.Controls.Add(this.chkAlign);
+            this.groupBox1.Controls.Add(this.txtSuffix);
+            this.groupBox1.Controls.Add(this.label2);
+            this.groupBox1.Controls.Add(this.txtPrefix);
+            this.groupBox1.Controls.Add(this.label1);
+            this.groupBox1.Location = new System.Drawing.Point(6, 6);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(208, 201);
+            this.groupBox1.TabIndex = 0;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "Formatting Options";
+            // 
+            // chkSuffixOnLastLine
+            // 
+            this.chkSuffixOnLastLine.AutoSize = true;
+            this.chkSuffixOnLastLine.Location = new System.Drawing.Point(9, 153);
+            this.chkSuffixOnLastLine.Name = "chkSuffixOnLastLine";
+            this.chkSuffixOnLastLine.Size = new System.Drawing.Size(167, 19);
+            this.chkSuffixOnLastLine.TabIndex = 5;
+            this.chkSuffixOnLastLine.Text = "Apply Suffix to Last Line Only";
+            this.toolTip1.SetToolTip(this.chkSuffixOnLastLine, "If checked, the suffix is only applied to the final line of the pointer chain.");
+            this.chkSuffixOnLastLine.UseVisualStyleBackColor = true;
+            this.chkSuffixOnLastLine.CheckedChanged += new System.EventHandler(this.CodeNoteSetting_Changed);
+            // 
+            // chkAlign
+            // 
+            this.chkAlign.AutoSize = true;
+            this.chkAlign.Location = new System.Drawing.Point(9, 128);
+            this.chkAlign.Name = "chkAlign";
+            this.chkAlign.Size = new System.Drawing.Size(142, 19);
+            this.chkAlign.TabIndex = 4;
+            this.chkAlign.Text = "Align Suffixes Vertically";
+            this.toolTip1.SetToolTip(this.chkAlign, "Adds padding spaces so that all suffixes line up in a column.");
+            this.chkAlign.UseVisualStyleBackColor = true;
+            this.chkAlign.CheckedChanged += new System.EventHandler(this.CodeNoteSetting_Changed);
+            // 
+            // txtSuffix
+            // 
+            this.txtSuffix.Location = new System.Drawing.Point(9, 89);
+            this.txtSuffix.Name = "txtSuffix";
+            this.txtSuffix.Size = new System.Drawing.Size(180, 23);
+            this.txtSuffix.TabIndex = 3;
+            this.toolTip1.SetToolTip(this.txtSuffix, "The character(s) to add to the end of each line (e.g., \" |\" or \"=\").");
+            this.txtSuffix.TextChanged += new System.EventHandler(this.CodeNoteSetting_Changed);
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(6, 71);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(64, 15);
+            this.label2.TabIndex = 2;
+            this.label2.Text = "Line Suffix:";
+            // 
+            // txtPrefix
+            // 
+            this.txtPrefix.Location = new System.Drawing.Point(9, 45);
+            this.txtPrefix.Name = "txtPrefix";
+            this.txtPrefix.Size = new System.Drawing.Size(180, 23);
+            this.txtPrefix.TabIndex = 1;
+            this.toolTip1.SetToolTip(this.txtPrefix, "The character(s) used for indentation. Will be repeated for each level.\r\nExample" +
+        "s: . or + or -");
+            this.txtPrefix.TextChanged += new System.EventHandler(this.CodeNoteSetting_Changed);
+            // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(6, 27);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(107, 15);
+            this.label1.TabIndex = 0;
+            this.label1.Text = "Indentation Prefix:";
+            // 
             // tabDebug
             // 
             this.tabDebug.Controls.Add(this.grpLogging);
             this.tabDebug.Location = new System.Drawing.Point(4, 24);
             this.tabDebug.Name = "tabDebug";
             this.tabDebug.Padding = new System.Windows.Forms.Padding(3);
-            this.tabDebug.Size = new System.Drawing.Size(312, 175);
+            this.tabDebug.Size = new System.Drawing.Size(452, 213);
             this.tabDebug.TabIndex = 1;
             this.tabDebug.Text = "Debug";
             this.tabDebug.UseVisualStyleBackColor = true;
@@ -130,7 +255,7 @@
             this.grpLogging.Controls.Add(this.chkLogLiveScan);
             this.grpLogging.Location = new System.Drawing.Point(6, 6);
             this.grpLogging.Name = "grpLogging";
-            this.grpLogging.Size = new System.Drawing.Size(299, 154);
+            this.grpLogging.Size = new System.Drawing.Size(439, 154);
             this.grpLogging.TabIndex = 1;
             this.grpLogging.TabStop = false;
             this.grpLogging.Text = "Logging and Debug Toggles";
@@ -184,7 +309,7 @@
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnClose.DialogResult = System.Windows.Forms.DialogResult.OK;
-            this.btnClose.Location = new System.Drawing.Point(245, 221);
+            this.btnClose.Location = new System.Drawing.Point(385, 259);
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(87, 28);
             this.btnClose.TabIndex = 2;
@@ -197,7 +322,7 @@
             this.btnRestartApp.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.btnRestartApp.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
             this.btnRestartApp.ForeColor = System.Drawing.Color.DarkRed;
-            this.btnRestartApp.Location = new System.Drawing.Point(12, 221);
+            this.btnRestartApp.Location = new System.Drawing.Point(12, 259);
             this.btnRestartApp.Name = "btnRestartApp";
             this.btnRestartApp.Size = new System.Drawing.Size(130, 28);
             this.btnRestartApp.TabIndex = 3;
@@ -209,7 +334,7 @@
             // btnPurgeMemory
             // 
             this.btnPurgeMemory.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.btnPurgeMemory.Location = new System.Drawing.Point(148, 221);
+            this.btnPurgeMemory.Location = new System.Drawing.Point(148, 259);
             this.btnPurgeMemory.Name = "btnPurgeMemory";
             this.btnPurgeMemory.Size = new System.Drawing.Size(91, 28);
             this.btnPurgeMemory.TabIndex = 4;
@@ -223,7 +348,7 @@
             this.AcceptButton = this.btnClose;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(344, 261);
+            this.ClientSize = new System.Drawing.Size(484, 299);
             this.Controls.Add(this.btnPurgeMemory);
             this.Controls.Add(this.btnRestartApp);
             this.Controls.Add(this.btnClose);
@@ -241,6 +366,10 @@
             this.grpPerformance.PerformLayout();
             this.grpSound.ResumeLayout(false);
             this.grpSound.PerformLayout();
+            this.tabCodeNotes.ResumeLayout(false);
+            this.groupBox2.ResumeLayout(false);
+            this.groupBox1.ResumeLayout(false);
+            this.groupBox1.PerformLayout();
             this.tabDebug.ResumeLayout(false);
             this.grpLogging.ResumeLayout(false);
             this.grpLogging.PerformLayout();
@@ -266,5 +395,15 @@
         private System.Windows.Forms.GroupBox grpPerformance;
         private System.Windows.Forms.CheckBox chkLimitCpuUsage;
         private System.Windows.Forms.CheckBox chkLogStateScanDetails;
+        private System.Windows.Forms.TabPage tabCodeNotes;
+        private System.Windows.Forms.GroupBox groupBox2;
+        private System.Windows.Forms.RichTextBox richPreview;
+        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.CheckBox chkAlign;
+        private System.Windows.Forms.TextBox txtSuffix;
+        private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.TextBox txtPrefix;
+        private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.CheckBox chkSuffixOnLastLine;
     }
 }
