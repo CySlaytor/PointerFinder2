@@ -13,7 +13,8 @@
         public static string CodeNotePrefix { get; set; } = ".";
         public static string CodeNoteSuffix { get; set; } = " |";
         public static bool CodeNoteAlignSuffixes { get; set; } = true;
-        //New setting to control suffix application.
         public static bool CodeNoteSuffixOnLastLineOnly { get; set; } = false;
+        // Added a new setting to control the "Sort by Lowest Offsets" behavior.
+        public static bool SortByLevelFirst { get; set; } = true;
     }
 }

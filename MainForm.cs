@@ -3,6 +3,7 @@ using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
 using PointerFinder2.Emulators.LiveScan;
 using PointerFinder2.Emulators.StateBased;
+using PointerFinder2.Properties;
 using PointerFinder2.UI;
 using PointerFinder2.UI.Controls;
 using PointerFinder2.UI.StaticRangeFinders;
@@ -11,6 +12,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Media;
@@ -33,6 +35,12 @@ namespace PointerFinder2
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, UIntPtr dwMinimumWorkingSetSize, UIntPtr dwMaximumWorkingSetSize);
 
+        // Add P/Invoke to get total system physical RAM.
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetPhysicallyInstalledSystemMemory(out long TotalMemoryInKilobytes);
+
+
         #region Fields
         // --- Application State ---
         private IEmulatorManager _currentManager;
@@ -48,6 +56,11 @@ namespace PointerFinder2
         private readonly System.Windows.Forms.Timer _filterRefreshTimer;  // Periodically refreshes the UI during continuous filtering.
         private readonly System.Windows.Forms.Timer _scanTimer;           // Updates the elapsed time label during scans.
         private readonly Stopwatch _scanStopwatch = new Stopwatch();     // Measures the duration of scans.
+        private readonly System.Windows.Forms.Timer _memoryMonitorTimer;  // Periodically checks system RAM usage during scans.
+        // Fields re-purposed for physical RAM monitoring.
+        private PerformanceCounter _performanceCounter;                  // The counter for available physical memory.
+        private float _totalSystemMemoryMB;                              // Total physical RAM in Megabytes.
+        private bool _stoppedByMemoryMonitor = false;                    // Flag to indicate why a scan was stopped.
 
         // --- Data & Threading ---
         private List<PointerPath> _currentResults = new List<PointerPath>();
@@ -57,6 +70,13 @@ namespace PointerFinder2
         private ScanParameters _lastScanParams;
         private bool _isRefining = false;
         private readonly DebugLogForm logger = DebugLogForm.Instance;
+        private int _lastFoundCount = 0;
+
+        // --- Tool Window Instances ---
+        // Added fields to track open tool windows to prevent duplicate creation from the menu.
+        private CodeNoteConverterForm _codeNoteConverterInstance;
+        private CodeNoteHierarchyFixerForm _codeNoteHierarchyFixerInstance;
+        private Form _staticRangeFinderInstance;
 
         // --- Restart State ---
         private int _pidToAutoAttach = -1;
@@ -80,6 +100,7 @@ namespace PointerFinder2
 
             // Wire up the Load event to our auto-attach method. This is crucial for the smart restart to work.
             this.Load += new System.EventHandler(this.MainForm_Load);
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.MainForm_FormClosing);
 
             dgvResults.DoubleBuffered(true); // Enable double buffering to reduce flicker.
             SetUIStateDetached();
@@ -91,11 +112,106 @@ namespace PointerFinder2
             _filterRefreshTimer.Tick += FilterRefreshTimer_Tick;
             _scanTimer = new System.Windows.Forms.Timer { Interval = 100 };
             _scanTimer.Tick += ScanTimer_Tick;
+
+            _memoryMonitorTimer = new System.Windows.Forms.Timer { Interval = 2000 }; // Check every 2 seconds.
+            _memoryMonitorTimer.Tick += MemoryMonitorTimer_Tick;
+            try
+            {
+                // Get total physical RAM and set up the counter for "Available MBytes".
+                if (GetPhysicallyInstalledSystemMemory(out long totalRamKB))
+                {
+                    _totalSystemMemoryMB = totalRamKB / 1024f;
+                    logger.Log($"[INFO] Detected total system RAM: {_totalSystemMemoryMB:N0} MB.");
+                }
+                _performanceCounter = new PerformanceCounter("Memory", "Available MBytes");
+            }
+            catch (Exception ex)
+            {
+                logger.Log($"[WARNING] Could not initialize PerformanceCounter for memory monitoring. The feature will be disabled. Error: {ex.Message}");
+                _performanceCounter = null;
+            }
+        }
+
+        // New method to handle the memory monitor timer tick.
+        private void MemoryMonitorTimer_Tick(object sender, EventArgs e)
+        {
+            if (_performanceCounter == null || _totalSystemMemoryMB <= 0 || _scanCts == null || _scanCts.IsCancellationRequested)
+            {
+                _memoryMonitorTimer.Stop();
+                return;
+            }
+
+            try
+            {
+                float availableMB = _performanceCounter.NextValue();
+                float usedMB = _totalSystemMemoryMB - availableMB;
+                float usagePercentage = (usedMB / _totalSystemMemoryMB) * 100.0f;
+
+                if (usagePercentage > 80.0f)
+                {
+                    logger.Log($"[PERFORMANCE] High physical RAM usage detected ({usagePercentage:F1}%). Stopping scan to prevent system instability.");
+                    _stoppedByMemoryMonitor = true;
+                    _scanCts?.Cancel();
+                    _memoryMonitorTimer.Stop();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Log($"[ERROR] Failed to read memory performance counter. Disabling monitor. Error: {ex.Message}");
+                _performanceCounter = null;
+                _memoryMonitorTimer.Stop();
+            }
+        }
+
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // Save window state, size, and location
+            Settings.Default.MainWindowState = this.WindowState;
+            if (this.WindowState == FormWindowState.Normal)
+            {
+                Settings.Default.MainWindowLocation = this.Location;
+                Settings.Default.MainWindowSize = this.Size;
+            }
+            else
+            {
+                // If minimized or maximized, save the restored bounds
+                Settings.Default.MainWindowLocation = this.RestoreBounds.Location;
+                Settings.Default.MainWindowSize = this.RestoreBounds.Size;
+            }
+            Settings.Default.Save();
         }
 
         // After the form loads, check if we need to auto-attach from a restart.
         private void MainForm_Load(object sender, EventArgs e)
         {
+            // Only apply saved settings if the position hasn't been manually set by restart logic.
+            if (this.StartPosition != FormStartPosition.Manual)
+            {
+                if (Settings.Default.MainWindowSize.Width > 0 && Settings.Default.MainWindowSize.Height > 0)
+                {
+                    this.StartPosition = FormStartPosition.Manual;
+                    // Ensure the form is visible on a screen before setting its location.
+                    Point location = Settings.Default.MainWindowLocation;
+                    Size size = Settings.Default.MainWindowSize;
+                    bool isVisible = false;
+                    foreach (Screen screen in Screen.AllScreens)
+                    {
+                        if (screen.WorkingArea.IntersectsWith(new Rectangle(location, size)))
+                        {
+                            isVisible = true;
+                            break;
+                        }
+                    }
+                    if (isVisible)
+                    {
+                        this.Location = location;
+                        this.Size = size;
+                        // Only set window state if it's not Minimized, to avoid starting hidden.
+                        this.WindowState = (Settings.Default.MainWindowState == FormWindowState.Minimized) ? FormWindowState.Normal : Settings.Default.MainWindowState;
+                    }
+                }
+            }
+
             if (_pidToAutoAttach != -1 && !string.IsNullOrEmpty(_targetToAutoAttach))
             {
                 AutoAttachOnRestart(_pidToAutoAttach, _targetToAutoAttach);
@@ -272,7 +388,18 @@ namespace PointerFinder2
             if (_scanStopwatch.IsRunning)
             {
                 TimeSpan ts = _scanStopwatch.Elapsed;
-                lblElapsedTime.Text = $"Time: {ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100}";
+                string timeText = $"Time: {ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100}";
+
+                bool isStateScan = _activeProfile?.StateBasedScannerFactory != null && _currentScanner != null && _currentScanner.GetType().IsSubclassOf(typeof(StateBasedScannerStrategyBase));
+
+                if (isStateScan && _lastFoundCount > 0)
+                {
+                    lblElapsedTime.Text = $"{timeText} | Found: {_lastFoundCount:N0}";
+                }
+                else
+                {
+                    lblElapsedTime.Text = timeText;
+                }
             }
         }
 
@@ -438,17 +565,24 @@ namespace PointerFinder2
         }
         private void debugConsoleToolStripMenuItem_Click(object sender, EventArgs e) { DebugLogForm.Instance.Show(); DebugLogForm.Instance.BringToFront(); }
         private void debugOptionsToolStripMenuItem_Click(object sender, EventArgs e) { new SettingsForm(this).ShowDialog(this); }
+        // Updated to disable tool menu items if their corresponding window is already open.
         private void toolsToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
         {
             // Expanded support to NDS and Dolphin.
             bool isSupported = _activeProfile?.Target == EmulatorTarget.PCSX2 ||
                                _activeProfile?.Target == EmulatorTarget.RALibretroNDS ||
                                _activeProfile?.Target == EmulatorTarget.Dolphin;
-            staticRangeFinderToolStripMenuItem.Enabled = _currentManager != null && _currentManager.IsAttached && isSupported;
+
+            staticRangeFinderToolStripMenuItem.Enabled = _currentManager != null && _currentManager.IsAttached && isSupported && (_staticRangeFinderInstance == null || _staticRangeFinderInstance.IsDisposed);
+            codeNoteConverterToolStripMenuItem.Enabled = (_codeNoteConverterInstance == null || _codeNoteConverterInstance.IsDisposed);
+            codeNoteHierarchyFixerToolStripMenuItem.Enabled = (_codeNoteHierarchyFixerInstance == null || _codeNoteHierarchyFixerInstance.IsDisposed);
         }
 
+        // Logic updated to manage a single instance of the finder form and handle settings reload on close.
         private void staticRangeFinderToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (_staticRangeFinderInstance != null && !_staticRangeFinderInstance.IsDisposed) return;
+
             // Added branching to open the correct finder for the active emulator.
             Form finderForm = null;
             if (_activeProfile.Target == EmulatorTarget.PCSX2)
@@ -466,23 +600,43 @@ namespace PointerFinder2
 
             if (finderForm != null)
             {
-                using (finderForm)
+                _staticRangeFinderInstance = finderForm;
+                _staticRangeFinderInstance.FormClosed += (s, args) =>
                 {
-                    if (finderForm.ShowDialog(this) == DialogResult.OK)
+                    var form = s as Form;
+                    if (form != null && form.DialogResult == DialogResult.OK)
                     {
                         // If the user applied settings, reload them into the current session.
-                        _currentSettings = SettingsManager.Load(_activeProfile.Target, _currentManager.GetDefaultSettings());
+                        // We must invoke this on the UI thread.
+                        this.Invoke((Action)(() =>
+                        {
+                            _currentSettings = SettingsManager.Load(_activeProfile.Target, _currentManager.GetDefaultSettings());
+                        }));
                     }
-                }
+                    _staticRangeFinderInstance = null; // Allow re-opening
+                };
+                _staticRangeFinderInstance.Show(this);
             }
         }
+        // Changed to manage a single instance of the form.
         private void codeNoteConverterToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (_codeNoteConverterInstance != null && !_codeNoteConverterInstance.IsDisposed) return;
+
             // Pass the current manager to the constructor for intelligent defaults.
-            using (var form = new CodeNoteConverterForm(_currentManager))
-            {
-                form.ShowDialog(this);
-            }
+            _codeNoteConverterInstance = new CodeNoteConverterForm(_currentManager);
+            _codeNoteConverterInstance.FormClosed += (s, args) => _codeNoteConverterInstance = null;
+            _codeNoteConverterInstance.Show(this);
+        }
+
+        // Changed to manage a single instance of the form.
+        private void codeNoteHierarchyFixerToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (_codeNoteHierarchyFixerInstance != null && !_codeNoteHierarchyFixerInstance.IsDisposed) return;
+
+            _codeNoteHierarchyFixerInstance = new CodeNoteHierarchyFixerForm();
+            _codeNoteHierarchyFixerInstance.FormClosed += (s, args) => _codeNoteHierarchyFixerInstance = null;
+            _codeNoteHierarchyFixerInstance.Show(this);
         }
         #endregion
 
@@ -512,7 +666,8 @@ namespace PointerFinder2
 
                     _lastScanParams = optionsForm.GetScanParameters();
                     if (_lastScanParams == null) return;
-                    _currentSettings = optionsForm.GetCurrentSettings();
+
+                    optionsForm.UpdateSettings(_currentSettings);
                     SettingsManager.Save(_activeProfile.Target, _currentSettings);
                     try
                     {
@@ -537,9 +692,12 @@ namespace PointerFinder2
             lblProgressPercentage.Text = $"0 / {_lastScanParams.MaxResults:N0}";
             progressBar.Maximum = (int)_lastScanParams.MaxResults;
             progressBar.Value = 0;
+            _lastFoundCount = 0;
             SwitchToScanUI(true);
             _scanStopwatch.Restart();
             _scanTimer.Start();
+            _stoppedByMemoryMonitor = false;
+            _memoryMonitorTimer.Start();
 
             try
             {
@@ -551,8 +709,16 @@ namespace PointerFinder2
 
                 if (_scanCts.IsCancellationRequested)
                 {
-                    UpdateStatus($"Scan stopped by user. Found {results.Count:N0} paths {FormatDuration(elapsed)}.");
-                    SoundManager.PlayNotify();
+                    if (_stoppedByMemoryMonitor)
+                    {
+                        UpdateStatus($"Scan stopped automatically due to high system memory usage. Found {results.Count:N0} paths {FormatDuration(elapsed)}.");
+                        SoundManager.PlayFail();
+                    }
+                    else
+                    {
+                        UpdateStatus($"Scan stopped by user. Found {results.Count:N0} paths {FormatDuration(elapsed)}.");
+                        SoundManager.PlayNotify();
+                    }
                 }
                 else
                 {
@@ -576,8 +742,16 @@ namespace PointerFinder2
             {
                 var elapsed = _scanStopwatch.Elapsed;
                 _scanTimer.Stop();
-                UpdateStatus($"Scan stopped by user {FormatDuration(elapsed)}.");
-                SoundManager.PlayNotify();
+                if (_stoppedByMemoryMonitor)
+                {
+                    UpdateStatus($"Scan stopped automatically due to high system memory usage {FormatDuration(elapsed)}.");
+                    SoundManager.PlayFail();
+                }
+                else
+                {
+                    UpdateStatus($"Scan stopped by user {FormatDuration(elapsed)}.");
+                    SoundManager.PlayNotify();
+                }
             }
             catch (Exception ex)
             {
@@ -586,6 +760,7 @@ namespace PointerFinder2
             }
             finally
             {
+                _memoryMonitorTimer.Stop();
                 _scanStopwatch.Stop();
                 _scanTimer.Stop();
                 _scanCts?.Dispose();
@@ -618,7 +793,8 @@ namespace PointerFinder2
                     var newScanParams = optionsForm.GetScanParameters();
                     if (newScanParams == null) return;
                     _lastScanParams = newScanParams;
-                    _currentSettings = optionsForm.GetCurrentSettings();
+
+                    optionsForm.UpdateSettings(_currentSettings);
                     SettingsManager.Save(_activeProfile.Target, _currentSettings);
                     try
                     {
@@ -648,6 +824,8 @@ namespace PointerFinder2
             SwitchToScanUI(true, "Refining results...");
             _scanStopwatch.Restart();
             _scanTimer.Start();
+            _stoppedByMemoryMonitor = false;
+            _memoryMonitorTimer.Start();
             bool shouldLog = DebugSettings.LogRefineScan;
 
             try
@@ -664,8 +842,16 @@ namespace PointerFinder2
 
                 if (_scanCts.IsCancellationRequested)
                 {
-                    UpdateStatus($"Refine scan stopped by user. Found {finalResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
-                    SoundManager.PlayNotify();
+                    if (_stoppedByMemoryMonitor)
+                    {
+                        UpdateStatus($"Refine scan stopped automatically due to high memory usage. Found {finalResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
+                        SoundManager.PlayFail();
+                    }
+                    else
+                    {
+                        UpdateStatus($"Refine scan stopped by user. Found {finalResults.Count:N0} matching paths {FormatDuration(elapsed)}.");
+                        SoundManager.PlayNotify();
+                    }
                 }
                 else
                 {
@@ -685,8 +871,16 @@ namespace PointerFinder2
             {
                 var elapsed = _scanStopwatch.Elapsed;
                 _scanTimer.Stop();
-                UpdateStatus($"Refine scan stopped by user {FormatDuration(elapsed)}.");
-                SoundManager.PlayNotify();
+                if (_stoppedByMemoryMonitor)
+                {
+                    UpdateStatus($"Refine scan stopped automatically due to high system memory usage {FormatDuration(elapsed)}.");
+                    SoundManager.PlayFail();
+                }
+                else
+                {
+                    UpdateStatus($"Refine scan stopped by user {FormatDuration(elapsed)}.");
+                    SoundManager.PlayNotify();
+                }
             }
             catch (Exception ex)
             {
@@ -696,6 +890,7 @@ namespace PointerFinder2
             finally
             {
                 _isRefining = false;
+                _memoryMonitorTimer.Stop();
                 _scanStopwatch.Stop();
                 _scanTimer.Stop();
                 _scanCts?.Dispose();
@@ -718,7 +913,8 @@ namespace PointerFinder2
                     if (scanParams == null) return;
 
                     ClearSessionDataOnly();
-                    _currentSettings = optionsForm.GetCurrentSettings();
+
+                    optionsForm.UpdateSettings(_currentSettings);
                     SettingsManager.Save(_activeProfile.Target, _currentSettings);
                     _lastScanParams = scanParams;
 
@@ -981,20 +1177,28 @@ namespace PointerFinder2
                 Invoke((Action)(() => UpdateScanProgress(report)));
                 return;
             }
+            _lastFoundCount = report.FoundCount;
+
             if (_isRefining && report.CurrentValue > 0 && report.CurrentValue == report.MaxValue)
             {
                 UpdateStatus("Scan phase complete, intersecting results...");
             }
             if (!string.IsNullOrEmpty(report.StatusMessage)) UpdateStatus(report.StatusMessage);
+
             if (_lastScanParams != null)
             {
                 bool isStateScan = _activeProfile.StateBasedScannerFactory != null && _currentScanner.GetType().IsSubclassOf(typeof(StateBasedScannerStrategyBase));
-                if (isStateScan && report.MaxValue > 0)
+                if (isStateScan)
                 {
-                    int max = (int)Math.Min(report.MaxValue, int.MaxValue);
-                    if (progressBar.Maximum != max) progressBar.Maximum = max;
-                    progressBar.Value = (int)Math.Min(report.CurrentValue, progressBar.Maximum);
-                    lblProgressPercentage.Text = $"{report.CurrentValue:N0} / {report.MaxValue:N0}";
+                    // Only update the main progress bar if valid Current/Max values are sent.
+                    if (report.MaxValue > 0 && report.CurrentValue >= 0)
+                    {
+                        int max = (int)Math.Min(report.MaxValue, int.MaxValue);
+                        if (progressBar.Maximum != max) progressBar.Maximum = max;
+                        progressBar.Value = (int)Math.Min(report.CurrentValue, progressBar.Maximum);
+                        lblProgressPercentage.Text = $"{report.CurrentValue:N0} / {report.MaxValue:N0}";
+                    }
+                    // The found count for state scans is now handled by the ScanTimer_Tick event.
                 }
                 else
                 {
@@ -1111,47 +1315,45 @@ namespace PointerFinder2
             }
         }
 
-        // This method now processes paths in chunks to keep the UI responsive, and uses a dynamic
-        // delay between full passes to manage CPU usage effectively based on the number of results.
+        // This method now uses a more memory-efficient "swap buffer" approach.
+        // It avoids creating a new List<> on every iteration, reducing garbage collection pressure.
         private async Task FilterPathsContinuously(CancellationToken token)
         {
-            const int chunkSize = 50000; // Process paths in chunks for UI responsiveness.
+            // Use two bags for a swap-buffer pattern.
+            var pathsToProcess = _validFilteredPaths;
+            var validatedPaths = new ConcurrentBag<PointerPath>();
 
             while (!token.IsCancellationRequested)
             {
-                var pathsToCheck = _validFilteredPaths.ToList();
-                if (pathsToCheck.Count == 0)
+                if (pathsToProcess.IsEmpty)
                 {
                     break;
                 }
 
-                var stillValidPaths = new ConcurrentBag<PointerPath>();
-
-                // Process the full list in smaller chunks.
-                for (int i = 0; i < pathsToCheck.Count; i += chunkSize)
+                // Process the current bag of paths in parallel chunks.
+                await Task.Run(() =>
                 {
-                    if (token.IsCancellationRequested) break;
-
-                    var chunk = pathsToCheck.Skip(i).Take(chunkSize);
-
-                    Parallel.ForEach(chunk, path =>
+                    Parallel.ForEach(pathsToProcess, path =>
                     {
                         if (token.IsCancellationRequested) return;
                         uint? calculatedAddress = _currentManager.RecalculateFinalAddress(path, path.FinalAddress);
                         if (calculatedAddress.HasValue && calculatedAddress.Value == path.FinalAddress)
                         {
-                            stillValidPaths.Add(path);
+                            validatedPaths.Add(path);
                         }
                     });
-
-                    // Yield the thread after each chunk to process UI events (like the stop button).
-                    await Task.Delay(1, token);
-                }
+                }, token);
 
                 if (token.IsCancellationRequested) break;
 
-                _validFilteredPaths = stillValidPaths;
-                _currentResults = stillValidPaths.ToList();
+                // Swap the bags for the next iteration. The 'validatedPaths' becomes the new source,
+                // and the old 'pathsToProcess' bag is cleared to become the new destination.
+                _validFilteredPaths = validatedPaths;
+                pathsToProcess = validatedPaths;
+                validatedPaths = new ConcurrentBag<PointerPath>(); // Reset the destination bag.
+
+                // Update the main results list for the UI refresh timer.
+                _currentResults = pathsToProcess.ToList();
 
                 // Calculate a dynamic delay between full filter passes to manage CPU usage.
                 int pathCount = _currentResults.Count;
@@ -1212,6 +1414,7 @@ namespace PointerFinder2
             {
                 deleteSelectedToolStripMenuItem_Click(sender, e);
             }
+            // Updated Ctrl+V logic to reuse an existing Code Note Converter window.
             if (e.Control && e.KeyCode == Keys.V)
             {
                 e.SuppressKeyPress = true;
@@ -1219,11 +1422,17 @@ namespace PointerFinder2
                 // Basic validation to see if it looks like a trigger.
                 if (!string.IsNullOrEmpty(clipboardText) && (clipboardText.Contains("I:0x") || clipboardText.Contains("0xH")))
                 {
-                    //Pass the current manager to the constructor.
-                    using (var form = new CodeNoteConverterForm(clipboardText, _currentManager))
+                    // If an instance is not open, create it.
+                    if (_codeNoteConverterInstance == null || _codeNoteConverterInstance.IsDisposed)
                     {
-                        form.ShowDialog(this);
+                        _codeNoteConverterInstance = new CodeNoteConverterForm(_currentManager);
+                        _codeNoteConverterInstance.FormClosed += (s, args) => _codeNoteConverterInstance = null;
+                        _codeNoteConverterInstance.Show(this);
                     }
+
+                    // Pass the trigger to the (now guaranteed to be open) instance and focus it.
+                    _codeNoteConverterInstance.ProcessTrigger(clipboardText);
+                    _codeNoteConverterInstance.Activate();
                 }
             }
         }
@@ -1293,6 +1502,9 @@ namespace PointerFinder2
             }
         }
 
+        // This method has been refactored to be more memory-efficient.
+        // It now builds a cache of sorted offsets first, then performs an in-place sort
+        // on the main results list, avoiding the creation of a large intermediate list of objects.
         private async void sortByLowestOffsetsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (!_currentResults.Any()) return;
@@ -1300,50 +1512,45 @@ namespace PointerFinder2
             PushUndoState();
             ClearSortGlyphs();
 
-            // Prevent user interaction during the sort and show a wait cursor.
             this.Enabled = false;
             this.UseWaitCursor = true;
             UpdateStatus("Sorting by lowest offsets... this may take a moment.");
 
             try
             {
-                // Perform the potentially heavy sorting logic on a background thread.
-                var sortedResults = await Task.Run(() =>
+                await Task.Run(() =>
                 {
-                    // Step 1: Create a temporary list with pre-calculated sorted offsets for efficiency.
-                    var sortableResults = _currentResults
-                        .Select(p => new
-                        {
-                            Path = p,
-                            SortedOffsets = p.Offsets.Select(o => Math.Abs(o)).OrderBy(o => o).ToList()
-                        })
-                        .ToList();
+                    // Step 1: Create a cache of pre-sorted absolute offsets for each path.
+                    // This is the memory-intensive part, but it's unavoidable if we want fast sorting.
+                    var offsetCache = _currentResults.ToDictionary(
+                        p => p,
+                        p => p.Offsets.Select(o => Math.Abs(o)).OrderBy(o => o).ToList()
+                    );
 
-                    // Step 2: Sort the temporary list using a lexicographical comparison.
-                    sortableResults.Sort((item1, item2) =>
+                    // Step 2: Sort the main list in-place using the cache.
+                    _currentResults.Sort((p1, p2) =>
                     {
-                        var p1Offsets = item1.SortedOffsets;
-                        var p2Offsets = item2.SortedOffsets;
+                        if (GlobalSettings.SortByLevelFirst)
+                        {
+                            int levelComparison = p1.Offsets.Count.CompareTo(p2.Offsets.Count);
+                            if (levelComparison != 0) return levelComparison;
+                        }
+
+                        var p1Offsets = offsetCache[p1];
+                        var p2Offsets = offsetCache[p2];
 
                         int minCount = Math.Min(p1Offsets.Count, p2Offsets.Count);
                         for (int i = 0; i < minCount; i++)
                         {
                             int comparison = p1Offsets[i].CompareTo(p2Offsets[i]);
-                            if (comparison != 0)
-                            {
-                                return comparison; // Found a difference, return it.
-                            }
+                            if (comparison != 0) return comparison;
                         }
-                        // If all common offsets are equal, the path with fewer levels is smaller.
-                        return p1Offsets.Count.CompareTo(p2Offsets.Count);
-                    });
 
-                    // Step 3: Extract the sorted PointerPath objects into a new list.
-                    return sortableResults.Select(item => item.Path).ToList();
+                        return p1.Offsets.Count.CompareTo(p2.Offsets.Count);
+                    });
                 });
 
-                _currentResults = sortedResults;
-                dgvResults.Invalidate(); // Force the grid to redraw with the new order.
+                dgvResults.Invalidate();
                 UpdateStatus($"Sorted by lowest offsets. {_currentResults.Count:N0} results.");
             }
             catch (Exception ex)
@@ -1353,7 +1560,6 @@ namespace PointerFinder2
             }
             finally
             {
-                // Re-enable the UI.
                 this.Enabled = true;
                 this.UseWaitCursor = false;
             }

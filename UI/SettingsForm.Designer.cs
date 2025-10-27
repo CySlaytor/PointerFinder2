@@ -20,6 +20,11 @@
             this.components = new System.ComponentModel.Container();
             this.tabControlSettings = new System.Windows.Forms.TabControl();
             this.tabGeneral = new System.Windows.Forms.TabPage();
+            this.grpSorting = new System.Windows.Forms.GroupBox();
+            this.chkSortByLevelFirst = new System.Windows.Forms.CheckBox();
+            this.grpDangerZone = new System.Windows.Forms.GroupBox();
+            this.btnRestartApp = new System.Windows.Forms.Button();
+            this.btnResetAll = new System.Windows.Forms.Button();
             this.grpPerformance = new System.Windows.Forms.GroupBox();
             this.chkLimitCpuUsage = new System.Windows.Forms.CheckBox();
             this.grpSound = new System.Windows.Forms.GroupBox();
@@ -41,11 +46,12 @@
             this.chkLogFilter = new System.Windows.Forms.CheckBox();
             this.chkLogLiveScan = new System.Windows.Forms.CheckBox();
             this.btnClose = new System.Windows.Forms.Button();
-            this.btnRestartApp = new System.Windows.Forms.Button();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.btnPurgeMemory = new System.Windows.Forms.Button();
             this.tabControlSettings.SuspendLayout();
             this.tabGeneral.SuspendLayout();
+            this.grpSorting.SuspendLayout();
+            this.grpDangerZone.SuspendLayout();
             this.grpPerformance.SuspendLayout();
             this.grpSound.SuspendLayout();
             this.tabCodeNotes.SuspendLayout();
@@ -66,25 +72,89 @@
             this.tabControlSettings.Location = new System.Drawing.Point(12, 12);
             this.tabControlSettings.Name = "tabControlSettings";
             this.tabControlSettings.SelectedIndex = 0;
-            this.tabControlSettings.Size = new System.Drawing.Size(460, 241);
+            this.tabControlSettings.Size = new System.Drawing.Size(460, 310);
             this.tabControlSettings.TabIndex = 0;
             // 
             // tabGeneral
             // 
+            this.tabGeneral.Controls.Add(this.grpSorting);
+            this.tabGeneral.Controls.Add(this.grpDangerZone);
             this.tabGeneral.Controls.Add(this.grpPerformance);
             this.tabGeneral.Controls.Add(this.grpSound);
             this.tabGeneral.Location = new System.Drawing.Point(4, 24);
             this.tabGeneral.Name = "tabGeneral";
             this.tabGeneral.Padding = new System.Windows.Forms.Padding(3);
-            this.tabGeneral.Size = new System.Drawing.Size(452, 213);
+            this.tabGeneral.Size = new System.Drawing.Size(452, 282);
             this.tabGeneral.TabIndex = 0;
             this.tabGeneral.Text = "General";
             this.tabGeneral.UseVisualStyleBackColor = true;
             // 
+            // grpSorting
+            // 
+            this.grpSorting.Controls.Add(this.chkSortByLevelFirst);
+            this.grpSorting.Location = new System.Drawing.Point(6, 77);
+            this.grpSorting.Name = "grpSorting";
+            this.grpSorting.Size = new System.Drawing.Size(439, 65);
+            this.grpSorting.TabIndex = 3;
+            this.grpSorting.TabStop = false;
+            this.grpSorting.Text = "Sorting";
+            // 
+            // chkSortByLevelFirst
+            // 
+            this.chkSortByLevelFirst.AutoSize = true;
+            this.chkSortByLevelFirst.Location = new System.Drawing.Point(16, 28);
+            this.chkSortByLevelFirst.Name = "chkSortByLevelFirst";
+            this.chkSortByLevelFirst.Size = new System.Drawing.Size(326, 19);
+            this.chkSortByLevelFirst.TabIndex = 0;
+            this.chkSortByLevelFirst.Text = "Prioritize shorter chains when sorting by lowest offsets";
+            this.toolTip1.SetToolTip(this.chkSortByLevelFirst, "When checked, results are sorted by the number of offsets first, then by the off" +
+        "set values.\r\nWhen unchecked, results are sorted purely by the offset values reg" +
+        "ardless of chain length.");
+            this.chkSortByLevelFirst.UseVisualStyleBackColor = true;
+            this.chkSortByLevelFirst.CheckedChanged += new System.EventHandler(this.chkSortByLevelFirst_CheckedChanged);
+            // 
+            // grpDangerZone
+            // 
+            this.grpDangerZone.Controls.Add(this.btnRestartApp);
+            this.grpDangerZone.Controls.Add(this.btnResetAll);
+            this.grpDangerZone.Location = new System.Drawing.Point(6, 219);
+            this.grpDangerZone.Name = "grpDangerZone";
+            this.grpDangerZone.Size = new System.Drawing.Size(439, 59);
+            this.grpDangerZone.TabIndex = 2;
+            this.grpDangerZone.TabStop = false;
+            this.grpDangerZone.Text = "Danger Zone";
+            // 
+            // btnRestartApp
+            // 
+            this.btnRestartApp.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnRestartApp.ForeColor = System.Drawing.Color.DarkOrange;
+            this.btnRestartApp.Location = new System.Drawing.Point(228, 22);
+            this.btnRestartApp.Name = "btnRestartApp";
+            this.btnRestartApp.Size = new System.Drawing.Size(130, 23);
+            this.btnRestartApp.TabIndex = 3;
+            this.btnRestartApp.Text = "Restart Application...";
+            this.toolTip1.SetToolTip(this.btnRestartApp, "Closes and re-opens the application to completely reset its memory state.");
+            this.btnRestartApp.UseVisualStyleBackColor = true;
+            this.btnRestartApp.Click += new System.EventHandler(this.btnRestartApp_Click);
+            // 
+            // btnResetAll
+            // 
+            this.btnResetAll.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnResetAll.ForeColor = System.Drawing.Color.Red;
+            this.btnResetAll.Location = new System.Drawing.Point(16, 22);
+            this.btnResetAll.Name = "btnResetAll";
+            this.btnResetAll.Size = new System.Drawing.Size(186, 23);
+            this.btnResetAll.TabIndex = 0;
+            this.btnResetAll.Text = "Reset All Settings to Default...";
+            this.toolTip1.SetToolTip(this.btnResetAll, "Deletes settings.ini and resets all saved options. The application will restart." +
+        "");
+            this.btnResetAll.UseVisualStyleBackColor = true;
+            this.btnResetAll.Click += new System.EventHandler(this.btnResetAll_Click);
+            // 
             // grpPerformance
             // 
             this.grpPerformance.Controls.Add(this.chkLimitCpuUsage);
-            this.grpPerformance.Location = new System.Drawing.Point(6, 77);
+            this.grpPerformance.Location = new System.Drawing.Point(6, 148);
             this.grpPerformance.Name = "grpPerformance";
             this.grpPerformance.Size = new System.Drawing.Size(439, 65);
             this.grpPerformance.TabIndex = 1;
@@ -132,7 +202,7 @@
             this.tabCodeNotes.Location = new System.Drawing.Point(4, 24);
             this.tabCodeNotes.Name = "tabCodeNotes";
             this.tabCodeNotes.Padding = new System.Windows.Forms.Padding(3);
-            this.tabCodeNotes.Size = new System.Drawing.Size(452, 213);
+            this.tabCodeNotes.Size = new System.Drawing.Size(452, 282);
             this.tabCodeNotes.TabIndex = 2;
             this.tabCodeNotes.Text = "Code Notes";
             this.tabCodeNotes.UseVisualStyleBackColor = true;
@@ -242,7 +312,7 @@
             this.tabDebug.Location = new System.Drawing.Point(4, 24);
             this.tabDebug.Name = "tabDebug";
             this.tabDebug.Padding = new System.Windows.Forms.Padding(3);
-            this.tabDebug.Size = new System.Drawing.Size(452, 213);
+            this.tabDebug.Size = new System.Drawing.Size(452, 282);
             this.tabDebug.TabIndex = 1;
             this.tabDebug.Text = "Debug";
             this.tabDebug.UseVisualStyleBackColor = true;
@@ -309,7 +379,7 @@
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnClose.DialogResult = System.Windows.Forms.DialogResult.OK;
-            this.btnClose.Location = new System.Drawing.Point(385, 259);
+            this.btnClose.Location = new System.Drawing.Point(385, 328);
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(87, 28);
             this.btnClose.TabIndex = 2;
@@ -317,24 +387,10 @@
             this.btnClose.UseVisualStyleBackColor = true;
             this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
             // 
-            // btnRestartApp
-            // 
-            this.btnRestartApp.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.btnRestartApp.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.btnRestartApp.ForeColor = System.Drawing.Color.DarkRed;
-            this.btnRestartApp.Location = new System.Drawing.Point(12, 259);
-            this.btnRestartApp.Name = "btnRestartApp";
-            this.btnRestartApp.Size = new System.Drawing.Size(130, 28);
-            this.btnRestartApp.TabIndex = 3;
-            this.btnRestartApp.Text = "Restart Application";
-            this.toolTip1.SetToolTip(this.btnRestartApp, "Closes and re-opens the application to completely reset its memory state.");
-            this.btnRestartApp.UseVisualStyleBackColor = true;
-            this.btnRestartApp.Click += new System.EventHandler(this.btnRestartApp_Click);
-            // 
             // btnPurgeMemory
             // 
             this.btnPurgeMemory.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.btnPurgeMemory.Location = new System.Drawing.Point(148, 259);
+            this.btnPurgeMemory.Location = new System.Drawing.Point(12, 328);
             this.btnPurgeMemory.Name = "btnPurgeMemory";
             this.btnPurgeMemory.Size = new System.Drawing.Size(91, 28);
             this.btnPurgeMemory.TabIndex = 4;
@@ -348,9 +404,8 @@
             this.AcceptButton = this.btnClose;
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(484, 299);
+            this.ClientSize = new System.Drawing.Size(484, 368);
             this.Controls.Add(this.btnPurgeMemory);
-            this.Controls.Add(this.btnRestartApp);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.tabControlSettings);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
@@ -362,6 +417,9 @@
             this.Load += new System.EventHandler(this.SettingsForm_Load);
             this.tabControlSettings.ResumeLayout(false);
             this.tabGeneral.ResumeLayout(false);
+            this.grpSorting.ResumeLayout(false);
+            this.grpSorting.PerformLayout();
+            this.grpDangerZone.ResumeLayout(false);
             this.grpPerformance.ResumeLayout(false);
             this.grpPerformance.PerformLayout();
             this.grpSound.ResumeLayout(false);
@@ -405,5 +463,9 @@
         private System.Windows.Forms.TextBox txtPrefix;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.CheckBox chkSuffixOnLastLine;
+        private System.Windows.Forms.GroupBox grpDangerZone;
+        private System.Windows.Forms.Button btnResetAll;
+        private System.Windows.Forms.GroupBox grpSorting;
+        private System.Windows.Forms.CheckBox chkSortByLevelFirst;
     }
 }

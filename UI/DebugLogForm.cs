@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 using PointerFinder2.DataModels;
+using PointerFinder2.Properties;
 
 namespace PointerFinder2
 {
@@ -37,7 +39,29 @@ namespace PointerFinder2
                 return _instance;
             }
         }
-
+        private void DebugLogForm_Load(object sender, EventArgs e)
+        {
+            if (Settings.Default.DebugLogSize.Width > 0 && Settings.Default.DebugLogSize.Height > 0)
+            {
+                this.StartPosition = FormStartPosition.Manual;
+                Point location = Settings.Default.DebugLogLocation;
+                Size size = Settings.Default.DebugLogSize;
+                bool isVisible = false;
+                foreach (Screen screen in Screen.AllScreens)
+                {
+                    if (screen.WorkingArea.IntersectsWith(new Rectangle(location, size)))
+                    {
+                        isVisible = true;
+                        break;
+                    }
+                }
+                if (isVisible)
+                {
+                    this.Location = location;
+                    this.Size = size;
+                }
+            }
+        }
         // Private constructor to enforce the singleton pattern.
         private DebugLogForm()
         {
@@ -110,6 +134,11 @@ namespace PointerFinder2
         // This keeps the singleton instance alive for the duration of the application.
         private void DebugLogForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            // Save window position and size before potentially canceling the close event.
+            Settings.Default.DebugLogLocation = this.Location;
+            Settings.Default.DebugLogSize = this.Size;
+            Settings.Default.Save();
+
             if (e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true;

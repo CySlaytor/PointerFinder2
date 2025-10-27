@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -45,7 +46,7 @@ namespace PointerFinder2
             // Populate settings
             txtMaxOffset.Text = _currentSettings.MaxOffset.ToString("X");
             numMaxLevel.Value = _currentSettings.MaxLevel;
-            numMaxResults.Value = _currentSettings.MaxResults;
+            numMaxCandidates.Value = _currentSettings.MaxCandidates;
             txtStaticStart.Text = _currentSettings.StaticAddressStart;
             txtStaticEnd.Text = _currentSettings.StaticAddressEnd;
             chkStopOnFirst.Checked = _currentSettings.StopOnFirstPathFound;
@@ -67,7 +68,7 @@ namespace PointerFinder2
                 if (_capturedStates[i] != null)
                 {
                     // Display the full, absolute address to avoid confusion.
-                    address = _capturedStates[i].Parameters.TargetAddress.ToString("X8");
+                    address = _capturedStates[i].TargetAddress.ToString("X8");
                     status = "Captured";
                     action = "Release";
                     statusColor = Color.Green;
@@ -80,6 +81,11 @@ namespace PointerFinder2
 
             dgvStates.ClearSelection();
             UpdateScanButtonState();
+
+            // Wire up Leave events for automatic hex input sanitization.
+            txtMaxOffset.Leave += SanitizeHexTextBox_Leave;
+            txtStaticStart.Leave += SanitizeHexTextBox_Leave;
+            txtStaticEnd.Leave += SanitizeHexTextBox_Leave;
         }
 
         private async void dgvStates_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -122,6 +128,10 @@ namespace PointerFinder2
             // --- Capture Logic ---
             string addressText = addressCell.Value?.ToString();
 
+            // Sanitize the address input from the grid before validation.
+            addressText = SanitizeHexInput(addressText);
+            addressCell.Value = addressText;
+
             if (string.IsNullOrWhiteSpace(addressText))
             {
                 MessageBox.Show($"Please enter a target address for Slot {e.RowIndex + 1}.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -138,6 +148,22 @@ namespace PointerFinder2
                 MessageBox.Show("Invalid address format. Please use hexadecimal characters.", "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+
+            if (targetAddress % 4 != 0)
+            {
+                uint correctedAddress = targetAddress & 0xFFFFFFFC; // Round down to the nearest multiple of 4.
+                string message = $"The target address 0x{targetAddress:X} is not 4-byte aligned. Pointer scans operate on 32-bit (4-byte) values, so the target address must be a multiple of 4.\n\n" +
+                                 "This can happen on systems like Wii/GameCube when reading an 8-bit value from a Big-Endian address.\n\n" +
+                                 $"The address will be automatically corrected to: 0x{correctedAddress:X}\n\n" +
+                                 "Click OK to apply this correction and continue.";
+
+                MessageBox.Show(this, message, "Address Alignment Correction", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                targetAddress = correctedAddress;
+                // Update the UI to reflect the corrected address before continuing.
+                addressCell.Value = targetAddress.ToString("X8");
+            }
+
 
             // UI feedback
             statusCell.Value = "Capturing...";
@@ -162,7 +188,7 @@ namespace PointerFinder2
             _capturedStates[e.RowIndex] = new ScanState
             {
                 MemoryDump = memoryDump,
-                Parameters = new ScanParameters { TargetAddress = targetAddress }
+                TargetAddress = targetAddress
             };
 
             // Display the full, absolute address after capture for clarity.
@@ -200,25 +226,30 @@ namespace PointerFinder2
         {
             try
             {
+                // Sanitize hex inputs before parsing to ensure a clean format.
+                txtMaxOffset.Text = SanitizeHexInput(txtMaxOffset.Text);
+                txtStaticStart.Text = SanitizeHexInput(txtStaticStart.Text);
+                txtStaticEnd.Text = SanitizeHexInput(txtStaticEnd.Text);
+
                 uint finalTarget;
                 if (_lastCapturedSlotIndex != -1 && _capturedStates[_lastCapturedSlotIndex] != null)
                 {
-                    finalTarget = _capturedStates[_lastCapturedSlotIndex].Parameters.TargetAddress;
+                    finalTarget = _capturedStates[_lastCapturedSlotIndex].TargetAddress;
                 }
                 else
                 {
                     // Fallback to the first valid state if the last one isn't available for some reason.
                     var firstState = _capturedStates.FirstOrDefault(s => s != null);
-                    finalTarget = firstState?.Parameters.TargetAddress ?? 0;
+                    finalTarget = firstState?.TargetAddress ?? 0;
                 }
 
                 return new ScanParameters
                 {
-                    MaxOffset = int.Parse(txtMaxOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
+                    MaxOffset = int.Parse(txtMaxOffset.Text, NumberStyles.HexNumber),
                     StaticBaseStart = _manager.UnnormalizeAddress(txtStaticStart.Text),
                     StaticBaseEnd = _manager.UnnormalizeAddress(txtStaticEnd.Text),
                     MaxLevel = (int)numMaxLevel.Value,
-                    MaxResults = (int)numMaxResults.Value,
+                    MaxCandidates = (int)numMaxCandidates.Value,
                     Use16ByteAlignment = false, // Hardcoded to false for this algorithm for maximum accuracy.
                     StopOnFirstPathFound = chkStopOnFirst.Checked,
                     // Pass the new FindAllPathLevels setting to the scan parameters.
@@ -235,21 +266,20 @@ namespace PointerFinder2
                 return null;
             }
         }
-
-        public AppSettings GetCurrentSettings()
+        // This method now updates the existing settings object instead of creating a new one.
+        public void UpdateSettings(AppSettings settings)
         {
-            _currentSettings.MaxOffset = int.Parse(txtMaxOffset.Text.Replace("0x", ""), NumberStyles.HexNumber);
-            _currentSettings.StaticAddressStart = txtStaticStart.Text;
-            _currentSettings.StaticAddressEnd = txtStaticEnd.Text;
-            _currentSettings.MaxLevel = (int)numMaxLevel.Value;
-            _currentSettings.MaxResults = (int)numMaxResults.Value;
-            // Do not overwrite the user's preference for 16-byte alignment from this form.
-            _currentSettings.StopOnFirstPathFound = chkStopOnFirst.Checked;
-            // Save the new FindAllPathLevels setting.
-            _currentSettings.FindAllPathLevels = chkFindAllLevels.Checked;
-            _currentSettings.CandidatesPerLevel = (int)numCandidatesPerLevel.Value;
-            return _currentSettings;
+            // Sanitize values before saving.
+            settings.MaxOffset = int.Parse(SanitizeHexInput(txtMaxOffset.Text), NumberStyles.HexNumber);
+            settings.StaticAddressStart = SanitizeHexInput(txtStaticStart.Text);
+            settings.StaticAddressEnd = SanitizeHexInput(txtStaticEnd.Text);
+            settings.MaxLevel = (int)numMaxLevel.Value;
+            settings.MaxCandidates = (int)numMaxCandidates.Value;
+            settings.StopOnFirstPathFound = chkStopOnFirst.Checked;
+            settings.FindAllPathLevels = chkFindAllLevels.Checked;
+            settings.CandidatesPerLevel = (int)numCandidatesPerLevel.Value;
         }
+
 
         private void btnScan_Click(object sender, EventArgs e)
         {
@@ -257,6 +287,30 @@ namespace PointerFinder2
             {
                 DialogResult = DialogResult.OK;
                 Close();
+            }
+        }
+
+        // Added a helper method to sanitize hex strings by removing non-hex characters and converting to uppercase.
+        private string SanitizeHexInput(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            var sb = new StringBuilder();
+            foreach (char c in input.ToUpperInvariant())
+            {
+                if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+
+        // Added a shared event handler to apply sanitization when a hex textbox loses focus.
+        private void SanitizeHexTextBox_Leave(object sender, EventArgs e)
+        {
+            if (sender is TextBox tb)
+            {
+                tb.Text = SanitizeHexInput(tb.Text);
             }
         }
     }

@@ -11,6 +11,22 @@ using System.Threading.Tasks;
 // Changed namespace to align with project structure and resolve compilation errors.
 namespace PointerFinder2.Emulators.LiveScan.PCSX2
 {
+    // -----------------------------------------------------------------------------------------
+    // ARCHITECTURAL NOTE:
+    // This class implements IPointerScannerStrategy directly instead of inheriting from
+    // LiveScannerStrategyBase. This is a deliberate design choice due to the unique memory
+    // layout of PCSX2 (PS2), which involves address mirroring (e.g., 0x0... vs 0x20...).
+    //
+    // The standard backward Breadth-First Search (BFS) in the base class becomes inefficient
+    // when needing to check for both mirrored and non-mirrored address values at every step.
+    //
+    // This implementation uses a "hybrid parallel Depth-First Search (DFS)" instead. It
+    // finds all Level 1 pointers and then launches parallel, recursive DFS tasks for each one.
+    // This approach was found to be more performant for the specific challenges of PS2 memory
+    // scanning, as it avoids the combinatorial explosion of candidates that a BFS would create
+    // with mirrored addresses.
+    // -----------------------------------------------------------------------------------------
+
     // Implements the pointer scanning strategy specifically for the PCSX2 emulator.
     // This strategy is "intelligent" as it considers multiple memory regions (EE RAM, Game Code)
     // and handles PCSX2's specific memory address formats using a high-performance parallel algorithm.

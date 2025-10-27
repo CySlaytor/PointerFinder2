@@ -30,6 +30,8 @@ namespace PointerFinder2.Emulators.LiveScan
         private long _foundPathsCounter = 0;
         private readonly DebugLogForm logger = DebugLogForm.Instance;
         private bool _shouldLogDetails;
+        // Added a threshold for progress reporting to avoid flooding the UI thread.
+        private long _nextUpdateThreshold;
 
         #region Abstract Methods
         // Builds the pointer map by scanning the relevant memory regions.
@@ -48,6 +50,8 @@ namespace PointerFinder2.Emulators.LiveScan
             _foundPaths = new ConcurrentBag<PointerPath>();
             _pointerMap = new ConcurrentDictionary<uint, List<uint>>(Environment.ProcessorCount, 100000);
             _foundPathsCounter = 0;
+            // Initialize the progress update threshold.
+            _nextUpdateThreshold = 100;
             _shouldLogDetails = DebugSettings.LogLiveScan;
 
             if (_params == null) return new List<PointerPath>();
@@ -193,9 +197,18 @@ namespace PointerFinder2.Emulators.LiveScan
 
                         if (_shouldLogDetails) logger.Log($"    >>>>>> VALID STATIC PATH FOUND: {newPath.BaseAddress:X} -> {newPath.GetOffsetsString()}");
 
-                        if (currentCount % 1000 == 0)
+                        // Replaced modulo-based reporting with a dynamic threshold to reduce UI update frequency.
+                        if (currentCount >= _nextUpdateThreshold)
                         {
                             ReportProgress(null, 0, 0, (int)currentCount);
+
+                            // Dynamically increase the update interval as more results are found.
+                            if (currentCount < 10000)
+                                _nextUpdateThreshold = currentCount + 100;
+                            else if (currentCount < 100000)
+                                _nextUpdateThreshold = currentCount + 1000;
+                            else
+                                _nextUpdateThreshold = currentCount + 10000;
                         }
                     }
                 });

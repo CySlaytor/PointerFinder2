@@ -29,7 +29,7 @@
             txtStaticEnd = new TextBox();
             txtStaticStart = new TextBox();
             label6 = new Label();
-            numMaxResults = new NumericUpDown();
+            numMaxCandidates = new NumericUpDown();
             dgvStates = new DataGridView();
             colSlot = new DataGridViewTextBoxColumn();
             colAddress = new DataGridViewTextBoxColumn();
@@ -44,7 +44,7 @@
             toolTip1 = new ToolTip(components);
             ((System.ComponentModel.ISupportInitialize)numMaxLevel).BeginInit();
             groupBoxRange.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)numMaxResults).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)numMaxCandidates).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvStates).BeginInit();
             groupBox1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)numCandidatesPerLevel).BeginInit();
@@ -151,16 +151,16 @@
             label6.TabIndex = 10;
             label6.Text = "Max Candidate Paths";
             // 
-            // numMaxResults
+            // numMaxCandidates
             // 
-            numMaxResults.Location = new Point(270, 252);
-            numMaxResults.Maximum = new decimal(new int[] { 100000000, 0, 0, 0 });
-            numMaxResults.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            numMaxResults.Name = "numMaxResults";
-            numMaxResults.Size = new Size(134, 23);
-            numMaxResults.TabIndex = 5;
-            numMaxResults.ThousandsSeparator = true;
-            numMaxResults.Value = new decimal(new int[] { 500000, 0, 0, 0 });
+            numMaxCandidates.Location = new Point(270, 252);
+            numMaxCandidates.Maximum = new decimal(new int[] { 100000000, 0, 0, 0 });
+            numMaxCandidates.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            numMaxCandidates.Name = "numMaxCandidates";
+            numMaxCandidates.Size = new Size(134, 23);
+            numMaxCandidates.TabIndex = 5;
+            numMaxCandidates.ThousandsSeparator = true;
+            numMaxCandidates.Value = new decimal(new int[] { 500000, 0, 0, 0 });
             // 
             // dgvStates
             // 
@@ -280,7 +280,7 @@
             Controls.Add(groupBox1);
             Controls.Add(dgvStates);
             Controls.Add(label6);
-            Controls.Add(numMaxResults);
+            Controls.Add(numMaxCandidates);
             Controls.Add(btnCancel);
             Controls.Add(btnScan);
             Controls.Add(label3);
@@ -299,14 +299,13 @@
             ((System.ComponentModel.ISupportInitialize)numMaxLevel).EndInit();
             groupBoxRange.ResumeLayout(false);
             groupBoxRange.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)numMaxResults).EndInit();
+            ((System.ComponentModel.ISupportInitialize)numMaxCandidates).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvStates).EndInit();
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)numCandidatesPerLevel).EndInit();
             ResumeLayout(false);
             PerformLayout();
-
         }
 
         #endregion
@@ -321,7 +320,7 @@
         private System.Windows.Forms.TextBox txtStaticEnd;
         private System.Windows.Forms.TextBox txtStaticStart;
         private System.Windows.Forms.Label label6;
-        private System.Windows.Forms.NumericUpDown numMaxResults;
+        private System.Windows.Forms.NumericUpDown numMaxCandidates;
         private System.Windows.Forms.DataGridView dgvStates;
         private System.Windows.Forms.GroupBox groupBox1;
         private System.Windows.Forms.CheckBox chkStopOnFirst;

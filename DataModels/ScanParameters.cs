@@ -17,7 +17,8 @@ namespace PointerFinder2.DataModels
         public uint StaticBaseStart { get; set; } = 0x20100000;
         // The end of the memory range for static base addresses.
         public uint StaticBaseEnd { get; set; } = 0x21FFFFFF;
-        // The maximum number of pointer paths to find before stopping the scan.
+        // Clarified that this setting is for the live scan.
+        // The maximum number of pointer paths to find before stopping a live scan.
         public int MaxResults { get; set; } = 5000;
         // If true, the scanner will also search using negative offsets on the first level.
         public bool ScanForStructureBase { get; set; } = true;
@@ -33,6 +34,9 @@ namespace PointerFinder2.DataModels
         public bool FindAllPathLevels { get; set; } = false;
         // The number of candidate offsets to find per address before moving on.
         public int CandidatesPerLevel { get; set; } = 10;
+        // Added separate parameter for State-Based scan candidate limit.
+        // The maximum number of candidate paths to generate during a state-based scan.
+        public int MaxCandidates { get; set; } = 500000;
         // The address to use for the final 'FinalAddress' column in the results grid.
         public uint FinalAddressTarget { get; set; }
         // A list containing all the captured memory states for multi-state comparison.

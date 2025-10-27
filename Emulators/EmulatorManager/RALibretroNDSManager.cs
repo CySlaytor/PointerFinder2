@@ -16,6 +16,11 @@ namespace PointerFinder2.Emulators.EmulatorManager
         public const uint NDS_STATIC_START = 0x00100000;
         public const uint NDS_STATIC_END = 0x003FFFFF + 1;
 
+        // FRAGILE: This hardcoded offset is the weakest point in the attachment process for this emulator.
+        // It points to a location within RALibretro.exe that contains a pointer to the emulated NDS RAM.
+        // If RALibretro is updated, this offset will likely change, breaking attachment.
+        // TODO: Replace this with a more robust signature scan (AOB scan) to find this pointer dynamically,
+        // similar to how the Dolphin manager works. This would make the tool version-independent.
         private const int RAM_POINTER_OFFSET = 0x212D30;
         private readonly string[] SUPPORTED_CORES = { "desmume_libretro.dll", "melondsds_libretro.dll" };
 
@@ -230,6 +235,8 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 MaxOffset = 4095,
                 MaxLevel = 7,
                 MaxResults = 500000,
+                // Provide default for new MaxCandidates setting.
+                MaxCandidates = 10000000,
                 ScanForStructureBase = false,
                 MaxNegativeOffset = 1024,
                 Use16ByteAlignment = false,

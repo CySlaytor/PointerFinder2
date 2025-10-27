@@ -19,6 +19,8 @@ namespace PointerFinder2.Core
             var ini = new IniFile(_settingsFile);
             ini.Write("UseWindowsDefaultSound", GlobalSettings.UseWindowsDefaultSound.ToString(), "Global");
             ini.Write("LimitCpuUsage", GlobalSettings.LimitCpuUsage.ToString(), "Global");
+            // Save the new sorting preference.
+            ini.Write("SortByLevelFirst", GlobalSettings.SortByLevelFirst.ToString(), "Global");
 
             // Save new Code Note settings
             ini.Write("CodeNotePrefix", GlobalSettings.CodeNotePrefix, "CodeNotes");
@@ -65,6 +67,7 @@ namespace PointerFinder2.Core
                 ini.Write("StopOnFirstPathFound", settings.StopOnFirstPathFound.ToString(), section);
                 ini.Write("FindAllPathLevels", settings.FindAllPathLevels.ToString(), section);
                 ini.Write("CandidatesPerLevel", settings.CandidatesPerLevel.ToString(), section);
+                ini.Write("MaxCandidates", settings.MaxCandidates.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -88,6 +91,9 @@ namespace PointerFinder2.Core
             GlobalSettings.UseWindowsDefaultSound = useDefaultSound;
             if (!bool.TryParse(ini.Read("LimitCpuUsage", "Global", GlobalSettings.LimitCpuUsage.ToString()), out bool limitCpuUsage)) limitCpuUsage = false;
             GlobalSettings.LimitCpuUsage = limitCpuUsage;
+            // Load the new sorting preference with a safe default.
+            if (!bool.TryParse(ini.Read("SortByLevelFirst", "Global", GlobalSettings.SortByLevelFirst.ToString()), out bool sortByLevel)) sortByLevel = true;
+            GlobalSettings.SortByLevelFirst = sortByLevel;
 
             // Load Code Note settings
             GlobalSettings.CodeNotePrefix = ini.Read("CodeNotePrefix", "CodeNotes", ".");
@@ -129,9 +135,13 @@ namespace PointerFinder2.Core
             if (!int.TryParse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()), out int maxOffset)) maxOffset = defaultSettings.MaxOffset;
             settings.MaxOffset = maxOffset;
             if (!int.TryParse(ini.Read("MaxLevel", section, defaultSettings.MaxLevel.ToString()), out int maxLevel)) maxLevel = defaultSettings.MaxLevel;
+            if (maxLevel < 1) maxLevel = defaultSettings.MaxLevel;
             settings.MaxLevel = maxLevel;
+
             if (!int.TryParse(ini.Read("MaxResults", section, defaultSettings.MaxResults.ToString()), out int maxResults)) maxResults = defaultSettings.MaxResults;
+            if (maxResults < 1) maxResults = defaultSettings.MaxResults;
             settings.MaxResults = maxResults;
+
             settings.StaticAddressStart = ini.Read("StaticAddressStart", section, defaultSettings.StaticAddressStart);
             settings.StaticAddressEnd = ini.Read("StaticAddressEnd", section, defaultSettings.StaticAddressEnd);
             if (!bool.TryParse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()), out bool scanForStructureBase)) scanForStructureBase = defaultSettings.ScanForStructureBase;
@@ -147,7 +157,12 @@ namespace PointerFinder2.Core
             if (!bool.TryParse(ini.Read("FindAllPathLevels", section, defaultSettings.FindAllPathLevels.ToString()), out bool findAllLevels)) findAllLevels = defaultSettings.FindAllPathLevels;
             settings.FindAllPathLevels = findAllLevels;
             if (!int.TryParse(ini.Read("CandidatesPerLevel", section, defaultSettings.CandidatesPerLevel.ToString()), out int cpl)) cpl = defaultSettings.CandidatesPerLevel;
+            if (cpl < 1) cpl = defaultSettings.CandidatesPerLevel;
             settings.CandidatesPerLevel = cpl;
+
+            if (!int.TryParse(ini.Read("MaxCandidates", section, defaultSettings.MaxCandidates.ToString()), out int maxCandidates)) maxCandidates = defaultSettings.MaxCandidates;
+            if (maxCandidates < 1) maxCandidates = defaultSettings.MaxCandidates;
+            settings.MaxCandidates = maxCandidates;
 
             //Re-load all global sections to ensure they are up-to-date.
             LoadGlobalAndDebugSections(ini);

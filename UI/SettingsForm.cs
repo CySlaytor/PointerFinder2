@@ -1,7 +1,9 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.DataModels;
+using PointerFinder2.Properties;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Windows.Forms;
 
 namespace PointerFinder2
@@ -10,7 +12,6 @@ namespace PointerFinder2
     public partial class SettingsForm : Form
     {
         private readonly MainForm _mainForm;
-        //Add a flag to prevent event handlers from running during form initialization.
         private bool _isInitializing = true;
 
         // The constructor now requires a reference to the MainForm
@@ -26,6 +27,8 @@ namespace PointerFinder2
             // --- Load General Settings ---
             chkUseDefaultSounds.Checked = GlobalSettings.UseWindowsDefaultSound;
             chkLimitCpuUsage.Checked = GlobalSettings.LimitCpuUsage;
+            // Load the new sorting preference setting.
+            chkSortByLevelFirst.Checked = GlobalSettings.SortByLevelFirst;
 
             // --- Load Debug Settings ---
             chkLogLiveScan.Checked = DebugSettings.LogLiveScan;
@@ -77,8 +80,45 @@ namespace PointerFinder2
                 MessageBoxIcon.Information);
         }
 
+        private void btnResetAll_Click(object sender, EventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will reset ALL application settings, including saved scan parameters, window positions, and debug flags. The settings.ini file will be deleted.\n\n" +
+                "The application will restart to apply the default settings.\n\n" +
+                "Are you sure you want to proceed?",
+                "Confirm Reset All Settings",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    // Reset Application Settings (window positions, etc.)
+                    Settings.Default.Reset();
+                    Settings.Default.Save();
+
+                    // Delete the INI file
+                    string settingsFile = Path.Combine(Application.StartupPath, "settings.ini");
+                    if (File.Exists(settingsFile))
+                    {
+                        File.Delete(settingsFile);
+                    }
+
+                    // Inform the user and restart
+                    MessageBox.Show("All settings have been reset to default. The application will now restart.", "Settings Reset", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _mainForm?.RestartApplication();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to reset settings: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+
         #region Settings Event Handlers
-        //Add guard clause to all event handlers to prevent them from firing during Load.
         private void chkUseDefaultSounds_CheckedChanged(object sender, EventArgs e)
         {
             if (_isInitializing) return;
@@ -90,6 +130,14 @@ namespace PointerFinder2
         {
             if (_isInitializing) return;
             GlobalSettings.LimitCpuUsage = chkLimitCpuUsage.Checked;
+            SettingsManager.SaveGlobalSettingsOnly();
+        }
+
+        // Add event handler for the new sorting checkbox.
+        private void chkSortByLevelFirst_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_isInitializing) return;
+            GlobalSettings.SortByLevelFirst = chkSortByLevelFirst.Checked;
             SettingsManager.SaveGlobalSettingsOnly();
         }
 
@@ -125,7 +173,6 @@ namespace PointerFinder2
         // Add event handlers and preview logic for Code Notes tab
         private void CodeNoteSetting_Changed(object sender, EventArgs e)
         {
-            // Add guard clause.
             if (_isInitializing) return;
 
             // Update Global Settings from UI controls

@@ -10,7 +10,8 @@
         public int MaxOffset { get; set; }
         // The maximum number of levels (pointers in a chain) to search for.
         public int MaxLevel { get; set; }
-        // The maximum number of results (for live scan) or candidates (for state-based scan) to generate.
+        // Clarified that this setting is for the live scan.
+        // The maximum number of results to find during a live scan.
         public int MaxResults { get; set; }
         // The start of the memory range to search for static base addresses.
         public string StaticAddressStart { get; set; }
@@ -31,5 +32,8 @@
         public bool FindAllPathLevels { get; set; } = false;
         // The number of candidate offsets to find per address in a state-based scan before moving on.
         public int CandidatesPerLevel { get; set; } = 10;
+        // Added separate setting for State-Based scan candidate limit.
+        // The maximum number of candidate paths to generate during a state-based scan.
+        public int MaxCandidates { get; set; }
     }
 }

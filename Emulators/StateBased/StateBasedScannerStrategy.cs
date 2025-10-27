@@ -28,9 +28,13 @@ namespace PointerFinder2.Emulators.StateBased
 
         protected Dictionary<uint, List<uint>> _pointerMap;
         private ConcurrentBag<PointerPath> _foundPaths;
+        // Added a dedicated counter for found paths to avoid performance issues with ConcurrentBag.Count.
+        private long _foundPathsCounter;
         private long _candidatesValidated;
         private long _candidatesGenerated;
         private CancellationTokenSource _stopOnFirstCts;
+        // Added a threshold for progress reporting to avoid flooding the UI thread.
+        private long _nextUpdateThreshold;
 
         #region Abstract Methods
         // Builds the pointer map by scanning the relevant memory regions from a captured memory dump.
@@ -48,6 +52,9 @@ namespace PointerFinder2.Emulators.StateBased
             _foundPaths = new ConcurrentBag<PointerPath>();
             _candidatesValidated = 0;
             _candidatesGenerated = 0;
+            // Initialize new fields for tracking progress.
+            _foundPathsCounter = 0;
+            _nextUpdateThreshold = 1; // Report the very first path found immediately.
             _stopOnFirstCts = new CancellationTokenSource();
 
             var combinedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopOnFirstCts.Token).Token;
@@ -107,7 +114,7 @@ namespace PointerFinder2.Emulators.StateBased
         {
             var currentLevelCandidates = new List<PathCandidate>();
 
-            uint targetAddress = _params.CapturedStates[0].Parameters.TargetAddress;
+            uint targetAddress = _params.CapturedStates[0].TargetAddress;
             logger.Log("[Phase 2] Finding Level 1 candidates...");
             ReportProgress("Searching Level 1...", 0, _params.MaxOffset / 4, 0);
             int candidatesFound = 0;
@@ -143,7 +150,8 @@ namespace PointerFinder2.Emulators.StateBased
 
             for (int level = 2; level <= _params.MaxLevel; level++)
             {
-                if (token.IsCancellationRequested || !currentLevelCandidates.Any() || _candidatesGenerated >= _params.MaxResults) break;
+                // Use the new MaxCandidates parameter instead of MaxResults.
+                if (token.IsCancellationRequested || !currentLevelCandidates.Any() || _candidatesGenerated >= _params.MaxCandidates) break;
 
                 logger.Log($"[Phase 2] Finding Level {level} candidates from {currentLevelCandidates.Count:N0} previous level nodes...");
                 var nextLevelCandidates = new ConcurrentBag<PathCandidate>();
@@ -152,11 +160,12 @@ namespace PointerFinder2.Emulators.StateBased
 
                 // Report progress based on iterating through the current level's candidates for a smoother UI experience.
                 long processedCandidates = 0;
-                ReportProgress($"Searching Level {level}...", 0, currentLevelCandidates.Count, _foundPaths.Count);
+                ReportProgress($"Searching Level {level}...", 0, currentLevelCandidates.Count, (int)_foundPathsCounter);
 
                 Parallel.ForEach(currentLevelCandidates, parallelOptions, (candidate, loopState) =>
                 {
-                    if (_candidatesGenerated >= _params.MaxResults)
+                    // Use the new MaxCandidates parameter instead of MaxResults.
+                    if (_candidatesGenerated >= _params.MaxCandidates)
                     {
                         loopState.Stop();
                         return;
@@ -170,7 +179,8 @@ namespace PointerFinder2.Emulators.StateBased
                         int candidatesFoundThisLevel = 0;
                         for (int offset = 0; offset <= _params.MaxOffset; offset += 4)
                         {
-                            if (token.IsCancellationRequested || _candidatesGenerated >= _params.MaxResults)
+                            // Use the new MaxCandidates parameter instead of MaxResults.
+                            if (token.IsCancellationRequested || _candidatesGenerated >= _params.MaxCandidates)
                             {
                                 loopState.Stop();
                                 return;
@@ -196,7 +206,7 @@ namespace PointerFinder2.Emulators.StateBased
                     long currentProcessed = Interlocked.Increment(ref processedCandidates);
                     if (currentProcessed % 256 == 0) // Update progress bar periodically
                     {
-                        ReportProgress($"Searching Level {level}...", currentProcessed, currentLevelCandidates.Count, _foundPaths.Count);
+                        ReportProgress($"Searching Level {level}...", currentProcessed, currentLevelCandidates.Count, (int)_foundPathsCounter);
                     }
                 });
 
@@ -212,7 +222,8 @@ namespace PointerFinder2.Emulators.StateBased
                     }
                 }
             }
-            ReportProgress("Search phase complete.", _params.MaxResults, _params.MaxResults, _foundPaths.Count);
+            // Use the new MaxCandidates parameter instead of MaxResults.
+            ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)_foundPathsCounter);
             return Task.CompletedTask;
         }
 
@@ -232,6 +243,23 @@ namespace PointerFinder2.Emulators.StateBased
             if (IsValidInAllStates(finalPath))
             {
                 _foundPaths.Add(finalPath);
+                // Increment a dedicated counter and report progress based on a dynamic threshold.
+                long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+
+                if (currentCount >= _nextUpdateThreshold)
+                {
+                    // Report a count-only update.
+                    ReportProgress(null, -1, -1, (int)currentCount);
+
+                    // Dynamically increase the update interval.
+                    if (currentCount < 100)
+                        _nextUpdateThreshold = currentCount + 10;
+                    else if (currentCount < 1000)
+                        _nextUpdateThreshold = currentCount + 100;
+                    else
+                        _nextUpdateThreshold = currentCount + 1000;
+                }
+
                 if (_params.StopOnFirstPathFound)
                 {
                     _stopOnFirstCts.Cancel();
@@ -255,12 +283,12 @@ namespace PointerFinder2.Emulators.StateBased
                 var state = _params.CapturedStates[i];
                 if (detailedLog)
                 {
-                    logBuilder.AppendLine($"--- Checking in State {i + 1} (Target: {state.Parameters.TargetAddress:X8}) ---");
+                    logBuilder.AppendLine($"--- Checking in State {i + 1} (Target: {state.TargetAddress:X8}) ---");
                 }
 
                 uint? finalAddress = RecalculatePathInState(path, state, logBuilder);
 
-                if (!finalAddress.HasValue || !_manager.AreAddressesEquivalent(finalAddress.Value, state.Parameters.TargetAddress))
+                if (!finalAddress.HasValue || !_manager.AreAddressesEquivalent(finalAddress.Value, state.TargetAddress))
                 {
                     if (detailedLog)
                     {

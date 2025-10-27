@@ -50,13 +50,16 @@
             // btnClose
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnClose.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnClose.Location = new System.Drawing.Point(509, 303);
+            // The DialogResult property is removed as it doesn't work for non-modal forms.
+            // this.btnClose.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+            this.btnClose.Location = new System.Drawing.Point(509, 365);
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(75, 23);
             this.btnClose.TabIndex = 5;
             this.btnClose.Text = "Close";
             this.btnClose.UseVisualStyleBackColor = true;
+            // A direct Click event handler is added to ensure the form closes.
+            this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
             // 
             // tabControl1
             // 
@@ -68,7 +71,7 @@
             this.tabControl1.Location = new System.Drawing.Point(0, 0);
             this.tabControl1.Name = "tabControl1";
             this.tabControl1.SelectedIndex = 0;
-            this.tabControl1.Size = new System.Drawing.Size(597, 297);
+            this.tabControl1.Size = new System.Drawing.Size(597, 359);
             this.tabControl1.TabIndex = 6;
             // 
             // tabToNote
@@ -86,7 +89,7 @@
             this.tabToNote.Location = new System.Drawing.Point(4, 24);
             this.tabToNote.Name = "tabToNote";
             this.tabToNote.Padding = new System.Windows.Forms.Padding(3);
-            this.tabToNote.Size = new System.Drawing.Size(589, 269);
+            this.tabToNote.Size = new System.Drawing.Size(589, 331);
             this.tabToNote.TabIndex = 0;
             this.tabToNote.Text = "RA Trigger to Code Note";
             this.tabToNote.UseVisualStyleBackColor = true;
@@ -94,7 +97,7 @@
             // btnCopyToClipboard
             // 
             this.btnCopyToClipboard.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCopyToClipboard.Location = new System.Drawing.Point(459, 238);
+            this.btnCopyToClipboard.Location = new System.Drawing.Point(459, 300);
             this.btnCopyToClipboard.Name = "btnCopyToClipboard";
             this.btnCopyToClipboard.Size = new System.Drawing.Size(122, 23);
             this.btnCopyToClipboard.TabIndex = 15;
@@ -148,7 +151,7 @@
             this.richCodeNoteOutput.Location = new System.Drawing.Point(10, 132);
             this.richCodeNoteOutput.Name = "richCodeNoteOutput";
             this.richCodeNoteOutput.ReadOnly = true;
-            this.richCodeNoteOutput.Size = new System.Drawing.Size(571, 100);
+            this.richCodeNoteOutput.Size = new System.Drawing.Size(571, 162);
             this.richCodeNoteOutput.TabIndex = 14;
             this.richCodeNoteOutput.Text = "";
             // 
@@ -206,15 +209,16 @@
             this.tabToTrigger.Location = new System.Drawing.Point(4, 24);
             this.tabToTrigger.Name = "tabToTrigger";
             this.tabToTrigger.Padding = new System.Windows.Forms.Padding(3);
-            this.tabToTrigger.Size = new System.Drawing.Size(589, 269);
+            this.tabToTrigger.Size = new System.Drawing.Size(589, 331);
             this.tabToTrigger.TabIndex = 1;
             this.tabToTrigger.Text = "Code Note to RA Trigger";
             this.tabToTrigger.UseVisualStyleBackColor = true;
             // 
             // chkUseMask
             // 
+            this.chkUseMask.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.chkUseMask.AutoSize = true;
-            this.chkUseMask.Location = new System.Drawing.Point(270, 163);
+            this.chkUseMask.Location = new System.Drawing.Point(270, 247);
             this.chkUseMask.Name = "chkUseMask";
             this.chkUseMask.Size = new System.Drawing.Size(77, 19);
             this.chkUseMask.TabIndex = 10;
@@ -224,7 +228,7 @@
             // btnCopyTrigger
             // 
             this.btnCopyTrigger.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCopyTrigger.Location = new System.Drawing.Point(459, 238);
+            this.btnCopyTrigger.Location = new System.Drawing.Point(459, 300);
             this.btnCopyTrigger.Name = "btnCopyTrigger";
             this.btnCopyTrigger.Size = new System.Drawing.Size(122, 23);
             this.btnCopyTrigger.TabIndex = 9;
@@ -236,7 +240,7 @@
             // 
             this.label8.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(10, 192);
+            this.label8.Location = new System.Drawing.Point(10, 276);
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(141, 15);
             this.label8.TabIndex = 8;
@@ -247,16 +251,16 @@
             this.txtTriggerOutput.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.txtTriggerOutput.Font = new System.Drawing.Font("Consolas", 9F);
-            this.txtTriggerOutput.Location = new System.Drawing.Point(10, 210);
+            this.txtTriggerOutput.Location = new System.Drawing.Point(10, 294);
             this.txtTriggerOutput.Name = "txtTriggerOutput";
             this.txtTriggerOutput.ReadOnly = true;
-            this.txtTriggerOutput.Size = new System.Drawing.Size(571, 22);
+            this.txtTriggerOutput.Size = new System.Drawing.Size(443, 22);
             this.txtTriggerOutput.TabIndex = 7;
             // 
             // btnReconvert
             // 
-            this.btnReconvert.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnReconvert.Location = new System.Drawing.Point(487, 161);
+            this.btnReconvert.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnReconvert.Location = new System.Drawing.Point(487, 245);
             this.btnReconvert.Name = "btnReconvert";
             this.btnReconvert.Size = new System.Drawing.Size(94, 23);
             this.btnReconvert.TabIndex = 6;
@@ -266,9 +270,10 @@
             // 
             // comboPointerPrefix
             // 
+            this.comboPointerPrefix.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.comboPointerPrefix.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboPointerPrefix.FormattingEnabled = true;
-            this.comboPointerPrefix.Location = new System.Drawing.Point(143, 161);
+            this.comboPointerPrefix.Location = new System.Drawing.Point(143, 245);
             this.comboPointerPrefix.Name = "comboPointerPrefix";
             this.comboPointerPrefix.Size = new System.Drawing.Size(121, 23);
             this.comboPointerPrefix.TabIndex = 5;
@@ -276,8 +281,9 @@
             // 
             // label7
             // 
+            this.label7.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(143, 143);
+            this.label7.Location = new System.Drawing.Point(143, 227);
             this.label7.Name = "label7";
             this.label7.Size = new System.Drawing.Size(82, 15);
             this.label7.TabIndex = 4;
@@ -285,15 +291,17 @@
             // 
             // txtBaseAddress
             // 
-            this.txtBaseAddress.Location = new System.Drawing.Point(10, 161);
+            this.txtBaseAddress.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.txtBaseAddress.Location = new System.Drawing.Point(10, 245);
             this.txtBaseAddress.Name = "txtBaseAddress";
             this.txtBaseAddress.Size = new System.Drawing.Size(127, 23);
             this.txtBaseAddress.TabIndex = 3;
             // 
             // label6
             // 
+            this.label6.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(10, 143);
+            this.label6.Location = new System.Drawing.Point(10, 227);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(109, 15);
             this.label6.TabIndex = 2;
@@ -307,7 +315,7 @@
             this.richCodeNoteInput.Font = new System.Drawing.Font("Consolas", 9F);
             this.richCodeNoteInput.Location = new System.Drawing.Point(10, 25);
             this.richCodeNoteInput.Name = "richCodeNoteInput";
-            this.richCodeNoteInput.Size = new System.Drawing.Size(571, 115);
+            this.richCodeNoteInput.Size = new System.Drawing.Size(571, 199);
             this.richCodeNoteInput.TabIndex = 1;
             this.richCodeNoteInput.Text = "";
             // 
@@ -326,10 +334,12 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnClose;
-            this.ClientSize = new System.Drawing.Size(596, 338);
+            this.ClientSize = new System.Drawing.Size(596, 400);
             this.Controls.Add(this.tabControl1);
             this.Controls.Add(this.btnClose);
-            this.MinimumSize = new System.Drawing.Size(450, 350);
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.MinimumSize = new System.Drawing.Size(520, 420);
             this.Name = "CodeNoteConverterForm";
             this.ShowIcon = false;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;

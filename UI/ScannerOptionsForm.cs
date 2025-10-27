@@ -3,6 +3,7 @@ using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
 using System;
 using System.Globalization;
+using System.Text;
 using System.Windows.Forms;
 
 namespace PointerFinder2
@@ -91,6 +92,13 @@ namespace PointerFinder2
                 chkUseSliderRange.Checked = false;
             }
             chkUseSliderRange_CheckedChanged(null, null);
+
+            // Wire up Leave events for automatic hex input sanitization.
+            txtTargetAddress.Leave += SanitizeHexTextBox_Leave;
+            txtMaxOffset.Leave += SanitizeHexTextBox_Leave;
+            txtStaticStart.Leave += SanitizeHexTextBox_Leave;
+            txtStaticEnd.Leave += SanitizeHexTextBox_Leave;
+            txtMaxNegativeOffset.Leave += SanitizeHexTextBox_Leave;
         }
 
         private void SetupRangeSlider()
@@ -110,8 +118,32 @@ namespace PointerFinder2
         {
             try
             {
+                // Sanitize all hex input fields before parsing to enforce a clean format.
+                txtTargetAddress.Text = SanitizeHexInput(txtTargetAddress.Text);
+                txtMaxOffset.Text = SanitizeHexInput(txtMaxOffset.Text);
+                txtStaticStart.Text = SanitizeHexInput(txtStaticStart.Text);
+                txtStaticEnd.Text = SanitizeHexInput(txtStaticEnd.Text);
+                txtMaxNegativeOffset.Text = SanitizeHexInput(txtMaxNegativeOffset.Text);
+
+
                 // This correctly uses the manager's UnnormalizeAddress to handle all cases.
                 uint targetAddress = _manager.UnnormalizeAddress(txtTargetAddress.Text);
+
+                if (targetAddress % 4 != 0)
+                {
+                    uint correctedAddress = targetAddress & 0xFFFFFFFC; // Round down to the nearest multiple of 4.
+                    string message = $"The target address 0x{targetAddress:X} is not 4-byte aligned. Pointer scans operate on 32-bit (4-byte) values, so the target address must be a multiple of 4.\n\n" +
+                                     "This can happen on systems like Wii/GameCube when reading an 8-bit value from a Big-Endian address.\n\n" +
+                                     $"The address will be automatically corrected to: 0x{correctedAddress:X}\n\n" +
+                                     "Click OK to apply this correction and continue.";
+
+                    MessageBox.Show(this, message, "Address Alignment Correction", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    targetAddress = correctedAddress;
+                    // Update the UI to reflect the corrected address.
+                    txtTargetAddress.Text = _manager.FormatDisplayAddress(targetAddress);
+                }
+
                 uint staticStart = _manager.UnnormalizeAddress(txtStaticStart.Text);
                 uint staticEnd = _manager.UnnormalizeAddress(txtStaticEnd.Text);
 
@@ -134,13 +166,13 @@ namespace PointerFinder2
                 return new ScanParameters
                 {
                     TargetAddress = targetAddress,
-                    MaxOffset = int.Parse(txtMaxOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
+                    MaxOffset = int.Parse(txtMaxOffset.Text, NumberStyles.HexNumber),
                     MaxLevel = (int)numMaxLevel.Value,
                     MaxResults = (int)numMaxResults.Value,
                     StaticBaseStart = staticStart,
                     StaticBaseEnd = staticEnd,
                     ScanForStructureBase = chkScanForStructureBase.Checked,
-                    MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
+                    MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text, NumberStyles.HexNumber),
                     Use16ByteAlignment = chkUse16ByteAlignment.Checked,
                     // Get the CPU limit setting from the global settings instead of a local checkbox.
                     LimitCpuUsage = GlobalSettings.LimitCpuUsage
@@ -153,34 +185,75 @@ namespace PointerFinder2
             }
         }
 
-        public AppSettings GetCurrentSettings()
+        // This method now updates the existing settings object instead of creating a new one.
+        public void UpdateSettings(AppSettings settings)
         {
-            var settings = new AppSettings
-            {
-                LastTargetAddress = txtTargetAddress.Text,
-                MaxOffset = int.Parse(txtMaxOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
-                MaxLevel = (int)numMaxLevel.Value,
-                MaxResults = (int)numMaxResults.Value,
-                StaticAddressStart = txtStaticStart.Text,
-                StaticAddressEnd = txtStaticEnd.Text,
-                UseSliderRange = chkUseSliderRange.Checked, // Save the checkbox state
-                ScanForStructureBase = chkScanForStructureBase.Checked,
-                MaxNegativeOffset = int.Parse(txtMaxNegativeOffset.Text.Replace("0x", ""), NumberStyles.HexNumber),
-                Use16ByteAlignment = chkUse16ByteAlignment.Checked,
-            };
-
-            return settings;
+            // Sanitize values before saving them back to settings.
+            settings.LastTargetAddress = SanitizeHexInput(txtTargetAddress.Text);
+            settings.MaxOffset = int.Parse(SanitizeHexInput(txtMaxOffset.Text), NumberStyles.HexNumber);
+            settings.MaxLevel = (int)numMaxLevel.Value;
+            settings.MaxResults = (int)numMaxResults.Value;
+            settings.StaticAddressStart = SanitizeHexInput(txtStaticStart.Text);
+            settings.StaticAddressEnd = SanitizeHexInput(txtStaticEnd.Text);
+            settings.UseSliderRange = chkUseSliderRange.Checked;
+            settings.ScanForStructureBase = chkScanForStructureBase.Checked;
+            settings.MaxNegativeOffset = int.Parse(SanitizeHexInput(txtMaxNegativeOffset.Text), NumberStyles.HexNumber);
+            settings.Use16ByteAlignment = chkUse16ByteAlignment.Checked;
         }
+
 
         // The OK button validates the input and closes the form if valid.
         private void btnOK_Click(object sender, EventArgs e)
         {
+            // Try to parse values for the performance check first.
+            if (!int.TryParse(SanitizeHexInput(txtMaxOffset.Text), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int maxOffset))
+            {
+                // If parsing fails, let GetScanParameters show the detailed error.
+                if (GetScanParameters() != null) { DialogResult = DialogResult.OK; Close(); }
+                return;
+            }
+            int maxLevel = (int)numMaxLevel.Value;
+
+            string warningMessage = "";
+
+            // Dolphin (Wii/GC) Warning
+            if (_target == EmulatorTarget.Dolphin)
+            {
+                if (maxOffset >= 0xFFFF && maxLevel >= 3)
+                {
+                    warningMessage = "A Max Offset of 0xFFFF or higher with 3+ levels on this console will be extremely slow and may generate millions of useless results.\n\nFor such a broad search, using the State-Based Scan method is strongly recommended.\n\nDo you want to continue with this Live Scan anyway?";
+                }
+                else if (maxOffset >= 0xFFF && maxLevel >= 4)
+                {
+                    warningMessage = "A Max Offset of 0xFFF or higher with 4+ levels on this console may be very slow and produce a large number of results.\n\nFor broad searches, the State-Based Scan method is often more effective.\n\nDo you want to continue with this Live Scan?";
+                }
+            }
+            // PCSX2 (PS2) Warning
+            else if (_target == EmulatorTarget.PCSX2)
+            {
+                if (maxOffset >= 0xFFF && maxLevel >= 5)
+                {
+                    warningMessage = "A Max Offset of 0xFFF or higher with 5+ levels on PS2 can be very slow and may generate millions of results.\n\nFor such deep searches, consider using the State-Based Scan method for better performance and accuracy.\n\nDo you want to continue with this Live Scan?";
+                }
+            }
+
+            if (!string.IsNullOrEmpty(warningMessage))
+            {
+                var result = MessageBox.Show(warningMessage, "Performance Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.No)
+                {
+                    return; // User cancelled, keep the form open.
+                }
+            }
+
+            // If we passed the checks (or user clicked Yes), proceed with the normal validation and close.
             if (GetScanParameters() != null)
             {
                 DialogResult = DialogResult.OK;
                 Close();
             }
         }
+
 
         // Toggles the enabled state of the negative offset textbox.
         private void chkScanForStructureBase_CheckedChanged(object sender, EventArgs e)
@@ -203,8 +276,8 @@ namespace PointerFinder2
 
             try
             {
-                uint startAddr = uint.Parse(txtStaticStart.Text, NumberStyles.HexNumber);
-                uint endAddr = uint.Parse(txtStaticEnd.Text, NumberStyles.HexNumber);
+                uint startAddr = uint.Parse(SanitizeHexInput(txtStaticStart.Text), NumberStyles.HexNumber);
+                uint endAddr = uint.Parse(SanitizeHexInput(txtStaticEnd.Text), NumberStyles.HexNumber);
                 rangeSlider.SetRange(
                     (int)(startAddr / SLIDER_GRANULARITY),
                     (int)(endAddr / SLIDER_GRANULARITY)
@@ -239,6 +312,30 @@ namespace PointerFinder2
                 // Reset the textboxes to the application's core defaults
                 txtStaticStart.Text = _defaultSettings.StaticAddressStart;
                 txtStaticEnd.Text = _defaultSettings.StaticAddressEnd;
+            }
+        }
+
+        // Added a helper method to sanitize hex strings by removing non-hex characters and converting to uppercase.
+        private string SanitizeHexInput(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            var sb = new StringBuilder();
+            foreach (char c in input.ToUpperInvariant())
+            {
+                if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+
+        // Added a shared event handler to apply sanitization when a hex textbox loses focus.
+        private void SanitizeHexTextBox_Leave(object sender, EventArgs e)
+        {
+            if (sender is TextBox tb)
+            {
+                tb.Text = SanitizeHexInput(tb.Text);
             }
         }
     }

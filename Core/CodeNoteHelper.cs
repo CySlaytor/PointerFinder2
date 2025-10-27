@@ -11,7 +11,7 @@ namespace PointerFinder2.Core
     // A helper class to generate custom-formatted code notes for pointer chains.
     public static class CodeNoteHelper
     {
-        private static readonly Dictionary<char, string> SizeMap = new Dictionary<char, string>
+        private static readonly Dictionary<char, string> SizeMap = new()
         {
             {' ', "16-bit"}, {'H', "8-bit"}, {'X', "32-bit"}, {'W', "24-bit"},
             {'M', "Bit0"}, {'N', "Bit1"}, {'O', "Bit2"}, {'P', "Bit3"},
@@ -32,7 +32,7 @@ namespace PointerFinder2.Core
 
         public static (List<int> offsets, string? size) ParseTrigger(string trigger)
         {
-            if (string.IsNullOrWhiteSpace(trigger)) return (new List<int>(), null);
+            if (string.IsNullOrWhiteSpace(trigger)) return ([], null);
 
             try
             {
@@ -45,14 +45,16 @@ namespace PointerFinder2.Core
                     var pointerMatch = Regex.Match(part, @"^I:0x[A-Z]?([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
                     if (pointerMatch.Success)
                     {
-                        if (offsets.Any() || parts.First() != part)
+                        if (offsets.Count != 0 || parts.First() != part)
                         {
                             offsets.Add(Convert.ToInt32(pointerMatch.Groups[1].Value, 16));
                         }
                         continue;
                     }
 
-                    var finalOffsetMatch = Regex.Match(part, @"^0x([A-Z])([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
+                    // Updated regex to handle optional prefixes like 'd', 'A:', 'p:', etc., before the final offset.
+                    // This allows for parsing of more complex and realistic trigger strings.
+                    var finalOffsetMatch = Regex.Match(part, @"(?:[A-Z]:)?[dpb~]?0x([A-Z])([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
                     if (finalOffsetMatch.Success)
                     {
                         offsets.Add(Convert.ToInt32(finalOffsetMatch.Groups[2].Value, 16));
@@ -65,7 +67,7 @@ namespace PointerFinder2.Core
             }
             catch
             {
-                return (new List<int>(), null);
+                return ([], null);
             }
         }
 
@@ -82,7 +84,7 @@ namespace PointerFinder2.Core
                 var offsets = new List<int>();
                 string finalMemorySize = "8-bit"; // Default
 
-                var lines = codeNote.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var lines = codeNote.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
 
                 var offsetRegex = new Regex(@"(?:\+|-)?0x([0-9a-fA-F]+)");
 
@@ -104,7 +106,7 @@ namespace PointerFinder2.Core
                     }
                 }
 
-                if (!offsets.Any())
+                if (offsets.Count == 0)
                 {
                     return "Could not parse any offsets from the code note.";
                 }
@@ -137,7 +139,7 @@ namespace PointerFinder2.Core
 
         internal static string BuildCodeNote(List<int> offsets, CodeNoteSettings settings, string? finalMemorySize = null, string? finalDescription = null)
         {
-            if (offsets == null || !offsets.Any()) return string.Empty;
+            if (offsets == null || offsets.Count == 0) return string.Empty;
 
             var lines = new List<string>();
 
@@ -169,7 +171,7 @@ namespace PointerFinder2.Core
             }
 
             // 3. Handle the final line description.
-            if (finalLines.Any() && (!string.IsNullOrEmpty(finalMemorySize) || !string.IsNullOrEmpty(finalDescription)))
+            if (finalLines.Count != 0 && (!string.IsNullOrEmpty(finalMemorySize) || !string.IsNullOrEmpty(finalDescription)))
             {
                 int lastIndex = finalLines.Count - 1;
                 var sb = new StringBuilder(finalLines[lastIndex]);

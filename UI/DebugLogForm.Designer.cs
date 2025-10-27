@@ -87,6 +87,9 @@
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.DebugLogForm_FormClosing);
             this.ResumeLayout(false);
             this.PerformLayout();
+            this.Load += new System.EventHandler(this.DebugLogForm_Load);
+            this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
         #endregion

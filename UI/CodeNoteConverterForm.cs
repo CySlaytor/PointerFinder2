@@ -1,6 +1,7 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
+using PointerFinder2.Properties;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -12,14 +13,13 @@ namespace PointerFinder2.UI
     public partial class CodeNoteConverterForm : Form
     {
         //Static fields to remember user inputs for the session.
-        private static string _lastTriggerInput = "I:0xG005e3de8&536870911_I:0xG00000068&536870911_0xH00000017>=2";
+        private static string _lastTriggerInput = "";
         private static string _lastCodeNoteInput = "";
         private static string _lastBaseAddress = "";
         private static int _lastPrefixIndex = 0;
         private static bool _lastUseMask = false;
 
         private List<int> _lastOffsets = new List<int>();
-        private readonly string _initialTrigger = null;
         private readonly IEmulatorManager _manager;
 
         // Base constructor
@@ -29,14 +29,42 @@ namespace PointerFinder2.UI
             _manager = manager;
         }
 
-        // Constructor for the paste shortcut
-        public CodeNoteConverterForm(string initialTrigger, IEmulatorManager manager) : this(manager)
+        // This public method allows the main form to send a new trigger to an existing instance.
+        public void ProcessTrigger(string trigger)
         {
-            _initialTrigger = initialTrigger;
+            // Switch to the correct tab if not already selected
+            if (tabControl1.SelectedTab != tabToNote)
+            {
+                tabControl1.SelectedTab = tabToNote;
+            }
+
+            txtTriggerInput.Text = trigger;
+            btnConvert.PerformClick();
         }
 
         private void CodeNoteConverterForm_Load(object sender, EventArgs e)
         {
+            if (Settings.Default.CodeNoteConverterSize.Width > 0 && Settings.Default.CodeNoteConverterSize.Height > 0)
+            {
+                this.StartPosition = FormStartPosition.Manual;
+                Point location = Settings.Default.CodeNoteConverterLocation;
+                Size size = Settings.Default.CodeNoteConverterSize;
+                bool isVisible = false;
+                foreach (Screen screen in Screen.AllScreens)
+                {
+                    if (screen.WorkingArea.IntersectsWith(new Rectangle(location, size)))
+                    {
+                        isVisible = true;
+                        break;
+                    }
+                }
+                if (isVisible)
+                {
+                    this.Location = location;
+                    this.Size = size;
+                }
+            }
+
             comboMemorySize.Items.AddRange(new object[] {
                 "8-bit", "16-bit", "32-bit", "24-bit", "Lower4", "Upper4",
                 "16-bit BE", "32-bit BE", "24-bit BE",
@@ -55,7 +83,7 @@ namespace PointerFinder2.UI
             });
 
             // Restore session state
-            txtTriggerInput.Text = _initialTrigger ?? _lastTriggerInput;
+            txtTriggerInput.Text = _lastTriggerInput;
             richCodeNoteInput.Text = _lastCodeNoteInput;
             txtBaseAddress.Text = _lastBaseAddress;
             comboPointerPrefix.SelectedIndex = _lastPrefixIndex;
@@ -80,6 +108,11 @@ namespace PointerFinder2.UI
 
         private void CodeNoteConverterForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            // Save window state before saving other session state
+            Settings.Default.CodeNoteConverterLocation = this.Location;
+            Settings.Default.CodeNoteConverterSize = this.Size;
+            Settings.Default.Save();
+
             // Save state for the session
             _lastTriggerInput = txtTriggerInput.Text;
             _lastCodeNoteInput = richCodeNoteInput.Text;
@@ -237,6 +270,11 @@ namespace PointerFinder2.UI
             {
                 chkUseMask.Enabled = true;
             }
+        }
+
+        private void btnClose_Click(object sender, EventArgs e)
+        {
+            this.Close();
         }
     }
 }
