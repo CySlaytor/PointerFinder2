@@ -5,11 +5,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
+using PointerFinder2.UI;
 
 namespace PointerFinder2
 {
     // The form for managing global application and debug settings.
-    public partial class SettingsForm : Form
+    public partial class SettingsForm : BaseForm
     {
         private readonly MainForm _mainForm;
         private bool _isInitializing = true;

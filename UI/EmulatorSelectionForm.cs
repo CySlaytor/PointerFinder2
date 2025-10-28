@@ -4,12 +4,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows.Forms;
+using PointerFinder2.UI;
 
 namespace PointerFinder2
 {
     // A form that is displayed when multiple supported emulators or instances are running.
     // It prompts the user to select which specific process they want to attach to.
-    public partial class EmulatorSelectionForm : Form
+    public partial class EmulatorSelectionForm : BaseForm
     {
         // Public properties to hold the user's final selection.
         public EmulatorProfile SelectedProfile { get; private set; }

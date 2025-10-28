@@ -11,7 +11,7 @@ using System.Windows.Forms;
 namespace PointerFinder2.UI.StaticRangeFinders
 {
     // A form that analyzes an NDS ROM header to find the static address range for a game.
-    public partial class NdsStaticRangeFinderForm : Form
+    public partial class NdsStaticRangeFinderForm : BaseForm
     {
         private readonly IEmulatorManager _manager;
         private uint _foundStart = 0;

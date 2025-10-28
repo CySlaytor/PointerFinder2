@@ -11,7 +11,7 @@ using System.Windows.Forms;
 namespace PointerFinder2.UI.StaticRangeFinders
 {
     // A form that analyzes a main.dol file to find the static address range for a GC/Wii game.
-    public partial class DolphinFileRangeFinderForm : Form
+    public partial class DolphinFileRangeFinderForm : BaseForm
     {
         private readonly IEmulatorManager _manager;
         private uint _foundStart = 0;

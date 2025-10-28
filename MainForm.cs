@@ -28,7 +28,7 @@ namespace PointerFinder2
     // The main window of the Pointer Finder application.
     // It handles UI events, orchestrates scanning and filtering operations,
     // and manages the overall application state.
-    public partial class MainForm : Form
+    public partial class MainForm : BaseForm
     {
         // Win32 API function to force a process to release memory back to the OS.
         [DllImport("kernel32.dll")]

@@ -11,7 +11,7 @@ using System.Windows.Forms;
 namespace PointerFinder2.UI
 {
     // A tool to parse, merge, and clean up complex code notes with hierarchical pointer chains.
-    public partial class CodeNoteHierarchyFixerForm : Form
+    public partial class CodeNoteHierarchyFixerForm : BaseForm
     {
         private const string INPUT_PLACEHOLDER = "Paste your raw code note here...";
         private const string OUTPUT_PLACEHOLDER = "Fixed output will appear here...";

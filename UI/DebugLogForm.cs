@@ -5,13 +5,14 @@ using System.Text;
 using System.Windows.Forms;
 using PointerFinder2.DataModels;
 using PointerFinder2.Properties;
+using PointerFinder2.UI;
 
 namespace PointerFinder2
 {
     // A form that displays real-time debug and logging messages from the application.
     // It is implemented as a singleton to ensure only one instance exists and that
     // logs from any thread can be safely displayed.
-    public partial class DebugLogForm : Form
+    public partial class DebugLogForm : BaseForm
     {
         // The single, shared instance of the form.
         private static DebugLogForm _instance;
