@@ -568,10 +568,11 @@ namespace PointerFinder2
         // Updated to disable tool menu items if their corresponding window is already open.
         private void toolsToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
         {
-            // Expanded support to NDS and Dolphin.
+            // Fix: Expanded support to include PPSSPP.
             bool isSupported = _activeProfile?.Target == EmulatorTarget.PCSX2 ||
                                _activeProfile?.Target == EmulatorTarget.RALibretroNDS ||
-                               _activeProfile?.Target == EmulatorTarget.Dolphin;
+                               _activeProfile?.Target == EmulatorTarget.Dolphin ||
+                               _activeProfile?.Target == EmulatorTarget.PPSSPP;
 
             staticRangeFinderToolStripMenuItem.Enabled = _currentManager != null && _currentManager.IsAttached && isSupported && (_staticRangeFinderInstance == null || _staticRangeFinderInstance.IsDisposed);
             codeNoteConverterToolStripMenuItem.Enabled = (_codeNoteConverterInstance == null || _codeNoteConverterInstance.IsDisposed);
@@ -597,6 +598,12 @@ namespace PointerFinder2
             {
                 finderForm = new DolphinFileRangeFinderForm(_currentManager);
             }
+            // Fix: Added branching for the new PPSSPP static range finder.
+            else if (_activeProfile.Target == EmulatorTarget.PPSSPP)
+            {
+                finderForm = new PpssppRamScanRangeFinderForm(_currentManager);
+            }
+
 
             if (finderForm != null)
             {

@@ -145,21 +145,41 @@ namespace PointerFinder2.Emulators.LiveScan
                 var parallelOptions = new ParallelOptions { CancellationToken = _cancellationToken };
                 if (_params.LimitCpuUsage) parallelOptions.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
 
+                // Fix: Replaced the flawed offset-stepping loop with a correct address-stepping implementation.
+                // This ensures that 16-byte alignment speeds up the scan by checking memory at aligned intervals,
+                // while still correctly calculating and finding pointers with unaligned offsets.
                 Parallel.ForEach(candidatesToProcess, parallelOptions, (candidate, loopState) =>
                 {
+                    if (loopState.IsStopped) return;
+
                     if (_shouldLogDetails) logger.Log($"  [L{level}] Processing candidate with head at 0x{candidate.HeadAddress:X}");
-                    for (int offset = 0; offset <= _params.MaxOffset; offset += step)
+
+                    uint addressToFind = candidate.HeadAddress;
+                    int searchStep = _params.Use16ByteAlignment ? 16 : 4;
+
+                    // 1. Handle offset 0 separately to ensure it's always checked.
+                    foreach (var source in FindSourcesForValue(addressToFind))
                     {
-                        if (loopState.ShouldExitCurrentIteration || _foundPathsCounter >= _params.MaxResults)
+                        var newOffsets = new List<int>(candidate.ReverseOffsets);
+                        newOffsets.Add(0);
+                        nextLevelCandidates.Add(new PathCandidate { HeadAddress = source, ReverseOffsets = newOffsets });
+                    }
+
+                    // 2. Handle positive offsets by iterating through memory addresses at aligned steps.
+                    uint startLoopAddress = _params.Use16ByteAlignment ? (addressToFind & 0xFFFFFFF0) : addressToFind;
+                    for (uint currentMemAddress = startLoopAddress; currentMemAddress > 4096 && currentMemAddress >= addressToFind - _params.MaxOffset; currentMemAddress -= (uint)searchStep)
+                    {
+                        if (loopState.IsStopped || _foundPathsCounter >= _params.MaxResults)
                         {
                             loopState.Stop();
                             return;
                         }
 
-                        uint valueToFind = candidate.HeadAddress - (uint)offset;
-                        foreach (var source in FindSourcesForValue(valueToFind))
+                        int offset = (int)(addressToFind - currentMemAddress);
+                        if (offset == 0) continue; // Already handled above.
+
+                        foreach (var source in FindSourcesForValue(currentMemAddress))
                         {
-                            if (_shouldLogDetails) logger.Log($"    -> Found source for value 0x{valueToFind:X} at address 0x{source:X}");
                             var newOffsets = new List<int>(candidate.ReverseOffsets);
                             newOffsets.Add(offset);
                             nextLevelCandidates.Add(new PathCandidate { HeadAddress = source, ReverseOffsets = newOffsets });

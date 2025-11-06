@@ -50,14 +50,16 @@ namespace PointerFinder2
                 case EmulatorTarget.RALibretroNDS: targetSystem = "NDS"; break;
                 // Added Dolphin target system name.
                 case EmulatorTarget.Dolphin: targetSystem = "GC/Wii"; break;
+                // Added PPSSPP target system name.
+                case EmulatorTarget.PPSSPP: targetSystem = "PSP"; break;
                 default: targetSystem = "Mem"; break;
             }
             label1.Text = $"Target Address ({targetSystem}, Hex)";
             groupBoxRange.Text = $"Static Base Address Range ({targetSystem}, Hex)";
 
-            // Show PCSX2-specific options only when the target is PCSX2.
-            bool isPcsx2 = (_target == EmulatorTarget.PCSX2);
-            chkUse16ByteAlignment.Visible = isPcsx2;
+            // Fix: Show alignment options for supported systems (PCSX2, PPSSPP).
+            bool supportsAlignment = (_target == EmulatorTarget.PCSX2 || _target == EmulatorTarget.PPSSPP);
+            chkUse16ByteAlignment.Visible = supportsAlignment;
 
 
             // --- Populate controls with current settings ---
@@ -70,8 +72,8 @@ namespace PointerFinder2
             chkScanForStructureBase.Checked = _currentSettings.ScanForStructureBase;
             txtMaxNegativeOffset.Text = _currentSettings.MaxNegativeOffset.ToString("X");
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;
-            // Populate PCSX2-specific controls
-            if (isPcsx2)
+            // Fix: Populate alignment-specific controls
+            if (supportsAlignment)
             {
                 chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
             }

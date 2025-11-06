@@ -9,6 +9,9 @@ using System.Collections.Generic;
 // Added using statements for the new Dolphin scanner strategies.
 using PointerFinder2.Emulators.LiveScan.Dolphin;
 using PointerFinder2.Emulators.StateBased.Dolphin;
+// Fix: Added using statements for the new PPSSPP scanner strategies.
+using PointerFinder2.Emulators.LiveScan.PPSSPP;
+using PointerFinder2.Emulators.StateBased.PPSSPP;
 
 namespace PointerFinder2.Emulators
 {
@@ -56,6 +59,16 @@ namespace PointerFinder2.Emulators
                 ManagerFactory = () => new DolphinManager(),
                 ScannerFactory = () => new DolphinLiveScannerStrategy(),
                 StateBasedScannerFactory = () => new DolphinStateBasedScannerStrategy()
+            },
+            // Fix: Added the new profile for PPSSPP.
+            new EmulatorProfile
+            {
+                Name = "PPSSPP",
+                Target = EmulatorTarget.PPSSPP,
+                ProcessNames = new[] { "PPSSPPWindows64" },
+                ManagerFactory = () => new PpssppManager(),
+                ScannerFactory = () => new PpssppLiveScannerStrategy(),
+                StateBasedScannerFactory = () => new PpssppStateBasedScannerStrategy()
             }
         };
     }

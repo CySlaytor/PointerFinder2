@@ -56,6 +56,12 @@ namespace PointerFinder2.DataModels
                     pointerMask = "&536870911"; // This is 0x1FFFFFFF
                     break;
 
+                case EmulatorTarget.PPSSPP:
+                    sizePrefix = "X"; // 32-bit memory access
+                    // Fix: Use the decimal representation of the mask for RA compatibility.
+                    pointerMask = "&33554431"; // This is decimal for 0x1FFFFFF
+                    break;
+
                 // For PS2, pointers are typically in the 0x00... range, so a standard
                 // 32-bit read ("X") is the correct and most useful default.
                 case EmulatorTarget.PCSX2:
@@ -66,22 +72,22 @@ namespace PointerFinder2.DataModels
 
             // 1. Base Address (indirect memory reference).
             string normalizedBaseAddress = manager.FormatDisplayAddress(this.BaseAddress);
-            // Append the mask to the base address.
-            sb.Append($"I:0x{sizePrefix}{normalizedBaseAddress}{pointerMask}");
+            // Fix: Pad to 8 characters with leading zeros and ensure lowercase for consistency.
+            sb.Append($"I:0x{sizePrefix}{normalizedBaseAddress.PadLeft(8, '0').ToLower()}{pointerMask}");
 
             // 2. Intermediate Pointer Offsets (all but the last one).
             for (int i = 0; i < Offsets.Count - 1; i++)
             {
-                string formattedOffset = $"{Math.Abs(Offsets[i]):x}";
-                // Append the mask to each intermediate pointer offset.
+                // Fix: Format offset to 8 hex characters (lowercase) with padding.
+                string formattedOffset = Math.Abs(Offsets[i]).ToString("x8");
                 sb.Append($"_I:0x{sizePrefix}{formattedOffset}{pointerMask}");
             }
 
             // 3. Final Offset (direct offset).
             if (Offsets.Any())
             {
-                string formattedLastOffset = $"{Math.Abs(Offsets.Last()):x}";
-                // The final offset does NOT get the mask.
+                // Fix: Format offset to 8 hex characters (lowercase) with padding.
+                string formattedLastOffset = Math.Abs(Offsets.Last()).ToString("x8");
                 sb.Append($"_0x{sizePrefix}{formattedLastOffset}");
             }
 

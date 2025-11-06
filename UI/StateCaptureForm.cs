@@ -38,6 +38,8 @@ namespace PointerFinder2
                 case EmulatorTarget.DuckStation: targetSystem = "PS1"; break;
                 case EmulatorTarget.RALibretroNDS: targetSystem = "NDS"; break;
                 case EmulatorTarget.Dolphin: targetSystem = "GC/Wii"; break;
+                // Fix: Added PPSSPP target system name.
+                case EmulatorTarget.PPSSPP: targetSystem = "PSP"; break;
                 default: targetSystem = "Mem"; break;
             }
             groupBoxRange.Text = $"Static Base Address Range ({targetSystem}, Hex)";
