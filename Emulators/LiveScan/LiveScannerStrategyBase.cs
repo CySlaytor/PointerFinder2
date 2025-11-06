@@ -145,7 +145,7 @@ namespace PointerFinder2.Emulators.LiveScan
                 var parallelOptions = new ParallelOptions { CancellationToken = _cancellationToken };
                 if (_params.LimitCpuUsage) parallelOptions.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
 
-                // Fix: Replaced the flawed offset-stepping loop with a correct address-stepping implementation.
+                // Replaced the flawed offset-stepping loop with a correct address-stepping implementation.
                 // This ensures that 16-byte alignment speeds up the scan by checking memory at aligned intervals,
                 // while still correctly calculating and finding pointers with unaligned offsets.
                 Parallel.ForEach(candidatesToProcess, parallelOptions, (candidate, loopState) =>

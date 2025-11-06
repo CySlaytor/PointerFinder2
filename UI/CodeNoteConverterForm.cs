@@ -18,7 +18,7 @@ namespace PointerFinder2.UI
         private static string _lastBaseAddress = "";
         private static int _lastPrefixIndex = 0;
         private static bool _lastUseMask = false;
-        // Fix: Added a static field to remember the description text during the session.
+        // Added a static field to remember the description text during the session.
         private static string _lastDescription = "";
 
         private List<int> _lastOffsets = new List<int>();
@@ -90,7 +90,7 @@ namespace PointerFinder2.UI
             txtBaseAddress.Text = _lastBaseAddress;
             comboPointerPrefix.SelectedIndex = _lastPrefixIndex;
             chkUseMask.Checked = _lastUseMask;
-            // Fix: Restore the last used description.
+            // Restore the last used description.
             txtDescription.Text = _lastDescription;
 
             // Apply intelligent defaults if an emulator is attached
@@ -123,7 +123,7 @@ namespace PointerFinder2.UI
             _lastBaseAddress = txtBaseAddress.Text;
             _lastPrefixIndex = comboPointerPrefix.SelectedIndex;
             _lastUseMask = chkUseMask.Checked;
-            // Fix: Save the current description text for the session.
+            // Save the current description text for the session.
             _lastDescription = txtDescription.Text;
         }
 
@@ -184,7 +184,7 @@ namespace PointerFinder2.UI
 
             _lastOffsets = offsets;
             comboMemorySize.Text = parsedSize ?? "N/A";
-            // Fix: Do not clear the description, allowing the user to reuse or edit it.
+            // Do not clear the description, allowing the user to reuse or edit it.
 
             UpdateNotePreview();
         }

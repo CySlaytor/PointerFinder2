@@ -16,6 +16,7 @@ namespace PointerFinder2
     {
         private readonly IEmulatorManager _manager;
         private readonly AppSettings _currentSettings;
+        private readonly AppSettings _defaultSettings;
         private readonly ScanState[] _capturedStates;
         private int _lastCapturedSlotIndex = -1;
 
@@ -25,6 +26,7 @@ namespace PointerFinder2
             _manager = manager;
             _currentSettings = settings;
             _capturedStates = capturedStates; // Keep a reference to MainForm's array
+            _defaultSettings = manager.GetDefaultSettings();
         }
 
         private void StateCaptureForm_Load(object sender, EventArgs e)
@@ -38,7 +40,6 @@ namespace PointerFinder2
                 case EmulatorTarget.DuckStation: targetSystem = "PS1"; break;
                 case EmulatorTarget.RALibretroNDS: targetSystem = "NDS"; break;
                 case EmulatorTarget.Dolphin: targetSystem = "GC/Wii"; break;
-                // Fix: Added PPSSPP target system name.
                 case EmulatorTarget.PPSSPP: targetSystem = "PSP"; break;
                 default: targetSystem = "Mem"; break;
             }
@@ -52,7 +53,6 @@ namespace PointerFinder2
             txtStaticStart.Text = _currentSettings.StaticAddressStart;
             txtStaticEnd.Text = _currentSettings.StaticAddressEnd;
             chkStopOnFirst.Checked = _currentSettings.StopOnFirstPathFound;
-            // Load the new FindAllPathLevels setting.
             chkFindAllLevels.Checked = _currentSettings.FindAllPathLevels;
             numCandidatesPerLevel.Value = _currentSettings.CandidatesPerLevel;
 
@@ -254,7 +254,6 @@ namespace PointerFinder2
                     MaxCandidates = (int)numMaxCandidates.Value,
                     Use16ByteAlignment = false, // Hardcoded to false for this algorithm for maximum accuracy.
                     StopOnFirstPathFound = chkStopOnFirst.Checked,
-                    // Pass the new FindAllPathLevels setting to the scan parameters.
                     FindAllPathLevels = chkFindAllLevels.Checked,
                     LimitCpuUsage = GlobalSettings.LimitCpuUsage,
                     CandidatesPerLevel = (int)numCandidatesPerLevel.Value,
@@ -292,10 +291,10 @@ namespace PointerFinder2
             }
         }
 
-        // Added a helper method to sanitize hex strings by removing non-hex characters and converting to uppercase.
+        // Updated sanitization to also remove leading zeros.
         private string SanitizeHexInput(string input)
         {
-            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            if (string.IsNullOrWhiteSpace(input)) return "0";
             var sb = new StringBuilder();
             foreach (char c in input.ToUpperInvariant())
             {
@@ -304,7 +303,9 @@ namespace PointerFinder2
                     sb.Append(c);
                 }
             }
-            return sb.ToString();
+
+            string result = sb.ToString().TrimStart('0');
+            return string.IsNullOrEmpty(result) ? "0" : result;
         }
 
         // Added a shared event handler to apply sanitization when a hex textbox loses focus.
@@ -314,6 +315,12 @@ namespace PointerFinder2
             {
                 tb.Text = SanitizeHexInput(tb.Text);
             }
+        }
+
+        private void btnResetRange_Click(object sender, EventArgs e)
+        {
+            txtStaticStart.Text = _defaultSettings.StaticAddressStart;
+            txtStaticEnd.Text = _defaultSettings.StaticAddressEnd;
         }
     }
 }

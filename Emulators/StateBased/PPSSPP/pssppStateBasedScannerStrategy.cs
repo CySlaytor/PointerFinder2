@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace PointerFinder2.Emulators.StateBased.PPSSPP
 {
-    // Fix: Added new state-based scan strategy for PPSSPP.
+    // Added new state-based scan strategy for PPSSPP.
     public class PpssppStateBasedScannerStrategy : StateBasedScannerStrategyBase
     {
         protected override Task BuildPointerMapAsync(ScanState state, CancellationToken token)

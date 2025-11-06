@@ -118,7 +118,7 @@ namespace PointerFinder2.UI.StaticRangeFinders
             // --- Result Calculation ---
             const uint MB_BLOCK_SIZE = 0x100000;
 
-            // Fix: Replaced the flawed heuristic. The correct logic for PSP is to simply find the 1MB block
+            // Replaced the flawed heuristic. The correct logic for PSP is to simply find the 1MB block
             // that contains the final marker address.
             uint approxStartAddr = (absoluteEndAddr / MB_BLOCK_SIZE) * MB_BLOCK_SIZE;
             uint approxEndAddr = approxStartAddr + MB_BLOCK_SIZE - 1;

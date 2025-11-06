@@ -57,7 +57,6 @@ namespace PointerFinder2
             label1.Text = $"Target Address ({targetSystem}, Hex)";
             groupBoxRange.Text = $"Static Base Address Range ({targetSystem}, Hex)";
 
-            // Fix: Show alignment options for supported systems (PCSX2, PPSSPP).
             bool supportsAlignment = (_target == EmulatorTarget.PCSX2 || _target == EmulatorTarget.PPSSPP);
             chkUse16ByteAlignment.Visible = supportsAlignment;
 
@@ -72,7 +71,6 @@ namespace PointerFinder2
             chkScanForStructureBase.Checked = _currentSettings.ScanForStructureBase;
             txtMaxNegativeOffset.Text = _currentSettings.MaxNegativeOffset.ToString("X");
             txtMaxNegativeOffset.Enabled = chkScanForStructureBase.Checked;
-            // Fix: Populate alignment-specific controls
             if (supportsAlignment)
             {
                 chkUse16ByteAlignment.Checked = _currentSettings.Use16ByteAlignment;
@@ -125,7 +123,7 @@ namespace PointerFinder2
                 txtMaxOffset.Text = SanitizeHexInput(txtMaxOffset.Text);
                 txtStaticStart.Text = SanitizeHexInput(txtStaticStart.Text);
                 txtStaticEnd.Text = SanitizeHexInput(txtStaticEnd.Text);
-                txtMaxNegativeOffset.Text = SanitizeHexInput(txtMaxNegativeOffset.Text);
+                txtMaxNegativeOffset.Text = SanitizeHexInput(txtMaxNegativeOffset.Text, 4095);
 
 
                 // This correctly uses the manager's UnnormalizeAddress to handle all cases.
@@ -199,7 +197,7 @@ namespace PointerFinder2
             settings.StaticAddressEnd = SanitizeHexInput(txtStaticEnd.Text);
             settings.UseSliderRange = chkUseSliderRange.Checked;
             settings.ScanForStructureBase = chkScanForStructureBase.Checked;
-            settings.MaxNegativeOffset = int.Parse(SanitizeHexInput(txtMaxNegativeOffset.Text), NumberStyles.HexNumber);
+            settings.MaxNegativeOffset = int.Parse(SanitizeHexInput(txtMaxNegativeOffset.Text, 4095), NumberStyles.HexNumber);
             settings.Use16ByteAlignment = chkUse16ByteAlignment.Checked;
         }
 
@@ -317,10 +315,9 @@ namespace PointerFinder2
             }
         }
 
-        // Added a helper method to sanitize hex strings by removing non-hex characters and converting to uppercase.
         private string SanitizeHexInput(string input)
         {
-            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            if (string.IsNullOrWhiteSpace(input)) return "0";
             var sb = new StringBuilder();
             foreach (char c in input.ToUpperInvariant())
             {
@@ -329,7 +326,22 @@ namespace PointerFinder2
                     sb.Append(c);
                 }
             }
-            return sb.ToString();
+
+            string result = sb.ToString().TrimStart('0');
+            return string.IsNullOrEmpty(result) ? "0" : result;
+        }
+
+        private string SanitizeHexInput(string input, int maxValue)
+        {
+            string sanitized = SanitizeHexInput(input);
+            if (int.TryParse(sanitized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int value))
+            {
+                if (value > maxValue)
+                {
+                    return maxValue.ToString("X");
+                }
+            }
+            return sanitized;
         }
 
         // Added a shared event handler to apply sanitization when a hex textbox loses focus.
@@ -337,8 +349,21 @@ namespace PointerFinder2
         {
             if (sender is TextBox tb)
             {
-                tb.Text = SanitizeHexInput(tb.Text);
+                if (tb == txtMaxNegativeOffset)
+                {
+                    tb.Text = SanitizeHexInput(tb.Text, 4095);
+                }
+                else
+                {
+                    tb.Text = SanitizeHexInput(tb.Text);
+                }
             }
+        }
+
+        private void btnResetRange_Click(object sender, EventArgs e)
+        {
+            txtStaticStart.Text = _defaultSettings.StaticAddressStart;
+            txtStaticEnd.Text = _defaultSettings.StaticAddressEnd;
         }
     }
 }

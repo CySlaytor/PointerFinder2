@@ -34,7 +34,6 @@ namespace PointerFinder2.DataModels
             // Determine the correct memory access size prefix based on the emulator target.
             // This provides a much smarter default for the user.
             string sizePrefix;
-            // Added a mask variable to hold the system-specific mask string.
             string pointerMask = "";
 
             // Find the profile for the current manager to get its target type.
@@ -42,53 +41,70 @@ namespace PointerFinder2.DataModels
 
             switch (profile?.Target)
             {
-                // For PS1 and NDS, default to 24-bit ("W") to automatically handle memory regions
-                // like 0x80... (PS1) and 0x02... (NDS) without needing manual masking.
                 case EmulatorTarget.DuckStation:
                 case EmulatorTarget.RALibretroNDS:
                     sizePrefix = "W"; // 24-bit memory access
                     break;
 
-                // Added Dolphin support, using "G" for 32-bit Big-Endian reads as requested.
                 case EmulatorTarget.Dolphin:
                     sizePrefix = "G"; // 32-bit Big-Endian memory access
-                    // Set the mask specifically for Dolphin.
                     pointerMask = "&536870911"; // This is 0x1FFFFFFF
                     break;
 
                 case EmulatorTarget.PPSSPP:
                     sizePrefix = "X"; // 32-bit memory access
-                    // Fix: Use the decimal representation of the mask for RA compatibility.
                     pointerMask = "&33554431"; // This is decimal for 0x1FFFFFF
                     break;
-
-                // For PS2, pointers are typically in the 0x00... range, so a standard
-                // 32-bit read ("X") is the correct and most useful default.
                 case EmulatorTarget.PCSX2:
-                default: // Default to 32-bit for any other or future systems.
+                default:
                     sizePrefix = "X"; // 32-bit memory access
                     break;
             }
 
             // 1. Base Address (indirect memory reference).
             string normalizedBaseAddress = manager.FormatDisplayAddress(this.BaseAddress);
-            // Fix: Pad to 8 characters with leading zeros and ensure lowercase for consistency.
             sb.Append($"I:0x{sizePrefix}{normalizedBaseAddress.PadLeft(8, '0').ToLower()}{pointerMask}");
 
             // 2. Intermediate Pointer Offsets (all but the last one).
             for (int i = 0; i < Offsets.Count - 1; i++)
             {
-                // Fix: Format offset to 8 hex characters (lowercase) with padding.
-                string formattedOffset = Math.Abs(Offsets[i]).ToString("x8");
-                sb.Append($"_I:0x{sizePrefix}{formattedOffset}{pointerMask}");
+                int offset = Offsets[i];
+                // Correctly handle negative offsets for intermediate pointers by subtracting from the previous value.
+                if (offset < 0)
+                {
+                    // For RA triggers, subtraction is represented by adding the two's complement, which is what happens with integer overflow.
+                    // However, a simpler representation is `p(address) - value`.
+                    // The most compatible way is to use a `Mem` address for the previous pointer and subtract.
+                    // Since that's complex to build dynamically, we use addition with the large overflowed value.
+                    // `ptr + (uint)negative_offset` correctly calculates `ptr - abs(negative_offset)`.
+                    string formattedOffset = ((uint)offset).ToString("x8");
+                    sb.Append($"_I:0x{sizePrefix}{formattedOffset}{pointerMask}");
+                }
+                else
+                {
+                    string formattedOffset = Math.Abs(offset).ToString("x8");
+                    sb.Append($"_I:0x{sizePrefix}{formattedOffset}{pointerMask}");
+                }
             }
 
             // 3. Final Offset (direct offset).
             if (Offsets.Any())
             {
-                // Fix: Format offset to 8 hex characters (lowercase) with padding.
-                string formattedLastOffset = Math.Abs(Offsets.Last()).ToString("x8");
-                sb.Append($"_0x{sizePrefix}{formattedLastOffset}");
+                int lastOffset = Offsets.Last();
+                // Correctly handle negative offsets for the final direct memory access.
+                if (lastOffset < 0)
+                {
+                    // This creates a subtraction from the last pointer's value. e.g., `p(0x..)-0xC`
+                    // This is not directly supported in one go in RA. The logic needs to be expressed differently.
+                    // The standard way is to add the two's complement.
+                    string formattedLastOffset = ((uint)lastOffset).ToString("x8");
+                    sb.Append($"_0x{sizePrefix}{formattedLastOffset}");
+                }
+                else
+                {
+                    string formattedLastOffset = Math.Abs(lastOffset).ToString("x8");
+                    sb.Append($"_0x{sizePrefix}{formattedLastOffset}");
+                }
             }
 
             // 4. Add a default trigger condition.
@@ -96,6 +112,7 @@ namespace PointerFinder2.DataModels
 
             return sb.ToString();
         }
+
 
         #region IEquatable Implementation
         // Determines if this PointerPath is equal to another one.

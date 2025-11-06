@@ -89,7 +89,7 @@ namespace PointerFinder2.UI
                 // 2. Recursively merge nodes with identical content.
                 var mergedTree = MergeTree(parsedTree);
 
-                // Fix: Sort root nodes. Headers and non-offset lines come first, followed by
+                // Sort root nodes. Headers and non-offset lines come first, followed by
                 // offset-based lines sorted numerically.
                 var offsetRegex = new Regex(@"^[\+\-]0x([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
                 mergedTree = mergedTree.OrderBy(node => offsetRegex.IsMatch(node.Content) ? 1 : 0)
@@ -201,7 +201,7 @@ namespace PointerFinder2.UI
             return rootNodes;
         }
 
-        // Fix: This method has been completely refactored to normalize keys for merging,
+        // This method has been completely refactored to normalize keys for merging,
         // preserve descriptions, and produce consistent output formatting.
         private List<CodeNoteNode> MergeTree(List<CodeNoteNode> nodes)
         {

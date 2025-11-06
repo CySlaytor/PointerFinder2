@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace PointerFinder2.Emulators.LiveScan.PPSSPP
 {
-    // Fix: Added new live scan strategy for PPSSPP.
+    // Added new live scan strategy for PPSSPP.
     public class PpssppLiveScannerStrategy : LiveScannerStrategyBase
     {
         protected override Task BuildPointerMapAsync()

@@ -6,10 +6,9 @@ using PointerFinder2.Emulators.StateBased.DuckStation;
 using PointerFinder2.Emulators.StateBased.PCSX2;
 using PointerFinder2.Emulators.StateBased.RALibretro;
 using System.Collections.Generic;
-// Added using statements for the new Dolphin scanner strategies.
 using PointerFinder2.Emulators.LiveScan.Dolphin;
 using PointerFinder2.Emulators.StateBased.Dolphin;
-// Fix: Added using statements for the new PPSSPP scanner strategies.
+// Added using statements for the new PPSSPP scanner strategies.
 using PointerFinder2.Emulators.LiveScan.PPSSPP;
 using PointerFinder2.Emulators.StateBased.PPSSPP;
 
@@ -60,7 +59,7 @@ namespace PointerFinder2.Emulators
                 ScannerFactory = () => new DolphinLiveScannerStrategy(),
                 StateBasedScannerFactory = () => new DolphinStateBasedScannerStrategy()
             },
-            // Fix: Added the new profile for PPSSPP.
+            // Added the new profile for PPSSPP.
             new EmulatorProfile
             {
                 Name = "PPSSPP",

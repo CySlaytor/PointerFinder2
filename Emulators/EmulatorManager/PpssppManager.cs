@@ -211,7 +211,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
 
         public AppSettings GetDefaultSettings()
         {
-            // Fix: Adjusted the default static range for PPSSPP.
+            // Adjusted the default static range for PPSSPP.
             return new AppSettings
             {
                 StaticAddressStart = "800000",
