@@ -33,7 +33,8 @@ namespace PointerFinder2
         private IEmulatorManager _currentManager;
         private AppSettings _currentSettings;
         private EmulatorProfile _activeProfile;
-        private readonly ScanState[] _multiStateCaptures = new ScanState[4];
+        // Replaced the raw ScanState array with an encapsulated manager class.
+        private readonly MultiScanState _multiScanState = new MultiScanState();
         private int _lastFoundCount = 0;
         private string _currentSearchTerm = string.Empty;
 
@@ -158,11 +159,8 @@ namespace PointerFinder2
             _lifecycleManager.SetCurrentManager(null);
             _resultsManager.ClearHistory();
             _resultsManager.ClearResults();
-
-            for (int i = 0; i < _multiStateCaptures.Length; i++)
-            {
-                _multiStateCaptures[i] = null;
-            }
+            // Use the new manager class to clear the state.
+            _multiScanState.ClearAll();
             SetUIStateDetached();
         }
 
@@ -263,6 +261,7 @@ namespace PointerFinder2
             }
 
             _resultsManager.SetNewResults(sessionData.Results, true);
+            _scanCoordinator.LastScanParams = sessionData.LastScanParameters;
 
             if (profile != null && sessionData.ProcessId != -1)
             {
@@ -301,11 +300,10 @@ namespace PointerFinder2
         private void debugOptionsToolStripMenuItem_Click(object sender, EventArgs e) { new SettingsForm(this).ShowDialog(this); }
         private void toolsToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
         {
-            bool isSupported = _activeProfile?.Target == EmulatorTarget.PCSX2 ||
-                               _activeProfile?.Target == EmulatorTarget.RALibretroNDS ||
-                               _activeProfile?.Target == EmulatorTarget.Dolphin ||
-                               _activeProfile?.Target == EmulatorTarget.PPSSPP;
-            staticRangeFinderToolStripMenuItem.Enabled = _currentManager != null && _currentManager.IsAttached && isSupported && (_staticRangeFinderInstance == null || _staticRangeFinderInstance.IsDisposed);
+            bool isAttached = _currentManager != null && _currentManager.IsAttached;
+            bool isStaticFinderSupported = _activeProfile?.SupportsStaticRangeFinder ?? false;
+
+            staticRangeFinderToolStripMenuItem.Enabled = isAttached && isStaticFinderSupported && (_staticRangeFinderInstance == null || _staticRangeFinderInstance.IsDisposed);
             codeNoteConverterToolStripMenuItem.Enabled = (_codeNoteConverterInstance == null || _codeNoteConverterInstance.IsDisposed);
             codeNoteHierarchyFixerToolStripMenuItem.Enabled = (_codeNoteHierarchyFixerInstance == null || _codeNoteHierarchyFixerInstance.IsDisposed);
         }
@@ -313,11 +311,9 @@ namespace PointerFinder2
         private void staticRangeFinderToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (_staticRangeFinderInstance != null && !_staticRangeFinderInstance.IsDisposed) return;
-            Form finderForm = null;
-            if (_activeProfile.Target == EmulatorTarget.PCSX2) finderForm = new Pcsx2RamScanRangeFinderForm(_currentManager);
-            else if (_activeProfile.Target == EmulatorTarget.RALibretroNDS) finderForm = new NdsStaticRangeFinderForm(_currentManager);
-            else if (_activeProfile.Target == EmulatorTarget.Dolphin) finderForm = new DolphinFileRangeFinderForm(_currentManager);
-            else if (_activeProfile.Target == EmulatorTarget.PPSSPP) finderForm = new PpssppRamScanRangeFinderForm(_currentManager);
+            if (_activeProfile?.StaticRangeFinderFactory == null) return;
+
+            Form finderForm = _activeProfile.StaticRangeFinderFactory(_currentManager);
 
             if (finderForm != null)
             {
@@ -406,7 +402,8 @@ namespace PointerFinder2
         {
             if (_scanCoordinator.IsBusy || _activeProfile == null || !_currentManager.IsAttached) return;
 
-            using (var optionsForm = new StateCaptureForm(_currentManager, _currentSettings, _multiStateCaptures))
+            // Pass the encapsulated state manager to the form instead of a raw array.
+            using (var optionsForm = new StateCaptureForm(_currentManager, _currentSettings, _multiScanState))
             {
                 if (optionsForm.ShowDialog() == DialogResult.OK)
                 {
@@ -491,7 +488,6 @@ namespace PointerFinder2
                 if (!e.Results.Any())
                 {
                     UpdateStatus($"Scan complete. No paths found {FormatDuration(e.Duration)}.");
-                    // Play the correct sound for a failed refine scan.
                     if (e.IsRefineScan) SoundManager.PlayFail();
                     else SoundManager.PlayNotify();
                 }
@@ -502,7 +498,6 @@ namespace PointerFinder2
                         : $"Scan complete. Found {e.Results.Count:N0} paths {FormatDuration(e.Duration)}.";
                     UpdateStatus(message);
 
-                    // Play the correct sound based on the scan type and success.
                     if (e.IsRefineScan || e.IsStateScan)
                     {
                         SoundManager.PlaySuccess();
@@ -535,7 +530,7 @@ namespace PointerFinder2
             if (InvokeRequired) { Invoke((Action)(() => OnResultsChanged(sender, e))); return; }
             PopulateResultsGrid(_resultsManager.CurrentResults, e.IsNewDataSet);
             UpdateStatus($"{_resultsManager.ResultsCount:N0} results.");
-            SwitchToScanUI(false); // Refreshes button states
+            SwitchToScanUI(false);
         }
 
         private void OnSortChanged(object sender, SortChangedEventArgs e)
@@ -647,7 +642,6 @@ namespace PointerFinder2
             lblProgressPercentage.Visible = scanningOrFilteringActive;
             lblResultCount.Visible = !scanningOrFilteringActive && hasResults;
             lblElapsedTime.Visible = scanningOrFilteringActive;
-            dgvResults.Enabled = !scanningOrFilteringActive;
 
             if (scanningOrFilteringActive)
             {
@@ -765,7 +759,7 @@ namespace PointerFinder2
         #endregion
 
         #region Context Menu Handlers
-        public void RestartApplication() => _lifecycleManager.RestartApplication();
+        public void RestartApplication() => _lifecycleManager.RestartApplication(_activeProfile);
         public void PurgeMemory() => _lifecycleManager.PurgeMemory();
         private void videoTutorialToolStripMenuItem_Click(object sender, EventArgs e)
         {

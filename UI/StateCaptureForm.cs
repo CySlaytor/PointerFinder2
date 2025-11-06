@@ -17,15 +17,16 @@ namespace PointerFinder2
         private readonly IEmulatorManager _manager;
         private readonly AppSettings _currentSettings;
         private readonly AppSettings _defaultSettings;
-        private readonly ScanState[] _capturedStates;
-        private int _lastCapturedSlotIndex = -1;
+        // Changed the field to use the new encapsulated manager class.
+        private readonly MultiScanState _multiScanState;
 
-        public StateCaptureForm(IEmulatorManager manager, AppSettings settings, ScanState[] capturedStates)
+        // Updated the constructor to accept the new manager class.
+        public StateCaptureForm(IEmulatorManager manager, AppSettings settings, MultiScanState multiScanState)
         {
             InitializeComponent();
             _manager = manager;
             _currentSettings = settings;
-            _capturedStates = capturedStates; // Keep a reference to MainForm's array
+            _multiScanState = multiScanState;
             _defaultSettings = manager.GetDefaultSettings();
         }
 
@@ -59,7 +60,7 @@ namespace PointerFinder2
             // NOTE: 16-byte alignment checkbox is intentionally removed from this form,
             // as the state-based algorithm always uses a 4-byte search for maximum accuracy.
 
-            // Initialize Grid from persistent state and find last captured slot
+            // Initialize the grid from the encapsulated manager class.
             for (int i = 0; i < 4; i++)
             {
                 string address = "";
@@ -67,14 +68,14 @@ namespace PointerFinder2
                 string action = "Capture";
                 Color statusColor = SystemColors.WindowText;
 
-                if (_capturedStates[i] != null)
+                ScanState currentState = _multiScanState[i];
+                if (currentState != null)
                 {
                     // Display the full, absolute address to avoid confusion.
-                    address = _capturedStates[i].TargetAddress.ToString("X8");
+                    address = currentState.TargetAddress.ToString("X8");
                     status = "Captured";
                     action = "Release";
                     statusColor = Color.Green;
-                    _lastCapturedSlotIndex = i; // Track the last valid slot
                 }
 
                 dgvStates.Rows.Add($"State {i + 1}", address, status, action);
@@ -104,25 +105,12 @@ namespace PointerFinder2
 
             if (actionCell.Value.ToString() == "Release")
             {
-                _capturedStates[e.RowIndex] = null;
+                // Use the manager method to release the state.
+                _multiScanState.ReleaseState(e.RowIndex);
                 statusCell.Value = "Empty";
                 statusCell.Style.ForeColor = SystemColors.WindowText;
                 actionCell.Value = "Capture";
                 addressCell.Value = "";
-
-                // If we just released the last captured slot, find the new last one.
-                if (e.RowIndex == _lastCapturedSlotIndex)
-                {
-                    _lastCapturedSlotIndex = -1; // Reset
-                    for (int i = _capturedStates.Length - 1; i >= 0; i--)
-                    {
-                        if (_capturedStates[i] != null)
-                        {
-                            _lastCapturedSlotIndex = i;
-                            break;
-                        }
-                    }
-                }
                 UpdateScanButtonState();
                 return;
             }
@@ -187,41 +175,42 @@ namespace PointerFinder2
                 return;
             }
 
-            _capturedStates[e.RowIndex] = new ScanState
+            // Use the manager method to capture the new state.
+            _multiScanState.CaptureState(e.RowIndex, new ScanState
             {
                 MemoryDump = memoryDump,
                 TargetAddress = targetAddress
-            };
+            });
 
             // Display the full, absolute address after capture for clarity.
             addressCell.Value = targetAddress.ToString("X8");
             statusCell.Value = "Captured";
             statusCell.Style.ForeColor = Color.Green;
             actionCell.Value = "Release";
-            _lastCapturedSlotIndex = e.RowIndex; // This is now the last captured slot.
 
             UpdateScanButtonState();
         }
 
         private void btnClearAll_Click(object sender, EventArgs e)
         {
+            // Use the manager method to clear all states.
+            _multiScanState.ClearAll();
+
             for (int i = 0; i < 4; i++)
             {
-                _capturedStates[i] = null;
                 var row = dgvStates.Rows[i];
                 row.Cells["colAddress"].Value = "";
                 row.Cells["colStatus"].Value = "Empty";
                 row.Cells["colStatus"].Style.ForeColor = SystemColors.WindowText;
                 (row.Cells["colAction"] as DataGridViewButtonCell).Value = "Capture";
             }
-            _lastCapturedSlotIndex = -1; // Reset last captured state memory.
             UpdateScanButtonState();
         }
 
         private void UpdateScanButtonState()
         {
-            int capturedCount = _capturedStates.Count(s => s != null);
-            btnScan.Enabled = capturedCount >= 2;
+            // Use the manager's property to check the count.
+            btnScan.Enabled = _multiScanState.CapturedCount >= 2;
         }
 
         public ScanParameters GetScanParameters()
@@ -233,16 +222,17 @@ namespace PointerFinder2
                 txtStaticStart.Text = SanitizeHexInput(txtStaticStart.Text);
                 txtStaticEnd.Text = SanitizeHexInput(txtStaticEnd.Text);
 
-                uint finalTarget;
-                if (_lastCapturedSlotIndex != -1 && _capturedStates[_lastCapturedSlotIndex] != null)
+                uint finalTarget = 0;
+                // Get the final target address safely from the manager.
+                int lastIndex = _multiScanState.LastCapturedSlotIndex;
+                if (lastIndex != -1)
                 {
-                    finalTarget = _capturedStates[_lastCapturedSlotIndex].TargetAddress;
+                    finalTarget = _multiScanState[lastIndex].TargetAddress;
                 }
                 else
                 {
-                    // Fallback to the first valid state if the last one isn't available for some reason.
-                    var firstState = _capturedStates.FirstOrDefault(s => s != null);
-                    finalTarget = firstState?.TargetAddress ?? 0;
+                    // Fallback to the first valid state if the last one isn't available.
+                    finalTarget = _multiScanState.GetCapturedStates().FirstOrDefault()?.TargetAddress ?? 0;
                 }
 
                 return new ScanParameters
@@ -258,7 +248,8 @@ namespace PointerFinder2
                     LimitCpuUsage = GlobalSettings.LimitCpuUsage,
                     CandidatesPerLevel = (int)numCandidatesPerLevel.Value,
                     FinalAddressTarget = finalTarget,
-                    CapturedStates = _capturedStates.Where(s => s != null).ToList()
+                    // Get the list of captured states from the manager.
+                    CapturedStates = _multiScanState.GetCapturedStates()
                 };
             }
             catch (Exception ex)

@@ -78,19 +78,15 @@ namespace PointerFinder2.Core
             return (pidToAutoAttach, targetToAutoAttach);
         }
 
-        public void RestartApplication()
+        // Changed method to accept the active EmulatorProfile, removing the need for reflection.
+        public void RestartApplication(EmulatorProfile activeProfile)
         {
             try
             {
                 var args = new List<string> { "/restart" };
-                if (_currentManager != null && _currentManager.IsAttached)
+                if (activeProfile != null && _currentManager != null && _currentManager.IsAttached)
                 {
-                    // Correctly get the target from the active profile, not the manager type name.
-                    var profile = EmulatorProfileRegistry.Profiles.FirstOrDefault(p => p.ManagerFactory().GetType() == _currentManager.GetType());
-                    if (profile != null)
-                    {
-                        args.Add($"/target:{profile.Target}");
-                    }
+                    args.Add($"/target:{activeProfile.Target}");
                     args.Add($"/pid:{_currentManager.EmulatorProcess.Id}");
                 }
 

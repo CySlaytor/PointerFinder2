@@ -26,7 +26,8 @@ namespace PointerFinder2.Core
         private readonly Stopwatch _operationStopwatch = new Stopwatch();
 
         public bool IsBusy => _operationCts != null && !_operationCts.IsCancellationRequested;
-        public ScanParameters LastScanParams { get; private set; }
+        // Change LastScanParams to be public set so MainForm can update it from loaded sessions.
+        public ScanParameters LastScanParams { get; set; }
 
         public async Task StartScan(IEmulatorManager manager, IPointerScannerStrategy scanner, ScanParameters parameters, bool isRefine, HashSet<PointerPath> existingPaths = null)
         {
@@ -74,11 +75,11 @@ namespace PointerFinder2.Core
             finally
             {
                 _operationStopwatch.Stop();
+                // Removed the unused 'stoppedByMemoryMonitor' parameter from the event args.
                 var eventArgs = new ScanCompletedEventArgs(
                     results,
                     _operationStopwatch.Elapsed,
                     wasCancelled || (_operationCts?.IsCancellationRequested ?? false),
-                    false, // Placeholder for memory monitor feature if re-added
                     scanner is StateBasedScannerStrategyBase,
                     isRefine
                 );
@@ -109,9 +110,6 @@ namespace PointerFinder2.Core
             }
             finally
             {
-                // The final list of results is correctly captured from the state of the ConcurrentBag
-                // at the end of the operation. This ensures that if the bag is empty (e.g., after a save state load),
-                // an empty list is sent back to the UI, correctly clearing the grid.
                 finalResults = validFilteredPaths.ToList();
                 FilterCompleted?.Invoke(finalResults);
 
@@ -145,9 +143,6 @@ namespace PointerFinder2.Core
 
                 if (token.IsCancellationRequested) break;
 
-                // This is the swap-buffer pattern. The `validPaths` variable, which is scoped to the parent `StartFiltering`
-                // method, is updated to point to the newly validated list. The original list is then cleared.
-                // This is crucial for the `finally` block to have the correct final list of results.
                 validPaths.Clear();
                 pathsToProcess = validatedPaths;
                 foreach (var path in pathsToProcess)
@@ -194,16 +189,15 @@ namespace PointerFinder2.Core
         public List<PointerPath> Results { get; }
         public TimeSpan Duration { get; }
         public bool WasCancelled { get; }
-        public bool StoppedByMemoryMonitor { get; }
+        // Removed the unused 'StoppedByMemoryMonitor' property.
         public bool IsStateScan { get; }
         public bool IsRefineScan { get; }
 
-        public ScanCompletedEventArgs(List<PointerPath> results, TimeSpan duration, bool wasCancelled, bool stoppedByMemoryMonitor, bool isStateScan, bool isRefineScan)
+        public ScanCompletedEventArgs(List<PointerPath> results, TimeSpan duration, bool wasCancelled, bool isStateScan, bool isRefineScan)
         {
             Results = results;
             Duration = duration;
             WasCancelled = wasCancelled;
-            StoppedByMemoryMonitor = stoppedByMemoryMonitor;
             IsStateScan = isStateScan;
             IsRefineScan = isRefineScan;
         }
