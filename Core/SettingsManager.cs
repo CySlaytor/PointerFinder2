@@ -1,4 +1,5 @@
-﻿using PointerFinder2.DataModels;
+﻿#nullable enable
+using PointerFinder2.DataModels;
 using PointerFinder2.Emulators;
 using System;
 using System.IO;

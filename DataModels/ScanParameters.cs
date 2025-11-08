@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿#nullable enable
+using System.Collections.Generic;
 
 namespace PointerFinder2.DataModels
 {
@@ -40,6 +41,6 @@ namespace PointerFinder2.DataModels
         // The address to use for the final 'FinalAddress' column in the results grid.
         public uint FinalAddressTarget { get; set; }
         // A list containing all the captured memory states for multi-state comparison.
-        public List<ScanState> CapturedStates { get; set; }
+        public List<ScanState>? CapturedStates { get; set; }
     }
 }

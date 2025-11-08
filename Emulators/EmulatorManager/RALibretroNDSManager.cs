@@ -1,8 +1,10 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.DataModels;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace PointerFinder2.Emulators.EmulatorManager
 {
@@ -16,16 +18,59 @@ namespace PointerFinder2.Emulators.EmulatorManager
         public const uint NDS_STATIC_START = 0x00100000;
         public const uint NDS_STATIC_END = 0x003FFFFF + 1;
 
-        // FRAGILE: This hardcoded offset is the weakest point in the attachment process for this emulator.
-        // It points to a location within RALibretro.exe that contains a pointer to the emulated NDS RAM.
-        // If RALibretro is updated, this offset will likely change, breaking attachment.
-        // TODO: Replace this with a more robust signature scan (AOB scan) to find this pointer dynamically,
-        // similar to how the Dolphin manager works. This would make the tool version-independent.
-        private const int RAM_POINTER_OFFSET = 0x212D30;
-        private readonly string[] SUPPORTED_CORES = { "desmume_libretro.dll", "melondsds_libretro.dll" };
+        // Replaced fragile hardcoded offset with a robust signature scanning method.
+        #region WinAPI
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern nint OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(nint hObject);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern int VirtualQueryEx(nint hProcess, nint lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, uint dwLength);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MEMORY_BASIC_INFORMATION
+        {
+            public nint BaseAddress;
+            public nint AllocationBase;
+            public uint AllocationProtect;
+            public ushort PartitionId;
+            public nint RegionSize;
+            public uint State;
+            public uint Protect;
+            public uint Type;
+        }
+        #endregion
+
+        #region Constants
+        private const int PROCESS_QUERY_INFORMATION = 0x0400;
+        private const int PROCESS_VM_READ = 0x0010;
+        private const int PROCESS_VM_WRITE = 0x0020;
+        private const int PROCESS_VM_OPERATION = 0x0008;
+        private const int ALL_ACCESS = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION;
+        private const uint MEM_COMMIT = 0x1000;
+        #endregion
+
+        // Added a struct to define core-specific memory signatures.
+        private struct CoreProfile
+        {
+            public string Name;
+            public long SearchSize;
+            public int Offset;
+        }
+
+        private static readonly CoreProfile[] CoreProfiles =
+        {
+            new CoreProfile { Name = "DeSmuME", SearchSize = 4456448, Offset = 0x112BF40 },
+            new CoreProfile { Name = "melonDS", SearchSize = 17760256, Offset = 0x0 }
+        };
+        private string _foundCoreName = "Unknown";
+
 
         #region Interface Implementation
-        public string EmulatorName => "RALibretro (NDS)";
+        // Updated EmulatorName to be dynamic based on the detected core.
+        public string EmulatorName => $"RALibretro (NDS - {_foundCoreName})";
         public uint MainMemoryStart => NDS_RAM_START;
         public uint MainMemorySize => 4 * 1024 * 1024; // 4MB
         public string RetroAchievementsPrefix => "D";
@@ -35,61 +80,63 @@ namespace PointerFinder2.Emulators.EmulatorManager
         public nint MemoryBasePC { get; private set; } = IntPtr.Zero;
         private nint NdsMemoryBaseInPC { get; set; } = IntPtr.Zero;
 
-        // Attaches by finding the loaded NDS core and then reading a pointer at a hardcoded offset.
+        // Rewrote the Attach method to use memory scanning instead of a hardcoded offset.
         public bool Attach(Process process)
         {
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
+            logger.Log($"[{EmulatorName}] Attempting to attach...");
 
             EmulatorProcess = process;
 
             if (EmulatorProcess?.MainModule == null)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
+                logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
                 return false;
             }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
+            logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
             if (!Environment.Is64BitProcess)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: This tool must be built for x64 to attach to RALibretro.");
+                logger.Log($"[{EmulatorName}] FAILURE: This tool must be built for x64 to attach to RALibretro.");
                 return false;
             }
 
-            var activeCoreModule = EmulatorProcess.Modules.Cast<ProcessModule>()
-                .FirstOrDefault(m => SUPPORTED_CORES.Any(c => c.Equals(m.ModuleName, StringComparison.OrdinalIgnoreCase)));
-
-            if (activeCoreModule == null)
-            {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: No supported NDS core (DeSmuME or melonDS) found loaded in RALibretro.");
-                return false;
-            }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Found active core '{activeCoreModule.ModuleName}'.");
-
-
-            ProcessHandle = Memory.OpenProcessHandle(EmulatorProcess);
+            ProcessHandle = OpenProcess(ALL_ACCESS, false, EmulatorProcess.Id);
             if (ProcessHandle == IntPtr.Zero)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
+                logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
                 return false;
             }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
+            logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened. Searching for core memory signatures...");
 
-            nint moduleBaseAddress = EmulatorProcess.MainModule.BaseAddress;
-            nint pointerAddress = IntPtr.Add(moduleBaseAddress, RAM_POINTER_OFFSET);
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Reading RAM pointer from address 0x{pointerAddress:X}.");
-
-            long? ramPtr = Memory.ReadInt64(ProcessHandle, pointerAddress);
-            if (!ramPtr.HasValue || ramPtr.Value == 0)
+            nint parentBlockBase = nint.Zero;
+            foreach (var profile in CoreProfiles)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from 0x{pointerAddress:X}. Ensure the game is fully loaded. This offset may be outdated for your RALibretro version.");
+                logger.Log($"  -> Searching for {profile.Name} signature (Region size: {profile.SearchSize} bytes)...");
+                parentBlockBase = FindBaseAddressBySize(profile.SearchSize);
+                if (parentBlockBase != nint.Zero)
+                {
+                    _foundCoreName = profile.Name;
+                    this.MemoryBasePC = parentBlockBase + profile.Offset;
+                    logger.Log($"\n[{EmulatorName}] SUCCESS! Detected {_foundCoreName} core.");
+                    logger.Log($"  -> Found parent block at: 0x{parentBlockBase:X}");
+                    logger.Log($"  -> Applying offset:       + 0x{profile.Offset:X}");
+                    logger.Log("--------------------------------------------------");
+                    break;
+                }
+            }
+
+            if (MemoryBasePC == nint.Zero)
+            {
+                logger.Log($"\n[{EmulatorName}] FATAL ERROR: Could not find memory signature for any known core (DeSmuME, melonDS).");
+                logger.Log("Please ensure a DS game is fully loaded and running in RALibretro.");
+                Detach();
                 return false;
             }
 
-            this.MemoryBasePC = (nint)ramPtr.Value;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: NDS RAM base (0x02000000) found in PC memory at 0x{this.MemoryBasePC:X}.");
+            logger.Log($"[{EmulatorName}] Calculated DS Main RAM Base at PC Address: 0x{this.MemoryBasePC:X}.");
 
             NdsMemoryBaseInPC = IntPtr.Subtract(MemoryBasePC, (int)NDS_RAM_START);
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
+            logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
 
@@ -98,13 +145,15 @@ namespace PointerFinder2.Emulators.EmulatorManager
         {
             if (ProcessHandle != IntPtr.Zero)
             {
-                Memory.CloseHandle(ProcessHandle);
+                CloseHandle(ProcessHandle);
             }
             ProcessHandle = IntPtr.Zero;
             MemoryBasePC = IntPtr.Zero;
             NdsMemoryBaseInPC = IntPtr.Zero;
             EmulatorProcess = null;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
+            // Reset the found core name on detach.
+            _foundCoreName = "Unknown";
+            logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
         // Reads a block of memory from the emulated NDS system.
@@ -255,5 +304,30 @@ namespace PointerFinder2.Emulators.EmulatorManager
             return -1;
         }
         #endregion
+
+        // Added a helper method to scan process memory for a region of a specific size.
+        private nint FindBaseAddressBySize(long exactRegionSizeBytes)
+        {
+            var foundAddresses = new List<nint>();
+            nint currentAddress = nint.Zero;
+            long MAX_ADDRESS = 0x7FFFFFFFFFFFL; // Max user-mode address for 64-bit processes
+
+            while ((long)currentAddress < MAX_ADDRESS)
+            {
+                if (VirtualQueryEx(ProcessHandle, currentAddress, out var mbi, (uint)Marshal.SizeOf(typeof(MEMORY_BASIC_INFORMATION))) == 0)
+                {
+                    break;
+                }
+
+                if (mbi.State == MEM_COMMIT && (long)mbi.RegionSize == exactRegionSizeBytes)
+                {
+                    foundAddresses.Add(mbi.BaseAddress);
+                }
+                currentAddress = mbi.BaseAddress + mbi.RegionSize;
+            }
+
+            // The Python script implies the last found block is the correct one.
+            return foundAddresses.Any() ? foundAddresses.Last() : nint.Zero;
+        }
     }
 }

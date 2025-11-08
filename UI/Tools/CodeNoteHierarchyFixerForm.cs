@@ -89,6 +89,21 @@ namespace PointerFinder2.UI
                 // 2. Recursively merge nodes with identical content.
                 var mergedTree = MergeTree(parsedTree);
 
+                // Sort root nodes. Headers and non-offset lines come first, followed by
+                // offset-based lines sorted numerically.
+                var offsetRegex = new Regex(@"^[\+\-]0x([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
+                mergedTree = mergedTree.OrderBy(node => offsetRegex.IsMatch(node.Content) ? 1 : 0)
+                                       .ThenBy(node =>
+                                       {
+                                           var match = offsetRegex.Match(node.Content);
+                                           if (match.Success)
+                                           {
+                                               return Convert.ToInt64(match.Groups[1].Value, 16);
+                                           }
+                                           return (long)node.OriginalIndex; // Use original index for non-offset nodes
+                                       }).ToList();
+
+
                 // 3. Rebuild the text from the cleaned tree structure, using the detected style.
                 var rebuiltText = RebuildTextFromTree(mergedTree, 0, indentChar);
 
@@ -186,19 +201,27 @@ namespace PointerFinder2.UI
             return rootNodes;
         }
 
+        // This method has been completely refactored to normalize keys for merging,
+        // preserve descriptions, and produce consistent output formatting.
         private List<CodeNoteNode> MergeTree(List<CodeNoteNode> nodes)
         {
             var finalNodes = new List<CodeNoteNode>();
             var mergeableGroups = new Dictionary<string, List<CodeNoteNode>>();
             var nonMergeableNodes = new List<CodeNoteNode>();
+            var offsetRegex = new Regex(@"^([\+\-]0x[0-9a-fA-F]+)", RegexOptions.IgnoreCase);
 
-            // First pass: Group all mergeable nodes by their core offset key (e.g., "+0x174").
+            // First pass: Group all mergeable nodes by their normalized offset key.
             foreach (var node in nodes)
             {
-                var match = Regex.Match(node.Content, @"^([\+\-]0x[0-9a-fA-F]+)");
+                var match = offsetRegex.Match(node.Content);
                 if (match.Success)
                 {
-                    string key = match.Groups[1].Value;
+                    // Normalize the key to handle case (+0xAB vs +0xab) and padding (+0x4 vs +0x04).
+                    string rawKey = match.Groups[1].Value;
+                    string sign = rawKey.Substring(0, 1);
+                    long offsetValue = Convert.ToInt64(rawKey.Substring(3), 16);
+                    string key = $"{sign}0x{offsetValue:x}";
+
                     if (!mergeableGroups.ContainsKey(key))
                     {
                         mergeableGroups[key] = new List<CodeNoteNode>();
@@ -212,11 +235,28 @@ namespace PointerFinder2.UI
             }
 
             // Process mergeable groups.
+            var contentRegex = new Regex(@"^([\+\-]0x)([0-9a-fA-F]+)(.*)", RegexOptions.IgnoreCase);
             foreach (var group in mergeableGroups.Values)
             {
-                // Use the first node of the group as the representative for content and original order.
                 var representative = group.OrderBy(n => n.OriginalIndex).First();
-                var newNode = new CodeNoteNode { Content = representative.Content, OriginalIndex = representative.OriginalIndex };
+
+                // Select the content with the longest description to preserve information.
+                string bestContent = group
+                    .Select(n => n.Content)
+                    .OrderByDescending(c => c.Length)
+                    .FirstOrDefault() ?? representative.Content;
+
+                // Normalize the chosen content for consistent output format (e.g., +0x0, lowercase hex).
+                var contentMatch = contentRegex.Match(bestContent);
+                if (contentMatch.Success)
+                {
+                    string signAndPrefix = contentMatch.Groups[1].Value;
+                    long offsetVal = Convert.ToInt64(contentMatch.Groups[2].Value, 16);
+                    string restOfLine = contentMatch.Groups[3].Value;
+                    bestContent = $"{signAndPrefix.ToLower()}{offsetVal:x}{restOfLine}";
+                }
+
+                var newNode = new CodeNoteNode { Content = bestContent, OriginalIndex = representative.OriginalIndex };
 
                 // Combine all children from all nodes in the group.
                 var allChildren = group.SelectMany(n => n.Children).ToList();
@@ -239,9 +279,10 @@ namespace PointerFinder2.UI
                 finalNodes.Add(node);
             }
 
-            // Sort the final list to maintain the original file order.
+            // Sort the final list to maintain the original file order before the root-level sort.
             return finalNodes.OrderBy(n => n.OriginalIndex).ToList();
         }
+
 
         // Integrated spacing logic directly into the rebuild function.
         private string RebuildTextFromTree(List<CodeNoteNode> nodes, int indentLevel, char indentChar)

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Windows.Forms;
 
 namespace PointerFinder2.Emulators
 {
@@ -24,5 +25,12 @@ namespace PointerFinder2.Emulators
 
         // A factory function that creates an instance of the emulator's state-based scanning strategy.
         public Func<IPointerScannerStrategy> StateBasedScannerFactory { get; set; }
+
+        // Added properties to make UI feature availability data-driven.
+        // If true, this profile supports a tool for finding the static memory range.
+        public bool SupportsStaticRangeFinder { get; set; } = false;
+
+        // A factory function that creates an instance of the static range finder form.
+        public Func<IEmulatorManager, Form> StaticRangeFinderFactory { get; set; }
     }
 }

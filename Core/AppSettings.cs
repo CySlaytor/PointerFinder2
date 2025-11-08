@@ -1,4 +1,5 @@
-﻿namespace PointerFinder2.Core
+﻿#nullable enable
+namespace PointerFinder2.Core
 {
     // Holds the saved settings for a specific emulator profile.
     // This allows user preferences for each scanning mode to persist between sessions.
@@ -14,9 +15,9 @@
         // The maximum number of results to find during a live scan.
         public int MaxResults { get; set; }
         // The start of the memory range to search for static base addresses.
-        public string StaticAddressStart { get; set; }
+        public string? StaticAddressStart { get; set; }
         // The end of the memory range to search for static base addresses.
-        public string StaticAddressEnd { get; set; }
+        public string? StaticAddressEnd { get; set; }
         // If true, the scanner will also search using negative offsets on the first level.
         public bool ScanForStructureBase { get; set; }
         // The maximum negative offset to use when ScanForStructureBase is true.

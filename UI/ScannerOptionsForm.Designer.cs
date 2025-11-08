@@ -17,315 +17,300 @@
 
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
-            this.txtTargetAddress = new System.Windows.Forms.TextBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.numMaxLevel = new System.Windows.Forms.NumericUpDown();
-            this.label2 = new System.Windows.Forms.Label();
-            this.label3 = new System.Windows.Forms.Label();
-            this.txtMaxOffset = new System.Windows.Forms.TextBox();
-            this.btnOK = new System.Windows.Forms.Button();
-            this.btnCancel = new System.Windows.Forms.Button();
-            this.groupBoxRange = new System.Windows.Forms.GroupBox();
-            this.label5 = new System.Windows.Forms.Label();
-            this.txtStaticEnd = new System.Windows.Forms.TextBox();
-            this.txtStaticStart = new System.Windows.Forms.TextBox();
-            this.label4 = new System.Windows.Forms.Label();
-            this.label6 = new System.Windows.Forms.Label();
-            this.numMaxResults = new System.Windows.Forms.NumericUpDown();
-            this.chkScanForStructureBase = new System.Windows.Forms.CheckBox();
-            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
-            this.chkUse16ByteAlignment = new System.Windows.Forms.CheckBox();
-            this.txtMaxNegativeOffset = new System.Windows.Forms.TextBox();
-            this.chkUseSliderRange = new System.Windows.Forms.CheckBox();
-            this.panelSlider = new System.Windows.Forms.Panel();
-            this.lblSliderRange = new System.Windows.Forms.Label();
-            this.rangeSlider = new PointerFinder2.UI.Controls.RangeSlider();
-            ((System.ComponentModel.ISupportInitialize)(this.numMaxLevel)).BeginInit();
-            this.groupBoxRange.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numMaxResults)).BeginInit();
-            this.panelSlider.SuspendLayout();
-            this.SuspendLayout();
+            components = new System.ComponentModel.Container();
+            txtTargetAddress = new TextBox();
+            label1 = new Label();
+            numMaxLevel = new NumericUpDown();
+            label2 = new Label();
+            label3 = new Label();
+            txtMaxOffset = new TextBox();
+            btnOK = new Button();
+            btnCancel = new Button();
+            groupBoxRange = new GroupBox();
+            label5 = new Label();
+            txtStaticEnd = new TextBox();
+            txtStaticStart = new TextBox();
+            label4 = new Label();
+            btnResetRange = new Button();
+            label6 = new Label();
+            numMaxResults = new NumericUpDown();
+            chkScanForStructureBase = new CheckBox();
+            toolTip1 = new ToolTip(components);
+            chkUse16ByteAlignment = new CheckBox();
+            txtMaxNegativeOffset = new TextBox();
+            chkUseSliderRange = new CheckBox();
+            panelSlider = new Panel();
+            lblSliderRange = new Label();
+            rangeSlider = new PointerFinder2.UI.Controls.RangeSlider();
+            ((System.ComponentModel.ISupportInitialize)numMaxLevel).BeginInit();
+            groupBoxRange.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)numMaxResults).BeginInit();
+            panelSlider.SuspendLayout();
+            SuspendLayout();
             // 
             // txtTargetAddress
             // 
-            this.txtTargetAddress.Location = new System.Drawing.Point(14, 28);
-            this.txtTargetAddress.Name = "txtTargetAddress";
-            this.txtTargetAddress.Size = new System.Drawing.Size(126, 22);
-            this.txtTargetAddress.TabIndex = 0;
+            txtTargetAddress.Location = new Point(14, 28);
+            txtTargetAddress.Name = "txtTargetAddress";
+            txtTargetAddress.Size = new Size(126, 23);
+            txtTargetAddress.TabIndex = 0;
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(11, 9);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(130, 15);
-            this.label1.TabIndex = 1;
-            this.label1.Text = "Target Address (PS2, Hex)";
+            label1.AutoSize = true;
+            label1.Location = new Point(11, 9);
+            label1.Name = "label1";
+            label1.Size = new Size(141, 15);
+            label1.TabIndex = 1;
+            label1.Text = "Target Address (PS2, Hex)";
             // 
             // numMaxLevel
             // 
-            this.numMaxLevel.Location = new System.Drawing.Point(14, 76);
-            this.numMaxLevel.Maximum = new decimal(new int[] {
-            100,
-            0,
-            0,
-            0});
-            this.numMaxLevel.Minimum = new decimal(new int[] {
-            1,
-            0,
-            0,
-            0});
-            this.numMaxLevel.Name = "numMaxLevel";
-            this.numMaxLevel.Size = new System.Drawing.Size(126, 22);
-            this.numMaxLevel.TabIndex = 2;
-            this.numMaxLevel.Value = new decimal(new int[] {
-            7,
-            0,
-            0,
-            0});
+            numMaxLevel.Location = new Point(14, 76);
+            numMaxLevel.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            numMaxLevel.Name = "numMaxLevel";
+            numMaxLevel.Size = new Size(126, 23);
+            numMaxLevel.TabIndex = 2;
+            numMaxLevel.Value = new decimal(new int[] { 7, 0, 0, 0 });
             // 
             // label2
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(11, 57);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(61, 15);
-            this.label2.TabIndex = 3;
-            this.label2.Text = "Max Level";
+            label2.AutoSize = true;
+            label2.Location = new Point(11, 57);
+            label2.Name = "label2";
+            label2.Size = new Size(59, 15);
+            label2.TabIndex = 3;
+            label2.Text = "Max Level";
             // 
             // label3
             // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(167, 9);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(94, 15);
-            this.label3.TabIndex = 5;
-            this.label3.Text = "Max Offset (Hex)";
+            label3.AutoSize = true;
+            label3.Location = new Point(167, 9);
+            label3.Name = "label3";
+            label3.Size = new Size(95, 15);
+            label3.TabIndex = 5;
+            label3.Text = "Max Offset (Hex)";
             // 
             // txtMaxOffset
             // 
-            this.txtMaxOffset.Location = new System.Drawing.Point(170, 28);
-            this.txtMaxOffset.Name = "txtMaxOffset";
-            this.txtMaxOffset.Size = new System.Drawing.Size(126, 22);
-            this.txtMaxOffset.TabIndex = 1;
+            txtMaxOffset.Location = new Point(170, 28);
+            txtMaxOffset.Name = "txtMaxOffset";
+            txtMaxOffset.Size = new Size(126, 23);
+            txtMaxOffset.TabIndex = 1;
             // 
             // btnOK
             // 
-            this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOK.Location = new System.Drawing.Point(125, 275);
-            this.btnOK.Name = "btnOK";
-            this.btnOK.Size = new System.Drawing.Size(83, 29);
-            this.btnOK.TabIndex = 10;
-            this.btnOK.Text = "OK";
-            this.btnOK.UseVisualStyleBackColor = true;
-            this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
+            btnOK.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnOK.Location = new Point(124, 275);
+            btnOK.Name = "btnOK";
+            btnOK.Size = new Size(83, 29);
+            btnOK.TabIndex = 10;
+            btnOK.Text = "OK";
+            btnOK.UseVisualStyleBackColor = true;
+            btnOK.Click += btnOK_Click;
             // 
             // btnCancel
             // 
-            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(213, 275);
-            this.btnCancel.Name = "btnCancel";
-            this.btnCancel.Size = new System.Drawing.Size(83, 29);
-            this.btnCancel.TabIndex = 11;
-            this.btnCancel.Text = "Cancel";
-            this.btnCancel.UseVisualStyleBackColor = true;
+            btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnCancel.DialogResult = DialogResult.Cancel;
+            btnCancel.Location = new Point(213, 275);
+            btnCancel.Name = "btnCancel";
+            btnCancel.Size = new Size(83, 29);
+            btnCancel.TabIndex = 11;
+            btnCancel.Text = "Cancel";
+            btnCancel.UseVisualStyleBackColor = true;
             // 
             // groupBoxRange
             // 
-            this.groupBoxRange.Controls.Add(this.label5);
-            this.groupBoxRange.Controls.Add(this.txtStaticEnd);
-            this.groupBoxRange.Controls.Add(this.txtStaticStart);
-            this.groupBoxRange.Controls.Add(this.label4);
-            this.groupBoxRange.Location = new System.Drawing.Point(14, 115);
-            this.groupBoxRange.Name = "groupBoxRange";
-            this.groupBoxRange.Size = new System.Drawing.Size(282, 59);
-            this.groupBoxRange.TabIndex = 4;
-            this.groupBoxRange.TabStop = false;
-            this.groupBoxRange.Text = "Static Base Address Range (PS2, Hex)";
+            groupBoxRange.Controls.Add(label5);
+            groupBoxRange.Controls.Add(txtStaticEnd);
+            groupBoxRange.Controls.Add(txtStaticStart);
+            groupBoxRange.Controls.Add(label4);
+            groupBoxRange.Location = new Point(14, 115);
+            groupBoxRange.Name = "groupBoxRange";
+            groupBoxRange.Size = new Size(284, 59);
+            groupBoxRange.TabIndex = 4;
+            groupBoxRange.TabStop = false;
+            groupBoxRange.Text = "Static Base Address Range (PS2, Hex)";
             // 
             // label5
             // 
-            this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(135, 29);
-            this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(11, 15);
-            this.label5.TabIndex = 12;
-            this.label5.Text = "-";
+            label5.AutoSize = true;
+            label5.Location = new Point(135, 29);
+            label5.Name = "label5";
+            label5.Size = new Size(12, 15);
+            label5.TabIndex = 12;
+            label5.Text = "-";
             // 
             // txtStaticEnd
             // 
-            this.txtStaticEnd.Location = new System.Drawing.Point(152, 26);
-            this.txtStaticEnd.Name = "txtStaticEnd";
-            this.txtStaticEnd.Size = new System.Drawing.Size(124, 22);
-            this.txtStaticEnd.TabIndex = 1;
+            txtStaticEnd.Location = new Point(152, 26);
+            txtStaticEnd.Name = "txtStaticEnd";
+            txtStaticEnd.Size = new Size(124, 23);
+            txtStaticEnd.TabIndex = 1;
             // 
             // txtStaticStart
             // 
-            this.txtStaticStart.Location = new System.Drawing.Point(6, 26);
-            this.txtStaticStart.Name = "txtStaticStart";
-            this.txtStaticStart.Size = new System.Drawing.Size(124, 22);
-            this.txtStaticStart.TabIndex = 0;
+            txtStaticStart.Location = new Point(6, 26);
+            txtStaticStart.Name = "txtStaticStart";
+            txtStaticStart.Size = new Size(124, 23);
+            txtStaticStart.TabIndex = 0;
             // 
             // label4
             // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(11, 57);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(61, 15);
-            this.label4.TabIndex = 3;
-            this.label4.Text = "Max Level";
+            label4.AutoSize = true;
+            label4.Location = new Point(11, 57);
+            label4.Name = "label4";
+            label4.Size = new Size(59, 15);
+            label4.TabIndex = 3;
+            label4.Text = "Max Level";
+            // 
+            // btnResetRange
+            // 
+            btnResetRange.Location = new Point(218, 183);
+            btnResetRange.Name = "btnResetRange";
+            btnResetRange.Size = new Size(75, 23);
+            btnResetRange.TabIndex = 13;
+            btnResetRange.Text = "Reset";
+            toolTip1.SetToolTip(btnResetRange, "Reset the range to the recommended default for this emulator.");
+            btnResetRange.UseVisualStyleBackColor = true;
+            btnResetRange.Click += btnResetRange_Click;
             // 
             // label6
             // 
-            this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(167, 57);
-            this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(73, 15);
-            this.label6.TabIndex = 10;
-            this.label6.Text = "Max Results";
+            label6.AutoSize = true;
+            label6.Location = new Point(167, 57);
+            label6.Name = "label6";
+            label6.Size = new Size(69, 15);
+            label6.TabIndex = 10;
+            label6.Text = "Max Results";
             // 
             // numMaxResults
             // 
-            this.numMaxResults.Location = new System.Drawing.Point(170, 76);
-            this.numMaxResults.Maximum = new decimal(new int[] {
-            100000000,
-            0,
-            0,
-            0});
-            this.numMaxResults.Minimum = new decimal(new int[] {
-            1,
-            0,
-            0,
-            0});
-            this.numMaxResults.Name = "numMaxResults";
-            this.numMaxResults.Size = new System.Drawing.Size(126, 22);
-            this.numMaxResults.TabIndex = 3;
-            this.numMaxResults.ThousandsSeparator = true;
-            this.numMaxResults.Value = new decimal(new int[] {
-            5000,
-            0,
-            0,
-            0});
+            numMaxResults.Location = new Point(170, 76);
+            numMaxResults.Maximum = new decimal(new int[] { 100000000, 0, 0, 0 });
+            numMaxResults.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            numMaxResults.Name = "numMaxResults";
+            numMaxResults.Size = new Size(126, 23);
+            numMaxResults.TabIndex = 3;
+            numMaxResults.ThousandsSeparator = true;
+            numMaxResults.Value = new decimal(new int[] { 5000, 0, 0, 0 });
             // 
             // chkScanForStructureBase
             // 
-            this.chkScanForStructureBase.AutoSize = true;
-            this.chkScanForStructureBase.Location = new System.Drawing.Point(14, 219);
-            this.chkScanForStructureBase.Name = "chkScanForStructureBase";
-            this.chkScanForStructureBase.Size = new System.Drawing.Size(176, 19);
-            this.chkScanForStructureBase.TabIndex = 6;
-            this.chkScanForStructureBase.Text = "Scan for Structure Base (Hex)";
-            this.toolTip1.SetToolTip(this.chkScanForStructureBase, "Performs an extra scan with negative offsets to find a pointer to the start of a" +
-        " data structure, not just a member within it. Increases scan time.");
-            this.chkScanForStructureBase.UseVisualStyleBackColor = true;
-            this.chkScanForStructureBase.CheckedChanged += new System.EventHandler(this.chkScanForStructureBase_CheckedChanged);
+            chkScanForStructureBase.AutoSize = true;
+            chkScanForStructureBase.Location = new Point(14, 219);
+            chkScanForStructureBase.Name = "chkScanForStructureBase";
+            chkScanForStructureBase.Size = new Size(198, 19);
+            chkScanForStructureBase.TabIndex = 6;
+            chkScanForStructureBase.Text = "Scan with Negative Offsets (Hex)";
+            toolTip1.SetToolTip(chkScanForStructureBase, "Performs an extra search using negative offsets up to the specified maximum value (in hex). Increases scan time.");
+            chkScanForStructureBase.UseVisualStyleBackColor = true;
+            chkScanForStructureBase.CheckedChanged += chkScanForStructureBase_CheckedChanged;
             // 
             // chkUse16ByteAlignment
             // 
-            this.chkUse16ByteAlignment.AutoSize = true;
-            this.chkUse16ByteAlignment.Location = new System.Drawing.Point(14, 244);
-            this.chkUse16ByteAlignment.Name = "chkUse16ByteAlignment";
-            this.chkUse16ByteAlignment.Size = new System.Drawing.Size(193, 19);
-            this.chkUse16ByteAlignment.TabIndex = 7;
-            this.chkUse16ByteAlignment.Text = "Search using 16-byte alignment";
-            this.toolTip1.SetToolTip(this.chkUse16ByteAlignment, "When enabled, the scanner descends through memory in 16-byte aligned steps.\r\nThi" +
-        "s improves performance and avoids false positives.\r\nUncheck for a more thorough" +
-        " 4-byte scan.");
-            this.chkUse16ByteAlignment.UseVisualStyleBackColor = true;
+            chkUse16ByteAlignment.AutoSize = true;
+            chkUse16ByteAlignment.Location = new Point(14, 244);
+            chkUse16ByteAlignment.Name = "chkUse16ByteAlignment";
+            chkUse16ByteAlignment.Size = new Size(193, 19);
+            chkUse16ByteAlignment.TabIndex = 7;
+            chkUse16ByteAlignment.Text = "Search using 16-byte alignment";
+            toolTip1.SetToolTip(chkUse16ByteAlignment, "When enabled, the scanner descends through memory in 16-byte aligned steps.\r\nThis improves performance and avoids false positives.\r\nUncheck for a more thorough 4-byte scan.");
+            chkUse16ByteAlignment.UseVisualStyleBackColor = true;
             // 
             // txtMaxNegativeOffset
             // 
-            this.txtMaxNegativeOffset.Location = new System.Drawing.Point(196, 217);
-            this.txtMaxNegativeOffset.Name = "txtMaxNegativeOffset";
-            this.txtMaxNegativeOffset.Size = new System.Drawing.Size(100, 22);
-            this.txtMaxNegativeOffset.TabIndex = 11;
+            txtMaxNegativeOffset.Location = new Point(218, 217);
+            txtMaxNegativeOffset.Name = "txtMaxNegativeOffset";
+            txtMaxNegativeOffset.Size = new Size(75, 23);
+            txtMaxNegativeOffset.TabIndex = 11;
             // 
             // chkUseSliderRange
             // 
-            this.chkUseSliderRange.AutoSize = true;
-            this.chkUseSliderRange.Location = new System.Drawing.Point(14, 186);
-            this.chkUseSliderRange.Name = "chkUseSliderRange";
-            this.chkUseSliderRange.Size = new System.Drawing.Size(168, 19);
-            this.chkUseSliderRange.TabIndex = 12;
-            this.chkUseSliderRange.Text = "Use Visual Range Selector";
-            this.chkUseSliderRange.UseVisualStyleBackColor = true;
-            this.chkUseSliderRange.CheckedChanged += new System.EventHandler(this.chkUseSliderRange_CheckedChanged);
+            chkUseSliderRange.AutoSize = true;
+            chkUseSliderRange.Location = new Point(14, 186);
+            chkUseSliderRange.Name = "chkUseSliderRange";
+            chkUseSliderRange.Size = new Size(160, 19);
+            chkUseSliderRange.TabIndex = 12;
+            chkUseSliderRange.Text = "Use Visual Range Selector";
+            chkUseSliderRange.UseVisualStyleBackColor = true;
+            chkUseSliderRange.CheckedChanged += chkUseSliderRange_CheckedChanged;
             // 
             // panelSlider
             // 
-            this.panelSlider.Controls.Add(this.lblSliderRange);
-            this.panelSlider.Controls.Add(this.rangeSlider);
-            this.panelSlider.Location = new System.Drawing.Point(14, 115);
-            this.panelSlider.Name = "panelSlider";
-            this.panelSlider.Size = new System.Drawing.Size(282, 59);
-            this.panelSlider.TabIndex = 13;
-            this.panelSlider.Visible = false;
+            panelSlider.Controls.Add(lblSliderRange);
+            panelSlider.Controls.Add(rangeSlider);
+            panelSlider.Location = new Point(14, 115);
+            panelSlider.Name = "panelSlider";
+            panelSlider.Size = new Size(282, 59);
+            panelSlider.TabIndex = 13;
+            panelSlider.Visible = false;
             // 
             // lblSliderRange
             // 
-            this.lblSliderRange.Location = new System.Drawing.Point(3, 33);
-            this.lblSliderRange.Name = "lblSliderRange";
-            this.lblSliderRange.Size = new System.Drawing.Size(276, 15);
-            this.lblSliderRange.TabIndex = 1;
-            this.lblSliderRange.Text = "000000 - FFFFFF";
-            this.lblSliderRange.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            lblSliderRange.Location = new Point(3, 33);
+            lblSliderRange.Name = "lblSliderRange";
+            lblSliderRange.Size = new Size(276, 15);
+            lblSliderRange.TabIndex = 1;
+            lblSliderRange.Text = "000000 - FFFFFF";
+            lblSliderRange.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // rangeSlider
             // 
-            this.rangeSlider.Location = new System.Drawing.Point(3, 4);
-            this.rangeSlider.Maximum = 1024;
-            this.rangeSlider.MaxRange = 256;
-            this.rangeSlider.Minimum = 0;
-            this.rangeSlider.Name = "rangeSlider";
-            this.rangeSlider.Size = new System.Drawing.Size(276, 25);
-            this.rangeSlider.TabIndex = 0;
-            this.rangeSlider.Text = "rangeSlider1";
-            this.rangeSlider.ThumbStep = 1;
-            this.rangeSlider.TrackStep = 256;
-            this.rangeSlider.Value1 = 256;
-            this.rangeSlider.Value2 = 512;
-            this.rangeSlider.ValueChanged += new System.EventHandler(this.rangeSlider_ValueChanged);
+            rangeSlider.Location = new Point(3, 4);
+            rangeSlider.Maximum = 1024;
+            rangeSlider.MaxRange = 256;
+            rangeSlider.Minimum = 0;
+            rangeSlider.Name = "rangeSlider";
+            rangeSlider.Size = new Size(276, 25);
+            rangeSlider.TabIndex = 0;
+            rangeSlider.Text = "rangeSlider1";
+            rangeSlider.ThumbStep = 1;
+            rangeSlider.TrackStep = 256;
+            rangeSlider.Value1 = 256;
+            rangeSlider.Value2 = 512;
+            rangeSlider.ValueChanged += rangeSlider_ValueChanged;
             // 
             // ScannerOptionsForm
             // 
-            this.AcceptButton = this.btnOK;
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(310, 316);
-            this.Controls.Add(this.chkUseSliderRange);
-            this.Controls.Add(this.txtMaxNegativeOffset);
-            this.Controls.Add(this.chkUse16ByteAlignment);
-            this.Controls.Add(this.chkScanForStructureBase);
-            this.Controls.Add(this.label6);
-            this.Controls.Add(this.numMaxResults);
-            this.Controls.Add(this.btnCancel);
-            this.Controls.Add(this.btnOK);
-            this.Controls.Add(this.label3);
-            this.Controls.Add(this.txtMaxOffset);
-            this.Controls.Add(this.label2);
-            this.Controls.Add(this.numMaxLevel);
-            this.Controls.Add(this.label1);
-            this.Controls.Add(this.txtTargetAddress);
-            this.Controls.Add(this.panelSlider);
-            this.Controls.Add(this.groupBoxRange);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.Name = "ScannerOptionsForm";
-            this.ShowInTaskbar = false;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Pointer Scan Options";
-            this.Load += new System.EventHandler(this.ScannerOptionsForm_Load);
-            ((System.ComponentModel.ISupportInitialize)(this.numMaxLevel)).EndInit();
-            this.groupBoxRange.ResumeLayout(false);
-            this.groupBoxRange.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.numMaxResults)).EndInit();
-            this.panelSlider.ResumeLayout(false);
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            AcceptButton = btnOK;
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            CancelButton = btnCancel;
+            ClientSize = new Size(307, 316);
+            Controls.Add(btnResetRange);
+            Controls.Add(chkUseSliderRange);
+            Controls.Add(txtMaxNegativeOffset);
+            Controls.Add(chkUse16ByteAlignment);
+            Controls.Add(chkScanForStructureBase);
+            Controls.Add(label6);
+            Controls.Add(numMaxResults);
+            Controls.Add(btnCancel);
+            Controls.Add(btnOK);
+            Controls.Add(label3);
+            Controls.Add(txtMaxOffset);
+            Controls.Add(label2);
+            Controls.Add(numMaxLevel);
+            Controls.Add(label1);
+            Controls.Add(txtTargetAddress);
+            Controls.Add(panelSlider);
+            Controls.Add(groupBoxRange);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "ScannerOptionsForm";
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Pointer Scan Options";
+            Load += ScannerOptionsForm_Load;
+            ((System.ComponentModel.ISupportInitialize)numMaxLevel).EndInit();
+            groupBoxRange.ResumeLayout(false);
+            groupBoxRange.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)numMaxResults).EndInit();
+            panelSlider.ResumeLayout(false);
+            ResumeLayout(false);
+            PerformLayout();
 
         }
 
@@ -354,5 +339,6 @@
         private System.Windows.Forms.Panel panelSlider;
         private UI.Controls.RangeSlider rangeSlider;
         private System.Windows.Forms.Label lblSliderRange;
+        private System.Windows.Forms.Button btnResetRange;
     }
 }

@@ -25,6 +25,7 @@
             btnScan = new Button();
             btnCancel = new Button();
             groupBoxRange = new GroupBox();
+            btnResetRange = new Button();
             label5 = new Label();
             txtStaticEnd = new TextBox();
             txtStaticStart = new TextBox();
@@ -109,6 +110,7 @@
             // 
             // groupBoxRange
             // 
+            groupBoxRange.Controls.Add(btnResetRange);
             groupBoxRange.Controls.Add(label5);
             groupBoxRange.Controls.Add(txtStaticEnd);
             groupBoxRange.Controls.Add(txtStaticStart);
@@ -119,10 +121,21 @@
             groupBoxRange.TabStop = false;
             groupBoxRange.Text = "Static Base Address Range ({sys}, Hex)";
             // 
+            // btnResetRange
+            // 
+            btnResetRange.Location = new Point(228, 21);
+            btnResetRange.Name = "btnResetRange";
+            btnResetRange.Size = new Size(55, 25);
+            btnResetRange.TabIndex = 13;
+            btnResetRange.Text = "Reset";
+            toolTip1.SetToolTip(btnResetRange, "Reset the range to the recommended default for this emulator.");
+            btnResetRange.UseVisualStyleBackColor = true;
+            btnResetRange.Click += btnResetRange_Click;
+            // 
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(135, 25);
+            label5.Location = new Point(110, 26);
             label5.Name = "label5";
             label5.Size = new Size(12, 15);
             label5.TabIndex = 12;
@@ -130,16 +143,16 @@
             // 
             // txtStaticEnd
             // 
-            txtStaticEnd.Location = new Point(152, 22);
+            txtStaticEnd.Location = new Point(124, 22);
             txtStaticEnd.Name = "txtStaticEnd";
-            txtStaticEnd.Size = new Size(124, 23);
+            txtStaticEnd.Size = new Size(98, 23);
             txtStaticEnd.TabIndex = 1;
             // 
             // txtStaticStart
             // 
             txtStaticStart.Location = new Point(6, 22);
             txtStaticStart.Name = "txtStaticStart";
-            txtStaticStart.Size = new Size(124, 23);
+            txtStaticStart.Size = new Size(98, 23);
             txtStaticStart.TabIndex = 0;
             // 
             // label6
@@ -332,7 +345,7 @@
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.NumericUpDown numCandidatesPerLevel;
         private System.Windows.Forms.ToolTip toolTip1;
-        // Added the Find All Levels checkbox.
         private System.Windows.Forms.CheckBox chkFindAllLevels;
+        private Button btnResetRange;
     }
 }

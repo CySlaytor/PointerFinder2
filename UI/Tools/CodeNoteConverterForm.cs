@@ -18,6 +18,8 @@ namespace PointerFinder2.UI
         private static string _lastBaseAddress = "";
         private static int _lastPrefixIndex = 0;
         private static bool _lastUseMask = false;
+        // Added a static field to remember the description text during the session.
+        private static string _lastDescription = "";
 
         private List<int> _lastOffsets = new List<int>();
         private readonly IEmulatorManager _manager;
@@ -88,6 +90,8 @@ namespace PointerFinder2.UI
             txtBaseAddress.Text = _lastBaseAddress;
             comboPointerPrefix.SelectedIndex = _lastPrefixIndex;
             chkUseMask.Checked = _lastUseMask;
+            // Restore the last used description.
+            txtDescription.Text = _lastDescription;
 
             // Apply intelligent defaults if an emulator is attached
             if (_manager != null && _manager.IsAttached)
@@ -119,6 +123,8 @@ namespace PointerFinder2.UI
             _lastBaseAddress = txtBaseAddress.Text;
             _lastPrefixIndex = comboPointerPrefix.SelectedIndex;
             _lastUseMask = chkUseMask.Checked;
+            // Save the current description text for the session.
+            _lastDescription = txtDescription.Text;
         }
 
 
@@ -173,13 +179,12 @@ namespace PointerFinder2.UI
                 richCodeNoteOutput.Text = "Could not find any valid offsets in the trigger string.";
                 _lastOffsets.Clear();
                 comboMemorySize.Text = "N/A";
-                txtDescription.Clear();
                 return;
             }
 
             _lastOffsets = offsets;
             comboMemorySize.Text = parsedSize ?? "N/A";
-            txtDescription.Clear();
+            // Do not clear the description, allowing the user to reuse or edit it.
 
             UpdateNotePreview();
         }

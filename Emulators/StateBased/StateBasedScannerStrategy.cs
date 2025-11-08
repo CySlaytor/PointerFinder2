@@ -1,4 +1,5 @@
-﻿using PointerFinder2.DataModels;
+﻿using PointerFinder2.Core;
+using PointerFinder2.DataModels;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -33,8 +34,8 @@ namespace PointerFinder2.Emulators.StateBased
         private long _candidatesValidated;
         private long _candidatesGenerated;
         private CancellationTokenSource _stopOnFirstCts;
-        // Added a threshold for progress reporting to avoid flooding the UI thread.
-        private long _nextUpdateThreshold;
+        // Replaced the threshold field with a dedicated manager class to remove duplicated logic.
+        private ProgressThresholdManager _progressThresholdManager;
 
         #region Abstract Methods
         // Builds the pointer map by scanning the relevant memory regions from a captured memory dump.
@@ -52,9 +53,9 @@ namespace PointerFinder2.Emulators.StateBased
             _foundPaths = new ConcurrentBag<PointerPath>();
             _candidatesValidated = 0;
             _candidatesGenerated = 0;
-            // Initialize new fields for tracking progress.
             _foundPathsCounter = 0;
-            _nextUpdateThreshold = 1; // Report the very first path found immediately.
+            // Initialize the progress threshold manager with a starting threshold of 1 for immediate feedback.
+            _progressThresholdManager = new ProgressThresholdManager(1);
             _stopOnFirstCts = new CancellationTokenSource();
 
             var combinedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopOnFirstCts.Token).Token;
@@ -243,21 +244,13 @@ namespace PointerFinder2.Emulators.StateBased
             if (IsValidInAllStates(finalPath))
             {
                 _foundPaths.Add(finalPath);
-                // Increment a dedicated counter and report progress based on a dynamic threshold.
                 long currentCount = Interlocked.Increment(ref _foundPathsCounter);
 
-                if (currentCount >= _nextUpdateThreshold)
+                // Use the new manager class to decide when to report progress.
+                if (_progressThresholdManager.ShouldUpdate(currentCount))
                 {
                     // Report a count-only update.
                     ReportProgress(null, -1, -1, (int)currentCount);
-
-                    // Dynamically increase the update interval.
-                    if (currentCount < 100)
-                        _nextUpdateThreshold = currentCount + 10;
-                    else if (currentCount < 1000)
-                        _nextUpdateThreshold = currentCount + 100;
-                    else
-                        _nextUpdateThreshold = currentCount + 1000;
                 }
 
                 if (_params.StopOnFirstPathFound)

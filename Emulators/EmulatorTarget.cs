@@ -7,6 +7,7 @@
         PCSX2,
         DuckStation,
         RALibretroNDS,
-        Dolphin
+        Dolphin,
+        PPSSPP
     }
 }
