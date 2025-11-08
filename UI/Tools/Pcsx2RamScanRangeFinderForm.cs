@@ -11,7 +11,7 @@ using System.Windows.Forms;
 namespace PointerFinder2.UI.StaticRangeFinders
 {
     // A form that automatically analyzes emulator memory to find the static address range for a game.
-    public partial class Pcsx2RamScanRangeFinderForm : Form
+    public partial class Pcsx2RamScanRangeFinderForm : BaseForm
     {
         // --- Heuristic Constants (from python script) ---
         private static readonly byte[][] SearchStrings = { Encoding.ASCII.GetBytes("BASLUS"), Encoding.ASCII.GetBytes("BESLES") };

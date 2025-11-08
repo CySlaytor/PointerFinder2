@@ -19,8 +19,10 @@ using System.Windows.Forms;
 
 namespace PointerFinder2
 {
-    // The main window of the Pointer Finder application. Refactored to delegate logic to manager classes.
-    public partial class MainForm : Form
+    // The main window of the Pointer Finder application.
+    // It handles UI events, orchestrates scanning and filtering operations,
+    // and manages the overall application state.
+    public partial class MainForm : BaseForm
     {
         #region Fields
         // --- Manager Classes ---

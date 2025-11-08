@@ -5,11 +5,12 @@ using System;
 using System.Globalization;
 using System.Text;
 using System.Windows.Forms;
+using PointerFinder2.UI;
 
 namespace PointerFinder2
 {
     // A form for configuring the parameters of a pointer scan.
-    public partial class ScannerOptionsForm : Form
+    public partial class ScannerOptionsForm : BaseForm
     {
         private readonly EmulatorTarget _target;
         private readonly IEmulatorManager _manager;

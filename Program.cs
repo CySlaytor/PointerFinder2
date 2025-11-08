@@ -1,5 +1,7 @@
 using System;
 using System.Windows.Forms;
+using PointerFinder2.UI;
+using PointerFinder2.Properties;
 
 namespace PointerFinder2
 {
@@ -7,9 +9,23 @@ namespace PointerFinder2
     {
         // The main entry point for the application.
         [STAThread]
-        private static void Main(string[] args)
+        static void Main()
         {
-            ApplicationConfiguration.Initialize();
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            bool darkMode = Settings.Default.DarkModeEnabled;
+
+            if (Settings.Default.FirstRun)
+            {
+                darkMode = false;
+                Settings.Default.FirstRun = false;
+                Settings.Default.Save();
+            }
+
+            ThemeBlack.SetEnabled(darkMode);
+
+            string[] args = Environment.GetCommandLineArgs();
             // Pass command-line arguments to the MainForm to handle smart restarts.
             Application.Run(new MainForm(args));
         }

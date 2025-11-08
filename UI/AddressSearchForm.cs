@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace PointerFinder2.UI
 {
     // A dialog form for entering a hexadecimal address to search for in the results.
-    public partial class AddressSearchForm : Form
+    public partial class AddressSearchForm : BaseForm
     {
         // The validated hexadecimal address string entered by the user.
         public string SearchAddress { get; private set; }
@@ -53,6 +53,11 @@ namespace PointerFinder2.UI
                 btnFind.PerformClick();
                 e.SuppressKeyPress = true;
             }
+        }
+
+        private void AddressSearchForm_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }

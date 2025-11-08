@@ -16,69 +16,70 @@
         #region Windows Form Designer generated code
         private void InitializeComponent()
         {
-            this.label1 = new System.Windows.Forms.Label();
-            this.txtAddress = new System.Windows.Forms.TextBox();
-            this.btnFind = new System.Windows.Forms.Button();
-            this.btnCancel = new System.Windows.Forms.Button();
-            this.SuspendLayout();
+            label1 = new Label();
+            txtAddress = new TextBox();
+            btnFind = new Button();
+            btnCancel = new Button();
+            SuspendLayout();
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(12, 15);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(155, 15);
-            this.label1.TabIndex = 0;
-            this.label1.Text = "Enter Base Address (Hex):";
+            label1.AutoSize = true;
+            label1.Location = new Point(12, 15);
+            label1.Name = "label1";
+            label1.Size = new Size(140, 15);
+            label1.TabIndex = 0;
+            label1.Text = "Enter Base Address (Hex):";
             // 
             // txtAddress
             // 
-            this.txtAddress.Location = new System.Drawing.Point(15, 36);
-            this.txtAddress.Name = "txtAddress";
-            this.txtAddress.Size = new System.Drawing.Size(257, 23);
-            this.txtAddress.TabIndex = 0;
-            this.txtAddress.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtAddress_KeyDown);
+            txtAddress.Location = new Point(15, 36);
+            txtAddress.Name = "txtAddress";
+            txtAddress.Size = new Size(257, 23);
+            txtAddress.TabIndex = 0;
+            txtAddress.KeyDown += txtAddress_KeyDown;
             // 
             // btnFind
             // 
-            this.btnFind.Location = new System.Drawing.Point(116, 75);
-            this.btnFind.Name = "btnFind";
-            this.btnFind.Size = new System.Drawing.Size(75, 23);
-            this.btnFind.TabIndex = 1;
-            this.btnFind.Text = "Find";
-            this.btnFind.UseVisualStyleBackColor = true;
-            this.btnFind.Click += new System.EventHandler(this.btnFind_Click);
+            btnFind.Location = new Point(116, 75);
+            btnFind.Name = "btnFind";
+            btnFind.Size = new Size(75, 23);
+            btnFind.TabIndex = 1;
+            btnFind.Text = "Find";
+            btnFind.UseVisualStyleBackColor = true;
+            btnFind.Click += btnFind_Click;
             // 
             // btnCancel
             // 
-            this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(197, 75);
-            this.btnCancel.Name = "btnCancel";
-            this.btnCancel.Size = new System.Drawing.Size(75, 23);
-            this.btnCancel.TabIndex = 2;
-            this.btnCancel.Text = "Cancel";
-            this.btnCancel.UseVisualStyleBackColor = true;
+            btnCancel.DialogResult = DialogResult.Cancel;
+            btnCancel.Location = new Point(197, 75);
+            btnCancel.Name = "btnCancel";
+            btnCancel.Size = new Size(75, 23);
+            btnCancel.TabIndex = 2;
+            btnCancel.Text = "Cancel";
+            btnCancel.UseVisualStyleBackColor = true;
             // 
             // AddressSearchForm
             // 
-            this.AcceptButton = this.btnFind;
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(284, 111);
-            this.Controls.Add(this.btnCancel);
-            this.Controls.Add(this.btnFind);
-            this.Controls.Add(this.txtAddress);
-            this.Controls.Add(this.label1);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.Name = "AddressSearchForm";
-            this.ShowInTaskbar = false;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Find Address";
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            AcceptButton = btnFind;
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            CancelButton = btnCancel;
+            ClientSize = new Size(284, 111);
+            Controls.Add(btnCancel);
+            Controls.Add(btnFind);
+            Controls.Add(txtAddress);
+            Controls.Add(label1);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "AddressSearchForm";
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Find Address";
+            Load += AddressSearchForm_Load;
+            ResumeLayout(false);
+            PerformLayout();
         }
         #endregion
 

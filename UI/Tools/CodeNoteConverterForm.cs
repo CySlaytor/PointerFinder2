@@ -10,7 +10,7 @@ using System.Windows.Forms;
 
 namespace PointerFinder2.UI
 {
-    public partial class CodeNoteConverterForm : Form
+    public partial class CodeNoteConverterForm : BaseForm
     {
         //Static fields to remember user inputs for the session.
         private static string _lastTriggerInput = "";
@@ -280,6 +280,16 @@ namespace PointerFinder2.UI
         private void btnClose_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        private void tabToNote_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void tabToTrigger_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
