@@ -7,6 +7,7 @@ namespace PointerFinder2
 {
     internal static class Program
     {
+        // The main entry point for the application.
         [STAThread]
         static void Main()
         {
@@ -25,6 +26,7 @@ namespace PointerFinder2
             ThemeBlack.SetEnabled(darkMode);
 
             string[] args = Environment.GetCommandLineArgs();
+            // Pass command-line arguments to the MainForm to handle smart restarts.
             Application.Run(new MainForm(args));
         }
     }

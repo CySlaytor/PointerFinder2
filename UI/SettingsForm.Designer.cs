@@ -96,7 +96,6 @@ namespace PointerFinder2
             tabGeneral.TabIndex = 0;
             tabGeneral.Text = "General";
             tabGeneral.UseVisualStyleBackColor = true;
-            tabGeneral.Click += tabGeneral_Click;
             // 
             // groupBox3
             // 
@@ -109,7 +108,6 @@ namespace PointerFinder2
             groupBox3.TabIndex = 2;
             groupBox3.TabStop = false;
             groupBox3.Text = "Theme";
-            groupBox3.Enter += groupBox3_Enter;
             // 
             // CheckDarkModeEnabled
             // 
@@ -136,7 +134,6 @@ namespace PointerFinder2
             grpSorting.TabIndex = 3;
             grpSorting.TabStop = false;
             grpSorting.Text = "Sorting";
-            grpSorting.Enter += grpSorting_Enter;
             // 
             // chkSortByLevelFirst
             // 
@@ -208,7 +205,6 @@ namespace PointerFinder2
             grpPerformance.TabIndex = 1;
             grpPerformance.TabStop = false;
             grpPerformance.Text = "Performance";
-            grpPerformance.Enter += grpPerformance_Enter;
             // 
             // chkLimitCpuUsage
             // 
@@ -235,7 +231,6 @@ namespace PointerFinder2
             grpSound.TabIndex = 0;
             grpSound.TabStop = false;
             grpSound.Text = "Sound";
-            grpSound.Enter += grpSound_Enter;
             // 
             // chkUseDefaultSounds
             // 
@@ -307,7 +302,6 @@ namespace PointerFinder2
             groupBox1.TabIndex = 0;
             groupBox1.TabStop = false;
             groupBox1.Text = "Formatting Options";
-            groupBox1.Enter += groupBox1_Enter;
             // 
             // chkSuffixOnLastLine
             // 
@@ -393,7 +387,6 @@ namespace PointerFinder2
             tabDebug.TabIndex = 1;
             tabDebug.Text = "Debug";
             tabDebug.UseVisualStyleBackColor = true;
-            tabDebug.Click += tabDebug_Click;
             // 
             // grpLogging
             // 
@@ -409,7 +402,6 @@ namespace PointerFinder2
             grpLogging.TabIndex = 1;
             grpLogging.TabStop = false;
             grpLogging.Text = "Logging and Debug Toggles";
-            grpLogging.Enter += grpLogging_Enter;
             // 
             // chkLogStateScanDetails
             // 
