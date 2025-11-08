@@ -17,341 +17,390 @@
 
         private void InitializeComponent()
         {
-            this.btnClose = new System.Windows.Forms.Button();
-            this.tabControl1 = new System.Windows.Forms.TabControl();
-            this.tabToNote = new System.Windows.Forms.TabPage();
-            this.btnCopyToClipboard = new System.Windows.Forms.Button();
-            this.comboMemorySize = new System.Windows.Forms.ComboBox();
-            this.txtDescription = new System.Windows.Forms.TextBox();
-            this.label4 = new System.Windows.Forms.Label();
-            this.label3 = new System.Windows.Forms.Label();
-            this.richCodeNoteOutput = new System.Windows.Forms.RichTextBox();
-            this.label2 = new System.Windows.Forms.Label();
-            this.btnConvert = new System.Windows.Forms.Button();
-            this.txtTriggerInput = new System.Windows.Forms.TextBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.tabToTrigger = new System.Windows.Forms.TabPage();
-            this.chkUseMask = new System.Windows.Forms.CheckBox();
-            this.btnCopyTrigger = new System.Windows.Forms.Button();
-            this.label8 = new System.Windows.Forms.Label();
-            this.txtTriggerOutput = new System.Windows.Forms.TextBox();
-            this.btnReconvert = new System.Windows.Forms.Button();
-            this.comboPointerPrefix = new System.Windows.Forms.ComboBox();
-            this.label7 = new System.Windows.Forms.Label();
-            this.txtBaseAddress = new System.Windows.Forms.TextBox();
-            this.label6 = new System.Windows.Forms.Label();
-            this.richCodeNoteInput = new System.Windows.Forms.RichTextBox();
-            this.label5 = new System.Windows.Forms.Label();
-            this.tabControl1.SuspendLayout();
-            this.tabToNote.SuspendLayout();
-            this.tabToTrigger.SuspendLayout();
-            this.SuspendLayout();
+            btnClose = new Button();
+            tabControl1 = new TabControl();
+            tabToNote = new TabPage();
+            btnCopyToClipboard = new Button();
+            comboMemorySize = new ComboBox();
+            txtDescription = new TextBox();
+            label4 = new Label();
+            label3 = new Label();
+            richCodeNoteOutput = new RichTextBox();
+            label2 = new Label();
+            btnConvert = new Button();
+            txtTriggerInput = new TextBox();
+            label1 = new Label();
+            tabToTrigger = new TabPage();
+            chkUseMask = new CheckBox();
+            btnCopyTrigger = new Button();
+            label8 = new Label();
+            txtTriggerOutput = new TextBox();
+            btnReconvert = new Button();
+            comboPointerPrefix = new ComboBox();
+            label7 = new Label();
+            txtBaseAddress = new TextBox();
+            label6 = new Label();
+            richCodeNoteInput = new RichTextBox();
+            label5 = new Label();
+            tabControl1.SuspendLayout();
+            tabToNote.SuspendLayout();
+            tabToTrigger.SuspendLayout();
+            SuspendLayout();
             // 
             // btnClose
             // 
-            this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            // The DialogResult property is removed as it doesn't work for non-modal forms.
-            // this.btnClose.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnClose.Location = new System.Drawing.Point(509, 365);
-            this.btnClose.Name = "btnClose";
-            this.btnClose.Size = new System.Drawing.Size(75, 23);
-            this.btnClose.TabIndex = 5;
-            this.btnClose.Text = "Close";
-            this.btnClose.UseVisualStyleBackColor = true;
-            // A direct Click event handler is added to ensure the form closes.
-            this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
+            btnClose.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnClose.BackColor = Color.Transparent;
+            btnClose.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
+            btnClose.FlatAppearance.CheckedBackColor = Color.FromArgb(136, 54, 82, 104);
+            btnClose.ForeColor = SystemColors.ControlText;
+            btnClose.Location = new Point(509, 365);
+            btnClose.Name = "btnClose";
+            btnClose.Size = new Size(75, 23);
+            btnClose.TabIndex = 5;
+            btnClose.Text = "Close";
+            btnClose.UseVisualStyleBackColor = false;
+            btnClose.Click += btnClose_Click;
             // 
             // tabControl1
             // 
-            this.tabControl1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.tabControl1.Controls.Add(this.tabToNote);
-            this.tabControl1.Controls.Add(this.tabToTrigger);
-            this.tabControl1.Location = new System.Drawing.Point(0, 0);
-            this.tabControl1.Name = "tabControl1";
-            this.tabControl1.SelectedIndex = 0;
-            this.tabControl1.Size = new System.Drawing.Size(597, 359);
-            this.tabControl1.TabIndex = 6;
+            tabControl1.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            tabControl1.Controls.Add(tabToNote);
+            tabControl1.Controls.Add(tabToTrigger);
+            tabControl1.ForeColor = Color.White;
+            tabControl1.Location = new Point(0, 0);
+            tabControl1.Name = "tabControl1";
+            tabControl1.SelectedIndex = 0;
+            tabControl1.Size = new Size(597, 359);
+            tabControl1.TabIndex = 6;
             // 
             // tabToNote
             // 
-            this.tabToNote.Controls.Add(this.btnCopyToClipboard);
-            this.tabToNote.Controls.Add(this.comboMemorySize);
-            this.tabToNote.Controls.Add(this.txtDescription);
-            this.tabToNote.Controls.Add(this.label4);
-            this.tabToNote.Controls.Add(this.label3);
-            this.tabToNote.Controls.Add(this.richCodeNoteOutput);
-            this.tabToNote.Controls.Add(this.label2);
-            this.tabToNote.Controls.Add(this.btnConvert);
-            this.tabToNote.Controls.Add(this.txtTriggerInput);
-            this.tabToNote.Controls.Add(this.label1);
-            this.tabToNote.Location = new System.Drawing.Point(4, 24);
-            this.tabToNote.Name = "tabToNote";
-            this.tabToNote.Padding = new System.Windows.Forms.Padding(3);
-            this.tabToNote.Size = new System.Drawing.Size(589, 331);
-            this.tabToNote.TabIndex = 0;
-            this.tabToNote.Text = "RA Trigger to Code Note";
-            this.tabToNote.UseVisualStyleBackColor = true;
+            tabToNote.BackColor = Color.Transparent;
+            tabToNote.Controls.Add(btnCopyToClipboard);
+            tabToNote.Controls.Add(comboMemorySize);
+            tabToNote.Controls.Add(txtDescription);
+            tabToNote.Controls.Add(label4);
+            tabToNote.Controls.Add(label3);
+            tabToNote.Controls.Add(richCodeNoteOutput);
+            tabToNote.Controls.Add(label2);
+            tabToNote.Controls.Add(btnConvert);
+            tabToNote.Controls.Add(txtTriggerInput);
+            tabToNote.Controls.Add(label1);
+            tabToNote.ForeColor = SystemColors.ControlText;
+            tabToNote.Location = new Point(4, 24);
+            tabToNote.Name = "tabToNote";
+            tabToNote.Padding = new Padding(3);
+            tabToNote.Size = new Size(589, 331);
+            tabToNote.TabIndex = 0;
+            tabToNote.Text = "RA Trigger to Code Note";
+            tabToNote.UseVisualStyleBackColor = true;
+            tabToNote.Click += tabToNote_Click;
             // 
             // btnCopyToClipboard
             // 
-            this.btnCopyToClipboard.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCopyToClipboard.Location = new System.Drawing.Point(459, 300);
-            this.btnCopyToClipboard.Name = "btnCopyToClipboard";
-            this.btnCopyToClipboard.Size = new System.Drawing.Size(122, 23);
-            this.btnCopyToClipboard.TabIndex = 15;
-            this.btnCopyToClipboard.Text = "Copy to Clipboard";
-            this.btnCopyToClipboard.UseVisualStyleBackColor = true;
-            this.btnCopyToClipboard.Click += new System.EventHandler(this.btnCopyToClipboard_Click);
+            btnCopyToClipboard.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnCopyToClipboard.BackColor = Color.Transparent;
+            btnCopyToClipboard.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
+            btnCopyToClipboard.FlatAppearance.CheckedBackColor = Color.FromArgb(136, 54, 82, 104);
+            btnCopyToClipboard.ForeColor = SystemColors.ControlText;
+            btnCopyToClipboard.Location = new Point(457, 298);
+            btnCopyToClipboard.Name = "btnCopyToClipboard";
+            btnCopyToClipboard.Size = new Size(122, 23);
+            btnCopyToClipboard.TabIndex = 15;
+            btnCopyToClipboard.Text = "Copy to Clipboard";
+            btnCopyToClipboard.UseVisualStyleBackColor = false;
+            btnCopyToClipboard.Click += btnCopyToClipboard_Click;
             // 
             // comboMemorySize
             // 
-            this.comboMemorySize.FormattingEnabled = true;
-            this.comboMemorySize.Location = new System.Drawing.Point(10, 78);
-            this.comboMemorySize.Name = "comboMemorySize";
-            this.comboMemorySize.Size = new System.Drawing.Size(127, 23);
-            this.comboMemorySize.TabIndex = 12;
-            this.comboMemorySize.TextChanged += new System.EventHandler(this.comboMemorySize_TextChanged);
+            comboMemorySize.BackColor = SystemColors.Window;
+            comboMemorySize.ForeColor = SystemColors.WindowText;
+            comboMemorySize.FormattingEnabled = true;
+            comboMemorySize.Location = new Point(10, 78);
+            comboMemorySize.Name = "comboMemorySize";
+            comboMemorySize.Size = new Size(127, 23);
+            comboMemorySize.TabIndex = 12;
+            comboMemorySize.TextChanged += comboMemorySize_TextChanged;
             // 
             // txtDescription
             // 
-            this.txtDescription.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtDescription.Location = new System.Drawing.Point(143, 78);
-            this.txtDescription.Name = "txtDescription";
-            this.txtDescription.Size = new System.Drawing.Size(438, 23);
-            this.txtDescription.TabIndex = 13;
-            this.txtDescription.TextChanged += new System.EventHandler(this.txtDescription_TextChanged);
+            txtDescription.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtDescription.BackColor = SystemColors.Window;
+            txtDescription.ForeColor = SystemColors.WindowText;
+            txtDescription.Location = new Point(143, 78);
+            txtDescription.Name = "txtDescription";
+            txtDescription.Size = new Size(436, 23);
+            txtDescription.TabIndex = 13;
+            txtDescription.TextChanged += txtDescription_TextChanged;
             // 
             // label4
             // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(143, 60);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(103, 15);
-            this.label4.TabIndex = 18;
-            this.label4.Text = "Description (final):";
+            label4.AutoSize = true;
+            label4.BackColor = Color.Transparent;
+            label4.ForeColor = SystemColors.ControlText;
+            label4.Location = new Point(143, 60);
+            label4.Name = "label4";
+            label4.Size = new Size(104, 15);
+            label4.TabIndex = 18;
+            label4.Text = "Description (final):";
             // 
             // label3
             // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(10, 60);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(109, 15);
-            this.label3.TabIndex = 16;
-            this.label3.Text = "Memory Size (final):";
+            label3.AutoSize = true;
+            label3.BackColor = Color.Transparent;
+            label3.ForeColor = SystemColors.ControlText;
+            label3.Location = new Point(10, 60);
+            label3.Name = "label3";
+            label3.Size = new Size(112, 15);
+            label3.TabIndex = 16;
+            label3.Text = "Memory Size (final):";
             // 
             // richCodeNoteOutput
             // 
-            this.richCodeNoteOutput.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.richCodeNoteOutput.Font = new System.Drawing.Font("Consolas", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.richCodeNoteOutput.Location = new System.Drawing.Point(10, 132);
-            this.richCodeNoteOutput.Name = "richCodeNoteOutput";
-            this.richCodeNoteOutput.ReadOnly = true;
-            this.richCodeNoteOutput.Size = new System.Drawing.Size(571, 162);
-            this.richCodeNoteOutput.TabIndex = 14;
-            this.richCodeNoteOutput.Text = "";
+            richCodeNoteOutput.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            richCodeNoteOutput.BackColor = SystemColors.Control;
+            richCodeNoteOutput.Font = new Font("Consolas", 9F);
+            richCodeNoteOutput.ForeColor = SystemColors.WindowText;
+            richCodeNoteOutput.Location = new Point(10, 132);
+            richCodeNoteOutput.Name = "richCodeNoteOutput";
+            richCodeNoteOutput.ReadOnly = true;
+            richCodeNoteOutput.Size = new Size(569, 160);
+            richCodeNoteOutput.TabIndex = 14;
+            richCodeNoteOutput.Text = "";
             // 
             // label2
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(10, 114);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(127, 15);
-            this.label2.TabIndex = 13;
-            this.label2.Text = "Formatted Code Note:";
+            label2.AutoSize = true;
+            label2.BackColor = Color.Transparent;
+            label2.ForeColor = SystemColors.ControlText;
+            label2.Location = new Point(10, 114);
+            label2.Name = "label2";
+            label2.Size = new Size(125, 15);
+            label2.TabIndex = 13;
+            label2.Text = "Formatted Code Note:";
             // 
             // btnConvert
             // 
-            this.btnConvert.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnConvert.Location = new System.Drawing.Point(487, 25);
-            this.btnConvert.Name = "btnConvert";
-            this.btnConvert.Size = new System.Drawing.Size(94, 23);
-            this.btnConvert.TabIndex = 11;
-            this.btnConvert.Text = "Convert";
-            this.btnConvert.UseVisualStyleBackColor = true;
-            this.btnConvert.Click += new System.EventHandler(this.btnConvert_Click);
+            btnConvert.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnConvert.BackColor = Color.Transparent;
+            btnConvert.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
+            btnConvert.FlatAppearance.CheckedBackColor = Color.FromArgb(136, 54, 82, 104);
+            btnConvert.ForeColor = SystemColors.ControlText;
+            btnConvert.Location = new Point(485, 25);
+            btnConvert.Name = "btnConvert";
+            btnConvert.Size = new Size(94, 23);
+            btnConvert.TabIndex = 11;
+            btnConvert.Text = "Convert";
+            btnConvert.UseVisualStyleBackColor = false;
+            btnConvert.Click += btnConvert_Click;
             // 
             // txtTriggerInput
             // 
-            this.txtTriggerInput.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtTriggerInput.Location = new System.Drawing.Point(10, 25);
-            this.txtTriggerInput.Name = "txtTriggerInput";
-            this.txtTriggerInput.Size = new System.Drawing.Size(471, 23);
-            this.txtTriggerInput.TabIndex = 10;
+            txtTriggerInput.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtTriggerInput.BackColor = SystemColors.Window;
+            txtTriggerInput.ForeColor = SystemColors.WindowText;
+            txtTriggerInput.Location = new Point(10, 25);
+            txtTriggerInput.Name = "txtTriggerInput";
+            txtTriggerInput.Size = new Size(469, 23);
+            txtTriggerInput.TabIndex = 10;
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(10, 7);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(183, 15);
-            this.label1.TabIndex = 9;
-            this.label1.Text = "Input RetroAchievements Trigger:";
+            label1.AutoSize = true;
+            label1.BackColor = Color.Transparent;
+            label1.ForeColor = SystemColors.ControlText;
+            label1.Location = new Point(10, 7);
+            label1.Name = "label1";
+            label1.Size = new Size(184, 15);
+            label1.TabIndex = 9;
+            label1.Text = "Input RetroAchievements Trigger:";
             // 
             // tabToTrigger
             // 
-            this.tabToTrigger.Controls.Add(this.chkUseMask);
-            this.tabToTrigger.Controls.Add(this.btnCopyTrigger);
-            this.tabToTrigger.Controls.Add(this.label8);
-            this.tabToTrigger.Controls.Add(this.txtTriggerOutput);
-            this.tabToTrigger.Controls.Add(this.btnReconvert);
-            this.tabToTrigger.Controls.Add(this.comboPointerPrefix);
-            this.tabToTrigger.Controls.Add(this.label7);
-            this.tabToTrigger.Controls.Add(this.txtBaseAddress);
-            this.tabToTrigger.Controls.Add(this.label6);
-            this.tabToTrigger.Controls.Add(this.richCodeNoteInput);
-            this.tabToTrigger.Controls.Add(this.label5);
-            this.tabToTrigger.Location = new System.Drawing.Point(4, 24);
-            this.tabToTrigger.Name = "tabToTrigger";
-            this.tabToTrigger.Padding = new System.Windows.Forms.Padding(3);
-            this.tabToTrigger.Size = new System.Drawing.Size(589, 331);
-            this.tabToTrigger.TabIndex = 1;
-            this.tabToTrigger.Text = "Code Note to RA Trigger";
-            this.tabToTrigger.UseVisualStyleBackColor = true;
+            tabToTrigger.BackColor = Color.Transparent;
+            tabToTrigger.Controls.Add(chkUseMask);
+            tabToTrigger.Controls.Add(btnCopyTrigger);
+            tabToTrigger.Controls.Add(label8);
+            tabToTrigger.Controls.Add(txtTriggerOutput);
+            tabToTrigger.Controls.Add(btnReconvert);
+            tabToTrigger.Controls.Add(comboPointerPrefix);
+            tabToTrigger.Controls.Add(label7);
+            tabToTrigger.Controls.Add(txtBaseAddress);
+            tabToTrigger.Controls.Add(label6);
+            tabToTrigger.Controls.Add(richCodeNoteInput);
+            tabToTrigger.Controls.Add(label5);
+            tabToTrigger.ForeColor = Color.White;
+            tabToTrigger.Location = new Point(4, 24);
+            tabToTrigger.Name = "tabToTrigger";
+            tabToTrigger.Padding = new Padding(3);
+            tabToTrigger.Size = new Size(589, 331);
+            tabToTrigger.TabIndex = 1;
+            tabToTrigger.Text = "Code Note to RA Trigger";
+            tabToTrigger.Click += tabToTrigger_Click;
             // 
             // chkUseMask
             // 
-            this.chkUseMask.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.chkUseMask.AutoSize = true;
-            this.chkUseMask.Location = new System.Drawing.Point(270, 247);
-            this.chkUseMask.Name = "chkUseMask";
-            this.chkUseMask.Size = new System.Drawing.Size(77, 19);
-            this.chkUseMask.TabIndex = 10;
-            this.chkUseMask.Text = "Use Mask";
-            this.chkUseMask.UseVisualStyleBackColor = true;
+            chkUseMask.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            chkUseMask.AutoSize = true;
+            chkUseMask.BackColor = Color.Transparent;
+            chkUseMask.ForeColor = SystemColors.ControlText;
+            chkUseMask.Location = new Point(270, 245);
+            chkUseMask.Name = "chkUseMask";
+            chkUseMask.Size = new Size(76, 19);
+            chkUseMask.TabIndex = 10;
+            chkUseMask.Text = "Use Mask";
+            chkUseMask.UseVisualStyleBackColor = false;
             // 
             // btnCopyTrigger
             // 
-            this.btnCopyTrigger.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCopyTrigger.Location = new System.Drawing.Point(459, 300);
-            this.btnCopyTrigger.Name = "btnCopyTrigger";
-            this.btnCopyTrigger.Size = new System.Drawing.Size(122, 23);
-            this.btnCopyTrigger.TabIndex = 9;
-            this.btnCopyTrigger.Text = "Copy to Clipboard";
-            this.btnCopyTrigger.UseVisualStyleBackColor = true;
-            this.btnCopyTrigger.Click += new System.EventHandler(this.btnCopyTrigger_Click);
+            btnCopyTrigger.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnCopyTrigger.BackColor = Color.Transparent;
+            btnCopyTrigger.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
+            btnCopyTrigger.FlatAppearance.CheckedBackColor = Color.FromArgb(136, 54, 82, 104);
+            btnCopyTrigger.ForeColor = SystemColors.ControlText;
+            btnCopyTrigger.Location = new Point(457, 298);
+            btnCopyTrigger.Name = "btnCopyTrigger";
+            btnCopyTrigger.Size = new Size(122, 23);
+            btnCopyTrigger.TabIndex = 9;
+            btnCopyTrigger.Text = "Copy to Clipboard";
+            btnCopyTrigger.UseVisualStyleBackColor = false;
+            btnCopyTrigger.Click += btnCopyTrigger_Click;
             // 
             // label8
             // 
-            this.label8.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(10, 276);
-            this.label8.Name = "label8";
-            this.label8.Size = new System.Drawing.Size(141, 15);
-            this.label8.TabIndex = 8;
-            this.label8.Text = "Output RA Trigger String:";
+            label8.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            label8.AutoSize = true;
+            label8.BackColor = Color.Transparent;
+            label8.ForeColor = SystemColors.ControlText;
+            label8.Location = new Point(10, 274);
+            label8.Name = "label8";
+            label8.Size = new Size(140, 15);
+            label8.TabIndex = 8;
+            label8.Text = "Output RA Trigger String:";
             // 
             // txtTriggerOutput
             // 
-            this.txtTriggerOutput.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtTriggerOutput.Font = new System.Drawing.Font("Consolas", 9F);
-            this.txtTriggerOutput.Location = new System.Drawing.Point(10, 294);
-            this.txtTriggerOutput.Name = "txtTriggerOutput";
-            this.txtTriggerOutput.ReadOnly = true;
-            this.txtTriggerOutput.Size = new System.Drawing.Size(443, 22);
-            this.txtTriggerOutput.TabIndex = 7;
+            txtTriggerOutput.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            txtTriggerOutput.BackColor = SystemColors.Control;
+            txtTriggerOutput.Font = new Font("Consolas", 9F);
+            txtTriggerOutput.ForeColor = SystemColors.WindowText;
+            txtTriggerOutput.Location = new Point(10, 292);
+            txtTriggerOutput.Name = "txtTriggerOutput";
+            txtTriggerOutput.ReadOnly = true;
+            txtTriggerOutput.Size = new Size(441, 22);
+            txtTriggerOutput.TabIndex = 7;
             // 
             // btnReconvert
             // 
-            this.btnReconvert.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnReconvert.Location = new System.Drawing.Point(487, 245);
-            this.btnReconvert.Name = "btnReconvert";
-            this.btnReconvert.Size = new System.Drawing.Size(94, 23);
-            this.btnReconvert.TabIndex = 6;
-            this.btnReconvert.Text = "Re-Convert";
-            this.btnReconvert.UseVisualStyleBackColor = true;
-            this.btnReconvert.Click += new System.EventHandler(this.btnReconvert_Click);
+            btnReconvert.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnReconvert.BackColor = Color.Transparent;
+            btnReconvert.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
+            btnReconvert.FlatAppearance.CheckedBackColor = Color.FromArgb(136, 54, 82, 104);
+            btnReconvert.ForeColor = SystemColors.ControlText;
+            btnReconvert.Location = new Point(485, 243);
+            btnReconvert.Name = "btnReconvert";
+            btnReconvert.Size = new Size(94, 23);
+            btnReconvert.TabIndex = 6;
+            btnReconvert.Text = "Re-Convert";
+            btnReconvert.UseVisualStyleBackColor = false;
+            btnReconvert.Click += btnReconvert_Click;
             // 
             // comboPointerPrefix
             // 
-            this.comboPointerPrefix.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.comboPointerPrefix.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboPointerPrefix.FormattingEnabled = true;
-            this.comboPointerPrefix.Location = new System.Drawing.Point(143, 245);
-            this.comboPointerPrefix.Name = "comboPointerPrefix";
-            this.comboPointerPrefix.Size = new System.Drawing.Size(121, 23);
-            this.comboPointerPrefix.TabIndex = 5;
-            this.comboPointerPrefix.SelectedIndexChanged += new System.EventHandler(this.comboPointerPrefix_SelectedIndexChanged);
+            comboPointerPrefix.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            comboPointerPrefix.BackColor = Color.FromArgb(55, 55, 55);
+            comboPointerPrefix.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboPointerPrefix.ForeColor = Color.White;
+            comboPointerPrefix.FormattingEnabled = true;
+            comboPointerPrefix.Location = new Point(143, 243);
+            comboPointerPrefix.Name = "comboPointerPrefix";
+            comboPointerPrefix.Size = new Size(121, 23);
+            comboPointerPrefix.TabIndex = 5;
+            comboPointerPrefix.SelectedIndexChanged += comboPointerPrefix_SelectedIndexChanged;
             // 
             // label7
             // 
-            this.label7.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.label7.AutoSize = true;
-            this.label7.Location = new System.Drawing.Point(143, 227);
-            this.label7.Name = "label7";
-            this.label7.Size = new System.Drawing.Size(82, 15);
-            this.label7.TabIndex = 4;
-            this.label7.Text = "Pointer Prefix:";
+            label7.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            label7.AutoSize = true;
+            label7.BackColor = Color.Transparent;
+            label7.ForeColor = SystemColors.ControlText;
+            label7.Location = new Point(143, 225);
+            label7.Name = "label7";
+            label7.Size = new Size(80, 15);
+            label7.TabIndex = 4;
+            label7.Text = "Pointer Prefix:";
             // 
             // txtBaseAddress
             // 
-            this.txtBaseAddress.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.txtBaseAddress.Location = new System.Drawing.Point(10, 245);
-            this.txtBaseAddress.Name = "txtBaseAddress";
-            this.txtBaseAddress.Size = new System.Drawing.Size(127, 23);
-            this.txtBaseAddress.TabIndex = 3;
+            txtBaseAddress.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            txtBaseAddress.BackColor = SystemColors.Window;
+            txtBaseAddress.ForeColor = Color.White;
+            txtBaseAddress.Location = new Point(10, 243);
+            txtBaseAddress.Name = "txtBaseAddress";
+            txtBaseAddress.Size = new Size(127, 23);
+            txtBaseAddress.TabIndex = 3;
             // 
             // label6
             // 
-            this.label6.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(10, 227);
-            this.label6.Name = "label6";
-            this.label6.Size = new System.Drawing.Size(109, 15);
-            this.label6.TabIndex = 2;
-            this.label6.Text = "Base Address (Hex):";
+            label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            label6.AutoSize = true;
+            label6.BackColor = Color.Transparent;
+            label6.ForeColor = SystemColors.ControlText;
+            label6.Location = new Point(10, 225);
+            label6.Name = "label6";
+            label6.Size = new Size(110, 15);
+            label6.TabIndex = 2;
+            label6.Text = "Base Address (Hex):";
             // 
             // richCodeNoteInput
             // 
-            this.richCodeNoteInput.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.richCodeNoteInput.Font = new System.Drawing.Font("Consolas", 9F);
-            this.richCodeNoteInput.Location = new System.Drawing.Point(10, 25);
-            this.richCodeNoteInput.Name = "richCodeNoteInput";
-            this.richCodeNoteInput.Size = new System.Drawing.Size(571, 199);
-            this.richCodeNoteInput.TabIndex = 1;
-            this.richCodeNoteInput.Text = "";
+            richCodeNoteInput.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            richCodeNoteInput.BackColor = SystemColors.Window;
+            richCodeNoteInput.Font = new Font("Consolas", 9F);
+            richCodeNoteInput.ForeColor = SystemColors.WindowText;
+            richCodeNoteInput.Location = new Point(10, 25);
+            richCodeNoteInput.Name = "richCodeNoteInput";
+            richCodeNoteInput.Size = new Size(569, 197);
+            richCodeNoteInput.TabIndex = 1;
+            richCodeNoteInput.Text = "";
             // 
             // label5
             // 
-            this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(10, 7);
-            this.label5.Name = "label5";
-            this.label5.Size = new System.Drawing.Size(101, 15);
-            this.label5.TabIndex = 0;
-            this.label5.Text = "Input Code Note:";
+            label5.AutoSize = true;
+            label5.BackColor = Color.Transparent;
+            label5.ForeColor = SystemColors.ControlText;
+            label5.Location = new Point(10, 7);
+            label5.Name = "label5";
+            label5.Size = new Size(98, 15);
+            label5.TabIndex = 0;
+            label5.Text = "Input Code Note:";
             // 
             // CodeNoteConverterForm
             // 
-            this.AcceptButton = this.btnConvert;
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.CancelButton = this.btnClose;
-            this.ClientSize = new System.Drawing.Size(596, 400);
-            this.Controls.Add(this.tabControl1);
-            this.Controls.Add(this.btnClose);
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.MinimumSize = new System.Drawing.Size(520, 420);
-            this.Name = "CodeNoteConverterForm";
-            this.ShowIcon = false;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Code Note Converter";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.CodeNoteConverterForm_FormClosing);
-            this.Load += new System.EventHandler(this.CodeNoteConverterForm_Load);
-            this.tabControl1.ResumeLayout(false);
-            this.tabToNote.ResumeLayout(false);
-            this.tabToNote.PerformLayout();
-            this.tabToTrigger.ResumeLayout(false);
-            this.tabToTrigger.PerformLayout();
-            this.ResumeLayout(false);
+            AcceptButton = btnConvert;
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            CancelButton = btnClose;
+            ClientSize = new Size(596, 400);
+            Controls.Add(tabControl1);
+            Controls.Add(btnClose);
+            ForeColor = SystemColors.ControlText;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            MinimumSize = new Size(520, 420);
+            Name = "CodeNoteConverterForm";
+            ShowIcon = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Code Note Converter";
+            FormClosing += CodeNoteConverterForm_FormClosing;
+            Load += CodeNoteConverterForm_Load;
+            tabControl1.ResumeLayout(false);
+            tabToNote.ResumeLayout(false);
+            tabToNote.PerformLayout();
+            tabToTrigger.ResumeLayout(false);
+            tabToTrigger.PerformLayout();
+            ResumeLayout(false);
 
         }
 

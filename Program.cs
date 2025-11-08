@@ -1,16 +1,30 @@
 using System;
 using System.Windows.Forms;
+using PointerFinder2.UI;
+using PointerFinder2.Properties;
 
 namespace PointerFinder2
 {
     internal static class Program
     {
-        // The main entry point for the application.
         [STAThread]
-        private static void Main(string[] args)
+        static void Main()
         {
-            ApplicationConfiguration.Initialize();
-            // Pass command-line arguments to the MainForm to handle smart restarts.
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            bool darkMode = Settings.Default.DarkModeEnabled;
+
+            if (Settings.Default.FirstRun)
+            {
+                darkMode = false;
+                Settings.Default.FirstRun = false;
+                Settings.Default.Save();
+            }
+
+            ThemeBlack.SetEnabled(darkMode);
+
+            string[] args = Environment.GetCommandLineArgs();
             Application.Run(new MainForm(args));
         }
     }

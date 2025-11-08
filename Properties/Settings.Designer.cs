@@ -10,13 +10,10 @@
 
 namespace PointerFinder2.Properties
 {
-
-
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "17.0.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase
     {
-
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
 
         public static Settings Default
@@ -32,14 +29,8 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("0, 0")]
         public global::System.Drawing.Point MainWindowLocation
         {
-            get
-            {
-                return ((global::System.Drawing.Point)(this["MainWindowLocation"]));
-            }
-            set
-            {
-                this["MainWindowLocation"] = value;
-            }
+            get { return ((global::System.Drawing.Point)(this["MainWindowLocation"])); }
+            set { this["MainWindowLocation"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -47,14 +38,8 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("982, 631")]
         public global::System.Drawing.Size MainWindowSize
         {
-            get
-            {
-                return ((global::System.Drawing.Size)(this["MainWindowSize"]));
-            }
-            set
-            {
-                this["MainWindowSize"] = value;
-            }
+            get { return ((global::System.Drawing.Size)(this["MainWindowSize"])); }
+            set { this["MainWindowSize"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -62,14 +47,8 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("Normal")]
         public global::System.Windows.Forms.FormWindowState MainWindowState
         {
-            get
-            {
-                return ((global::System.Windows.Forms.FormWindowState)(this["MainWindowState"]));
-            }
-            set
-            {
-                this["MainWindowState"] = value;
-            }
+            get { return ((global::System.Windows.Forms.FormWindowState)(this["MainWindowState"])); }
+            set { this["MainWindowState"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -77,14 +56,8 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("0, 0")]
         public global::System.Drawing.Point DebugLogLocation
         {
-            get
-            {
-                return ((global::System.Drawing.Point)(this["DebugLogLocation"]));
-            }
-            set
-            {
-                this["DebugLogLocation"] = value;
-            }
+            get { return ((global::System.Drawing.Point)(this["DebugLogLocation"])); }
+            set { this["DebugLogLocation"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -92,14 +65,8 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("1083, 593")]
         public global::System.Drawing.Size DebugLogSize
         {
-            get
-            {
-                return ((global::System.Drawing.Size)(this["DebugLogSize"]));
-            }
-            set
-            {
-                this["DebugLogSize"] = value;
-            }
+            get { return ((global::System.Drawing.Size)(this["DebugLogSize"])); }
+            set { this["DebugLogSize"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -107,14 +74,8 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("0, 0")]
         public global::System.Drawing.Point CodeNoteConverterLocation
         {
-            get
-            {
-                return ((global::System.Drawing.Point)(this["CodeNoteConverterLocation"]));
-            }
-            set
-            {
-                this["CodeNoteConverterLocation"] = value;
-            }
+            get { return ((global::System.Drawing.Point)(this["CodeNoteConverterLocation"])); }
+            set { this["CodeNoteConverterLocation"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -122,30 +83,17 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("612, 439")]
         public global::System.Drawing.Size CodeNoteConverterSize
         {
-            get
-            {
-                return ((global::System.Drawing.Size)(this["CodeNoteConverterSize"]));
-            }
-            set
-            {
-                this["CodeNoteConverterSize"] = value;
-            }
+            get { return ((global::System.Drawing.Size)(this["CodeNoteConverterSize"])); }
+            set { this["CodeNoteConverterSize"] = value; }
         }
 
-        // Added settings properties to store the window's position and size.
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("0, 0")]
         public global::System.Drawing.Point CodeNoteHierarchyFixerLocation
         {
-            get
-            {
-                return ((global::System.Drawing.Point)(this["CodeNoteHierarchyFixerLocation"]));
-            }
-            set
-            {
-                this["CodeNoteHierarchyFixerLocation"] = value;
-            }
+            get { return ((global::System.Drawing.Point)(this["CodeNoteHierarchyFixerLocation"])); }
+            set { this["CodeNoteHierarchyFixerLocation"] = value; }
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
@@ -153,13 +101,30 @@ namespace PointerFinder2.Properties
         [global::System.Configuration.DefaultSettingValueAttribute("800, 500")]
         public global::System.Drawing.Size CodeNoteHierarchyFixerSize
         {
+            get { return ((global::System.Drawing.Size)(this["CodeNoteHierarchyFixerSize"])); }
+            set { this["CodeNoteHierarchyFixerSize"] = value; }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool DarkModeEnabled
+        {
+            get { return ((bool)(this["DarkModeEnabled"])); }
+            set { this["DarkModeEnabled"] = value; }
+        }
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool FirstRun
+        {
             get
             {
-                return ((global::System.Drawing.Size)(this["CodeNoteHierarchyFixerSize"]));
+                return ((bool)(this["FirstRun"]));
             }
             set
             {
-                this["CodeNoteHierarchyFixerSize"] = value;
+                this["FirstRun"] = value;
             }
         }
     }

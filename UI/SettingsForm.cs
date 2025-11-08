@@ -1,11 +1,12 @@
 ﻿using PointerFinder2.Core;
 using PointerFinder2.DataModels;
 using PointerFinder2.Properties;
+using PointerFinder2.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
-using PointerFinder2.UI;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Button;
 
 namespace PointerFinder2
 {
@@ -25,27 +26,20 @@ namespace PointerFinder2
 
         private void SettingsForm_Load(object sender, EventArgs e)
         {
-            // --- Load General Settings ---
+            _isInitializing = true;
+            CheckDarkModeEnabled.Checked = Properties.Settings.Default.DarkModeEnabled;
             chkUseDefaultSounds.Checked = GlobalSettings.UseWindowsDefaultSound;
             chkLimitCpuUsage.Checked = GlobalSettings.LimitCpuUsage;
-            // Load the new sorting preference setting.
             chkSortByLevelFirst.Checked = GlobalSettings.SortByLevelFirst;
-
-            // --- Load Debug Settings ---
             chkLogLiveScan.Checked = DebugSettings.LogLiveScan;
             chkLogFilter.Checked = DebugSettings.LogFilterValidation;
             chkLogRefineScan.Checked = DebugSettings.LogRefineScan;
             chkLogStateScanDetails.Checked = DebugSettings.LogStateBasedScanDetails;
-
-            // Load Code Note settings
             txtPrefix.Text = GlobalSettings.CodeNotePrefix;
             txtSuffix.Text = GlobalSettings.CodeNoteSuffix;
             chkAlign.Checked = GlobalSettings.CodeNoteAlignSuffixes;
             chkSuffixOnLastLine.Checked = GlobalSettings.CodeNoteSuffixOnLastLineOnly;
-
             UpdateCodeNotePreview();
-
-            // All controls have been populated, so now we can allow event handlers to run.
             _isInitializing = false;
         }
 
@@ -54,7 +48,6 @@ namespace PointerFinder2
             Close();
         }
 
-        // This button now triggers the smart self-restart to fully reset the application's memory.
         private void btnRestartApp_Click(object sender, EventArgs e)
         {
             var result = MessageBox.Show(
@@ -69,10 +62,8 @@ namespace PointerFinder2
             }
         }
 
-        // Event handler for the new "Purge Memory" button.
         private void btnPurgeMemory_Click(object sender, EventArgs e)
         {
-            // Call the public PurgeMemory method on the MainForm instance.
             _mainForm?.PurgeMemory();
             MessageBox.Show(
                 "Application memory has been purged.\n\nYou should see the RAM usage drop in Task Manager.",
@@ -96,18 +87,15 @@ namespace PointerFinder2
             {
                 try
                 {
-                    // Reset Application Settings (window positions, etc.)
                     Settings.Default.Reset();
                     Settings.Default.Save();
 
-                    // Delete the INI file
                     string settingsFile = Path.Combine(Application.StartupPath, "settings.ini");
                     if (File.Exists(settingsFile))
                     {
                         File.Delete(settingsFile);
                     }
 
-                    // Inform the user and restart
                     MessageBox.Show("All settings have been reset to default. The application will now restart.", "Settings Reset", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     _mainForm?.RestartApplication();
                 }
@@ -117,7 +105,6 @@ namespace PointerFinder2
                 }
             }
         }
-
 
         #region Settings Event Handlers
         private void chkUseDefaultSounds_CheckedChanged(object sender, EventArgs e)
@@ -134,7 +121,6 @@ namespace PointerFinder2
             SettingsManager.SaveGlobalSettingsOnly();
         }
 
-        // Add event handler for the new sorting checkbox.
         private void chkSortByLevelFirst_CheckedChanged(object sender, EventArgs e)
         {
             if (_isInitializing) return;
@@ -171,12 +157,10 @@ namespace PointerFinder2
         }
         #endregion
 
-        // Add event handlers and preview logic for Code Notes tab
         private void CodeNoteSetting_Changed(object sender, EventArgs e)
         {
             if (_isInitializing) return;
 
-            // Update Global Settings from UI controls
             GlobalSettings.CodeNotePrefix = txtPrefix.Text;
             GlobalSettings.CodeNoteSuffix = txtSuffix.Text;
             GlobalSettings.CodeNoteAlignSuffixes = chkAlign.Checked;
@@ -197,8 +181,63 @@ namespace PointerFinder2
             };
 
             var dummyOffsets = new List<int> { 0x4, 0x2A0, -0x1C };
-            // Add a dummy description to the last line of the preview for context.
             richPreview.Text = CodeNoteHelper.BuildCodeNote(dummyOffsets, settings, "8-bit", "Description");
+        }
+
+        private void grpPerformance_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void CheckDarkModeEnabled_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_isInitializing) return;
+            Properties.Settings.Default.DarkModeEnabled = CheckDarkModeEnabled.Checked;
+            Properties.Settings.Default.Save();
+
+            // Restart aplikacji, żeby wszystkie formy odczytały nowe ustawienie
+            Application.Restart();
+            Environment.Exit(0);
+        }
+
+
+
+
+
+
+        private void groupBox3_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void tabGeneral_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void grpSorting_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void groupBox1_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void grpSound_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void tabDebug_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void grpLogging_Enter(object sender, EventArgs e)
+        {
+
         }
     }
 }

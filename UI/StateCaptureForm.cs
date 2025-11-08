@@ -13,7 +13,7 @@ using PointerFinder2.UI;
 
 namespace PointerFinder2
 {
-    public partial class StateCaptureForm : Form
+    public partial class StateCaptureForm : BaseForm
     {
         private readonly IEmulatorManager _manager;
         private readonly AppSettings _currentSettings;

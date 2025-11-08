@@ -17,171 +17,166 @@
 
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
-            this.btnClose = new System.Windows.Forms.Button();
-            this.btnApply = new System.Windows.Forms.Button();
-            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
-            this.richLog = new System.Windows.Forms.RichTextBox();
-            this.panelTop = new System.Windows.Forms.Panel();
-            this.btnAnalyze = new System.Windows.Forms.Button();
-            this.btnBrowse = new System.Windows.Forms.Button();
-            this.txtRomPath = new System.Windows.Forms.TextBox();
-            this.label2 = new System.Windows.Forms.Label();
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
-            this.lblResult = new System.Windows.Forms.Label();
-            this.label1 = new System.Windows.Forms.Label();
-            this.panelTop.SuspendLayout();
-            this.groupBox1.SuspendLayout();
-            this.SuspendLayout();
+            components = new System.ComponentModel.Container();
+            btnClose = new Button();
+            btnApply = new Button();
+            toolTip1 = new ToolTip(components);
+            label1 = new Label();
+            richLog = new RichTextBox();
+            panelTop = new Panel();
+            btnAnalyze = new Button();
+            btnBrowse = new Button();
+            txtRomPath = new TextBox();
+            label2 = new Label();
+            groupBox1 = new GroupBox();
+            lblResult = new Label();
+            panelTop.SuspendLayout();
+            groupBox1.SuspendLayout();
+            SuspendLayout();
             // 
             // btnClose
             // 
-            this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnClose.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnClose.Location = new System.Drawing.Point(497, 349);
-            this.btnClose.Name = "btnClose";
-            this.btnClose.Size = new System.Drawing.Size(75, 28);
-            this.btnClose.TabIndex = 3;
-            this.btnClose.Text = "Close";
-            this.btnClose.UseVisualStyleBackColor = true;
+            btnClose.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnClose.DialogResult = DialogResult.Cancel;
+            btnClose.Location = new Point(497, 349);
+            btnClose.Name = "btnClose";
+            btnClose.Size = new Size(75, 28);
+            btnClose.TabIndex = 3;
+            btnClose.Text = "Close";
+            btnClose.UseVisualStyleBackColor = true;
             // 
             // btnApply
             // 
-            this.btnApply.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnApply.Enabled = false;
-            this.btnApply.Location = new System.Drawing.Point(379, 349);
-            this.btnApply.Name = "btnApply";
-            this.btnApply.Size = new System.Drawing.Size(112, 28);
-            this.btnApply.TabIndex = 2;
-            this.btnApply.Text = "Apply and Close";
-            this.toolTip1.SetToolTip(this.btnApply, "Saves the suggested range to your NDS settings profile.");
-            this.btnApply.UseVisualStyleBackColor = true;
-            this.btnApply.Click += new System.EventHandler(this.btnApply_Click);
-            // 
-            // richLog
-            // 
-            this.richLog.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.richLog.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(40)))), ((int)(((byte)(40)))), ((int)(((byte)(40)))));
-            this.richLog.Font = new System.Drawing.Font("Consolas", 9F);
-            this.richLog.ForeColor = System.Drawing.Color.Gainsboro;
-            this.richLog.Location = new System.Drawing.Point(12, 59);
-            this.richLog.Name = "richLog";
-            this.richLog.ReadOnly = true;
-            this.richLog.Size = new System.Drawing.Size(560, 219);
-            this.richLog.TabIndex = 6;
-            this.richLog.Text = "";
-            this.richLog.WordWrap = true;
-            // 
-            // panelTop
-            // 
-            this.panelTop.Controls.Add(this.btnAnalyze);
-            this.panelTop.Controls.Add(this.btnBrowse);
-            this.panelTop.Controls.Add(this.txtRomPath);
-            this.panelTop.Controls.Add(this.label2);
-            this.panelTop.Dock = System.Windows.Forms.DockStyle.Top;
-            this.panelTop.Location = new System.Drawing.Point(0, 0);
-            this.panelTop.Name = "panelTop";
-            this.panelTop.Size = new System.Drawing.Size(584, 53);
-            this.panelTop.TabIndex = 7;
-            // 
-            // btnAnalyze
-            // 
-            this.btnAnalyze.Enabled = false;
-            this.btnAnalyze.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.btnAnalyze.Location = new System.Drawing.Point(474, 18);
-            this.btnAnalyze.Name = "btnAnalyze";
-            this.btnAnalyze.Size = new System.Drawing.Size(98, 23);
-            this.btnAnalyze.TabIndex = 3;
-            this.btnAnalyze.Text = "Analyze ROM";
-            this.btnAnalyze.UseVisualStyleBackColor = true;
-            this.btnAnalyze.Click += new System.EventHandler(this.btnAnalyze_Click);
-            // 
-            // btnBrowse
-            // 
-            this.btnBrowse.Location = new System.Drawing.Point(393, 18);
-            this.btnBrowse.Name = "btnBrowse";
-            this.btnBrowse.Size = new System.Drawing.Size(75, 23);
-            this.btnBrowse.TabIndex = 2;
-            this.btnBrowse.Text = "Browse...";
-            this.btnBrowse.UseVisualStyleBackColor = true;
-            this.btnBrowse.Click += new System.EventHandler(this.btnBrowse_Click);
-            // 
-            // txtRomPath
-            // 
-            this.txtRomPath.Location = new System.Drawing.Point(12, 19);
-            this.txtRomPath.Name = "txtRomPath";
-            this.txtRomPath.Size = new System.Drawing.Size(375, 23);
-            this.txtRomPath.TabIndex = 1;
-            this.txtRomPath.TextChanged += new System.EventHandler(this.txtRomPath_TextChanged);
-            // 
-            // label2
-            // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(12, 1);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(92, 15);
-            this.label2.TabIndex = 0;
-            this.label2.Text = "NDS ROM File:";
-            // 
-            // groupBox1
-            // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.groupBox1.Controls.Add(this.lblResult);
-            this.groupBox1.Controls.Add(this.label1);
-            this.groupBox1.Location = new System.Drawing.Point(12, 284);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(560, 59);
-            this.groupBox1.TabIndex = 8;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "Results";
-            // 
-            // lblResult
-            // 
-            this.lblResult.AutoSize = true;
-            this.lblResult.Font = new System.Drawing.Font("Consolas", 9.75F, System.Drawing.FontStyle.Bold);
-            this.lblResult.Location = new System.Drawing.Point(180, 26);
-            this.lblResult.Name = "lblResult";
-            this.lblResult.Size = new System.Drawing.Size(21, 15);
-            this.lblResult.TabIndex = 1;
-            this.lblResult.Text = "N/A";
+            btnApply.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnApply.Enabled = false;
+            btnApply.Location = new Point(379, 349);
+            btnApply.Name = "btnApply";
+            btnApply.Size = new Size(112, 28);
+            btnApply.TabIndex = 2;
+            btnApply.Text = "Apply and Close";
+            toolTip1.SetToolTip(btnApply, "Saves the suggested range to your NDS settings profile.");
+            btnApply.UseVisualStyleBackColor = true;
+            btnApply.Click += btnApply_Click;
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(16, 26);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(158, 15);
-            this.label1.TabIndex = 0;
-            this.label1.Text = "Suggested Range (for scan):";
-            this.toolTip1.SetToolTip(this.label1, "The calculated range that should contain all static addresses.\r\nThis is the rang" +
-        "e that will be applied to your settings.");
+            label1.AutoSize = true;
+            label1.Location = new Point(16, 26);
+            label1.Name = "label1";
+            label1.Size = new Size(154, 15);
+            label1.TabIndex = 0;
+            label1.Text = "Suggested Range (for scan):";
+            toolTip1.SetToolTip(label1, "The calculated range that should contain all static addresses.\r\nThis is the range that will be applied to your settings.");
+            // 
+            // richLog
+            // 
+            richLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            richLog.BackColor = Color.FromArgb(40, 40, 40);
+            richLog.Font = new Font("Consolas", 9F);
+            richLog.ForeColor = Color.Gainsboro;
+            richLog.Location = new Point(12, 59);
+            richLog.Name = "richLog";
+            richLog.ReadOnly = true;
+            richLog.Size = new Size(560, 219);
+            richLog.TabIndex = 6;
+            richLog.Text = "";
+            // 
+            // panelTop
+            // 
+            panelTop.Controls.Add(btnAnalyze);
+            panelTop.Controls.Add(btnBrowse);
+            panelTop.Controls.Add(txtRomPath);
+            panelTop.Controls.Add(label2);
+            panelTop.Dock = DockStyle.Top;
+            panelTop.Location = new Point(0, 0);
+            panelTop.Name = "panelTop";
+            panelTop.Size = new Size(584, 53);
+            panelTop.TabIndex = 7;
+            // 
+            // btnAnalyze
+            // 
+            btnAnalyze.Enabled = false;
+            btnAnalyze.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            btnAnalyze.Location = new Point(474, 18);
+            btnAnalyze.Name = "btnAnalyze";
+            btnAnalyze.Size = new Size(98, 23);
+            btnAnalyze.TabIndex = 3;
+            btnAnalyze.Text = "Analyze ROM";
+            btnAnalyze.UseVisualStyleBackColor = true;
+            btnAnalyze.Click += btnAnalyze_Click;
+            // 
+            // btnBrowse
+            // 
+            btnBrowse.Location = new Point(393, 18);
+            btnBrowse.Name = "btnBrowse";
+            btnBrowse.Size = new Size(75, 23);
+            btnBrowse.TabIndex = 2;
+            btnBrowse.Text = "Browse...";
+            btnBrowse.UseVisualStyleBackColor = true;
+            btnBrowse.Click += btnBrowse_Click;
+            // 
+            // txtRomPath
+            // 
+            txtRomPath.Location = new Point(12, 19);
+            txtRomPath.Name = "txtRomPath";
+            txtRomPath.Size = new Size(375, 23);
+            txtRomPath.TabIndex = 1;
+            txtRomPath.TextChanged += txtRomPath_TextChanged;
+            // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new Point(12, 1);
+            label2.Name = "label2";
+            label2.Size = new Size(84, 15);
+            label2.TabIndex = 0;
+            label2.Text = "NDS ROM File:";
+            // 
+            // groupBox1
+            // 
+            groupBox1.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            groupBox1.Controls.Add(lblResult);
+            groupBox1.Controls.Add(label1);
+            groupBox1.Location = new Point(12, 284);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(560, 59);
+            groupBox1.TabIndex = 8;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Results";
+            // 
+            // lblResult
+            // 
+            lblResult.AutoSize = true;
+            lblResult.Font = new Font("Consolas", 9.75F, FontStyle.Bold);
+            lblResult.Location = new Point(180, 26);
+            lblResult.Name = "lblResult";
+            lblResult.Size = new Size(28, 15);
+            lblResult.TabIndex = 1;
+            lblResult.Text = "N/A";
             // 
             // NdsStaticRangeFinderForm
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(584, 389);
-            this.Controls.Add(this.groupBox1);
-            this.Controls.Add(this.panelTop);
-            this.Controls.Add(this.richLog);
-            this.Controls.Add(this.btnApply);
-            this.Controls.Add(this.btnClose);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.Name = "NdsStaticRangeFinderForm";
-            this.ShowInTaskbar = false;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "NDS Static Range Finder";
-            this.Load += new System.EventHandler(this.NdsStaticRangeFinderForm_Load);
-            this.panelTop.ResumeLayout(false);
-            this.panelTop.PerformLayout();
-            this.groupBox1.ResumeLayout(false);
-            this.groupBox1.PerformLayout();
-            this.ResumeLayout(false);
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(584, 389);
+            Controls.Add(groupBox1);
+            Controls.Add(panelTop);
+            Controls.Add(richLog);
+            Controls.Add(btnApply);
+            Controls.Add(btnClose);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "NdsStaticRangeFinderForm";
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "NDS Static Range Finder";
+            Load += NdsStaticRangeFinderForm_Load;
+            panelTop.ResumeLayout(false);
+            panelTop.PerformLayout();
+            groupBox1.ResumeLayout(false);
+            groupBox1.PerformLayout();
+            ResumeLayout(false);
 
         }
 

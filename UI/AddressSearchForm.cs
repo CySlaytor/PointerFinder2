@@ -54,5 +54,10 @@ namespace PointerFinder2.UI
                 e.SuppressKeyPress = true;
             }
         }
+
+        private void AddressSearchForm_Load(object sender, EventArgs e)
+        {
+
+        }
     }
 }
