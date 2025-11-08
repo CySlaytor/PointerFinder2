@@ -1548,9 +1548,9 @@ namespace DarkModeForms
 		{
 			base.OnRenderItemBackground(e);
 
-			// Only draw border for ComboBox items
-			if (e.Item is ComboBox)
-			{
+            // Only draw border for ComboBox items
+            if (e.Item is ToolStripComboBox)
+            {
 				Rectangle rect = new Rectangle(Point.Empty, e.Item.Size);
 				e.Graphics.DrawRectangle(new Pen(MyColors.ControlLight, 1), rect);
 			}

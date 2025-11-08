@@ -4,212 +4,100 @@ using System.Windows.Forms;
 
 namespace DarkModeForms
 {
-	public class FlatProgressBar : ProgressBar
-	{
-		public FlatProgressBar()
-		{
-			this.SetStyle(ControlStyles.UserPaint, true);
-			//this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint, true);
-		}
+    /// <summary>
+    /// A custom ProgressBar that allows for a flat appearance with a customizable bar color.
+    /// This control uses user-painting to override the default system-drawn progress bar.
+    /// </summary>
+    public class FlatProgressBar : ProgressBar
+    {
+        private Color _progressBarColor = Color.Green;
 
-		protected override void OnPaintBackground(PaintEventArgs pevent)
-		{
-			// None... Helps control the flicker.
-		}
+        /// <summary>
+        /// Gets or sets the color of the progress bar meter.
+        /// </summary>
+        public Color ProgressBarColor
+        {
+            get => _progressBarColor;
+            set
+            {
+                _progressBarColor = value;
+                this.Invalidate(); // Redraw the control when the color changes
+            }
+        }
 
-		int min = 0;// Minimum value for progress range
-		int max = 100;// Maximum value for progress range
-		int val = 0;// Current progress
-		Color BarColor = Color.Green;// Color of progress meter
+        public FlatProgressBar()
+        {
+            // Set the control style to UserPaint to enable custom drawing.
+            this.SetStyle(ControlStyles.UserPaint, true);
+        }
 
-		protected override void OnResize(EventArgs e)
-		{
-			// Invalidate the control to get a repaint.
-			this.Invalidate();
-		}
+        protected override void OnPaintBackground(PaintEventArgs pevent)
+        {
+            // Do nothing here to prevent the default background from being drawn, which helps reduce flicker.
+        }
 
-		protected override void OnPaint(PaintEventArgs e)
-		{
-			Graphics g = e.Graphics;
-			SolidBrush brush = new SolidBrush(BarColor);
-			Brush BackBrush = new SolidBrush(this.BackColor);
+        protected override void OnResize(EventArgs e)
+        {
+            // Invalidate the control to force a repaint when its size changes.
+            this.Invalidate();
+            base.OnResize(e);
+        }
 
-			float percent = (float)(val - min) / (float)(max - min);
-			Rectangle rect = this.ClientRectangle;
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
 
-			// Calculate area for drawing the progress.
-			rect.Width = (int)((float)rect.Width * percent);
+            // Use 'using' statements to ensure disposable resources like brushes are properly handled.
+            using (var backBrush = new SolidBrush(this.BackColor))
+            using (var barBrush = new SolidBrush(this.ProgressBarColor))
+            {
+                Rectangle rect = this.ClientRectangle;
 
-			
-			g.FillRectangle(BackBrush, this.ClientRectangle); //Draw the brackgound
-			g.FillRectangle(brush, rect); // Draw the progress meter.
-			//ProgressBarRenderer.DrawHorizontalBar(g, rect);
+                // Draw the background of the progress bar.
+                g.FillRectangle(backBrush, rect);
 
-			// Draw a three-dimensional border around the control.
-			Draw3DBorder(g);
+                // Calculate the width of the progress meter based on the current value and range.
+                // We use the properties from the base ProgressBar class.
+                if (this.Maximum > this.Minimum)
+                {
+                    float percent = (float)(this.Value - this.Minimum) / (float)(this.Maximum - this.Minimum);
+                    rect.Width = (int)((float)rect.Width * percent);
 
-			// Clean up.
-			brush.Dispose();
-			g.Dispose();
-		}
+                    // Draw the progress meter, but only if it has a width greater than zero.
+                    if (rect.Width > 0)
+                    {
+                        g.FillRectangle(barBrush, rect);
+                    }
+                }
+            }
 
-		public int Minimum
-		{
-			get
-			{
-				return min;
-			}
+            // Draw a simple border around the control.
+            Draw3DBorder(g);
+        }
 
-			set
-			{
-				// Prevent a negative value.
-				if (value < 0)
-				{
-					value = 0;
-				}
+        private void Draw3DBorder(Graphics g)
+        {
+            int penWidth = (int)Pens.White.Width;
 
-				// Make sure that the minimum value is never set higher than the maximum value.
-				if (value > max)
-				{
-					max = value;
-				}
+            // Use a single color for the border that contrasts with the dark theme background.
+            using (Pen borderPen = new Pen(Color.DarkGray))
+            {
+                g.DrawLine(borderPen,
+                    new Point(this.ClientRectangle.Left, this.ClientRectangle.Top),
+                    new Point(this.ClientRectangle.Width - penWidth, this.ClientRectangle.Top));
 
-				min = value;
+                g.DrawLine(borderPen,
+                    new Point(this.ClientRectangle.Left, this.ClientRectangle.Top),
+                    new Point(this.ClientRectangle.Left, this.ClientRectangle.Height - penWidth));
 
-				// Ensure value is still in range
-				if (val < min)
-				{
-					val = min;
-				}
+                g.DrawLine(borderPen,
+                    new Point(this.ClientRectangle.Left, this.ClientRectangle.Height - penWidth),
+                    new Point(this.ClientRectangle.Width - penWidth, this.ClientRectangle.Height - penWidth));
 
-				// Invalidate the control to get a repaint.
-				this.Invalidate();
-			}
-		}
-
-		public int Maximum
-		{
-			get
-			{
-				return max;
-			}
-
-			set
-			{
-				// Make sure that the maximum value is never set lower than the minimum value.
-				if (value < min)
-				{
-					min = value;
-				}
-
-				max = value;
-
-				// Make sure that value is still in range.
-				if (val > max)
-				{
-					val = max;
-				}
-
-				// Invalidate the control to get a repaint.
-				this.Invalidate();
-			}
-		}
-
-		public int Value
-		{
-			get
-			{
-				return val;
-			}
-
-			set
-			{
-				int oldValue = val;
-
-				// Make sure that the value does not stray outside the valid range.
-				if (value < min)
-				{
-					val = min;
-				}
-				else if (value > max)
-				{
-					val = max;
-				}
-				else
-				{
-					val = value;
-				}
-
-				// Invalidate only the changed area.
-				float percent;
-
-				Rectangle newValueRect = this.ClientRectangle;
-				Rectangle oldValueRect = this.ClientRectangle;
-
-				// Use a new value to calculate the rectangle for progress.
-				percent = (float)(val - min) / (float)(max - min);
-				newValueRect.Width = (int)((float)newValueRect.Width * percent);
-
-				// Use an old value to calculate the rectangle for progress.
-				percent = (float)(oldValue - min) / (float)(max - min);
-				oldValueRect.Width = (int)((float)oldValueRect.Width * percent);
-
-				Rectangle updateRect = new Rectangle();
-
-				// Find only the part of the screen that must be updated.
-				if (newValueRect.Width > oldValueRect.Width)
-				{
-					updateRect.X = oldValueRect.Size.Width;
-					updateRect.Width = newValueRect.Width - oldValueRect.Width;
-				}
-				else
-				{
-					updateRect.X = newValueRect.Size.Width;
-					updateRect.Width = oldValueRect.Width - newValueRect.Width;
-				}
-
-				updateRect.Height = this.Height;
-
-				// Invalidate the intersection region only.
-				this.Invalidate(updateRect);
-			}
-		}
-
-		public Color ProgressBarColor
-		{
-			get
-			{
-				return BarColor;
-			}
-
-			set
-			{
-				BarColor = value;
-
-				// Invalidate the control to get a repaint.
-				this.Invalidate();
-			}
-		}
-
-		private void Draw3DBorder(Graphics g)
-		{
-			int PenWidth = (int)Pens.White.Width;
-
-			g.DrawLine(Pens.DarkGray,
-				new Point(this.ClientRectangle.Left, this.ClientRectangle.Top),
-				new Point(this.ClientRectangle.Width - PenWidth, this.ClientRectangle.Top));
-
-			g.DrawLine(Pens.DarkGray,
-				new Point(this.ClientRectangle.Left, this.ClientRectangle.Top),
-				new Point(this.ClientRectangle.Left, this.ClientRectangle.Height - PenWidth));
-
-			g.DrawLine(Pens.DarkGray,
-				new Point(this.ClientRectangle.Left, this.ClientRectangle.Height - PenWidth),
-				new Point(this.ClientRectangle.Width - PenWidth, this.ClientRectangle.Height - PenWidth));
-
-			g.DrawLine(Pens.DarkGray,
-				new Point(this.ClientRectangle.Width - PenWidth, this.ClientRectangle.Top),
-				new Point(this.ClientRectangle.Width - PenWidth, this.ClientRectangle.Height - PenWidth));
-		}
-	}
+                g.DrawLine(borderPen,
+                    new Point(this.ClientRectangle.Width - penWidth, this.ClientRectangle.Top),
+                    new Point(this.ClientRectangle.Width - penWidth, this.ClientRectangle.Height - penWidth));
+            }
+        }
+    }
 }

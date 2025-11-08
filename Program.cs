@@ -1,31 +1,27 @@
+using PointerFinder2.Properties;
+using PointerFinder2.UI;
 using System;
 using System.Windows.Forms;
-using PointerFinder2.UI;
-using PointerFinder2.Properties;
 
 namespace PointerFinder2
 {
     internal static class Program
     {
-        // The main entry point for the application.
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
         [STAThread]
-        static void Main()
+        private static void Main(string[] args)
         {
+            // For .NET Core/5+ applications, this is recommended for high DPI support.
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            bool darkMode = Settings.Default.DarkModeEnabled;
+            // Initialize theme settings from user preferences.
+            ThemeBlack.Initialize();
 
-            if (Settings.Default.FirstRun)
-            {
-                darkMode = false;
-                Settings.Default.FirstRun = false;
-                Settings.Default.Save();
-            }
-
-            ThemeBlack.SetEnabled(darkMode);
-
-            string[] args = Environment.GetCommandLineArgs();
             // Pass command-line arguments to the MainForm to handle smart restarts.
             Application.Run(new MainForm(args));
         }
