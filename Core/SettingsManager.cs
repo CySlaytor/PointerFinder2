@@ -58,12 +58,8 @@ namespace PointerFinder2.Core
                 ini.Write("LastTargetAddress", settings.LastTargetAddress, section);
                 ini.Write("MaxOffset", settings.MaxOffset.ToString(), section);
                 ini.Write("MaxLevel", settings.MaxLevel.ToString(), section);
-                ini.Write("MaxResults", settings.MaxResults.ToString(), section);
                 ini.Write("StaticAddressStart", settings.StaticAddressStart, section);
                 ini.Write("StaticAddressEnd", settings.StaticAddressEnd, section);
-                ini.Write("ScanForStructureBase", settings.ScanForStructureBase.ToString(), section);
-                ini.Write("Use16ByteAlignment", settings.Use16ByteAlignment.ToString(), section);
-                ini.Write("MaxNegativeOffset", settings.MaxNegativeOffset.ToString(), section);
                 ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
                 ini.Write("StopOnFirstPathFound", settings.StopOnFirstPathFound.ToString(), section);
                 ini.Write("FindAllPathLevels", settings.FindAllPathLevels.ToString(), section);
@@ -139,18 +135,9 @@ namespace PointerFinder2.Core
             if (maxLevel < 1) maxLevel = defaultSettings.MaxLevel;
             settings.MaxLevel = maxLevel;
 
-            if (!int.TryParse(ini.Read("MaxResults", section, defaultSettings.MaxResults.ToString()), out int maxResults)) maxResults = defaultSettings.MaxResults;
-            if (maxResults < 1) maxResults = defaultSettings.MaxResults;
-            settings.MaxResults = maxResults;
-
             settings.StaticAddressStart = ini.Read("StaticAddressStart", section, defaultSettings.StaticAddressStart);
             settings.StaticAddressEnd = ini.Read("StaticAddressEnd", section, defaultSettings.StaticAddressEnd);
-            if (!bool.TryParse(ini.Read("ScanForStructureBase", section, defaultSettings.ScanForStructureBase.ToString()), out bool scanForStructureBase)) scanForStructureBase = defaultSettings.ScanForStructureBase;
-            settings.ScanForStructureBase = scanForStructureBase;
-            if (!bool.TryParse(ini.Read("Use16ByteAlignment", section, defaultSettings.Use16ByteAlignment.ToString()), out bool use16ByteAlignment)) use16ByteAlignment = defaultSettings.Use16ByteAlignment;
-            settings.Use16ByteAlignment = use16ByteAlignment;
-            if (!int.TryParse(ini.Read("MaxNegativeOffset", section, defaultSettings.MaxNegativeOffset.ToString()), out int maxNegativeOffset)) maxNegativeOffset = defaultSettings.MaxNegativeOffset;
-            settings.MaxNegativeOffset = maxNegativeOffset;
+
             if (!bool.TryParse(ini.Read("UseSliderRange", section, defaultSettings.UseSliderRange.ToString()), out bool useSliderRange)) useSliderRange = defaultSettings.UseSliderRange;
             settings.UseSliderRange = useSliderRange;
             if (!bool.TryParse(ini.Read("StopOnFirstPathFound", section, defaultSettings.StopOnFirstPathFound.ToString()), out bool stopOnFirst)) stopOnFirst = defaultSettings.StopOnFirstPathFound;

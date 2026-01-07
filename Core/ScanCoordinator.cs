@@ -29,7 +29,7 @@ namespace PointerFinder2.Core
         // Change LastScanParams to be public set so MainForm can update it from loaded sessions.
         public ScanParameters LastScanParams { get; set; }
 
-        public async Task StartScan(IEmulatorManager manager, IPointerScannerStrategy scanner, ScanParameters parameters, bool isRefine, HashSet<PointerPath> existingPaths = null)
+        public async Task StartScan(IEmulatorManager manager, IPointerScannerStrategy scanner, ScanParameters parameters)
         {
             if (IsBusy) return;
 
@@ -37,7 +37,7 @@ namespace PointerFinder2.Core
             _operationCts = new CancellationTokenSource();
             _operationStopwatch.Restart();
 
-            OperationStarted?.Invoke(isRefine ? "Refining results..." : null);
+            OperationStarted?.Invoke(null);
 
             var progress = new Progress<ScanProgressReport>(report =>
             {
@@ -55,12 +55,6 @@ namespace PointerFinder2.Core
             {
                 var scanTask = Task.Run(() => scanner.Scan(manager, parameters, progress, _operationCts.Token), _operationCts.Token);
                 results = await scanTask;
-
-                if (isRefine && existingPaths != null)
-                {
-                    ProgressUpdated?.Invoke(new ScanProgressReport { StatusMessage = "Scan phase complete, intersecting results..." });
-                    results = results.Where(p => existingPaths.Contains(p)).ToList();
-                }
             }
             catch (OperationCanceledException)
             {
@@ -79,9 +73,7 @@ namespace PointerFinder2.Core
                 var eventArgs = new ScanCompletedEventArgs(
                     results,
                     _operationStopwatch.Elapsed,
-                    wasCancelled || (_operationCts?.IsCancellationRequested ?? false),
-                    scanner is StateBasedScannerStrategyBase,
-                    isRefine
+                    wasCancelled || (_operationCts?.IsCancellationRequested ?? false)
                 );
                 ScanCompleted?.Invoke(eventArgs);
                 DisposeCts();
@@ -189,17 +181,12 @@ namespace PointerFinder2.Core
         public List<PointerPath> Results { get; }
         public TimeSpan Duration { get; }
         public bool WasCancelled { get; }
-        // Removed the unused 'StoppedByMemoryMonitor' property.
-        public bool IsStateScan { get; }
-        public bool IsRefineScan { get; }
 
-        public ScanCompletedEventArgs(List<PointerPath> results, TimeSpan duration, bool wasCancelled, bool isStateScan, bool isRefineScan)
+        public ScanCompletedEventArgs(List<PointerPath> results, TimeSpan duration, bool wasCancelled)
         {
             Results = results;
             Duration = duration;
             WasCancelled = wasCancelled;
-            IsStateScan = isStateScan;
-            IsRefineScan = isRefineScan;
         }
     }
 }

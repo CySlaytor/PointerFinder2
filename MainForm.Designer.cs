@@ -46,8 +46,6 @@
             this.btnStopScan = new System.Windows.Forms.Button();
             this.progressBar = new System.Windows.Forms.ProgressBar();
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
-            this.btnScan = new System.Windows.Forms.Button();
-            this.btnRefineScan = new System.Windows.Forms.Button();
             this.btnFilter = new System.Windows.Forms.Button();
             this.btnCaptureState = new System.Windows.Forms.Button();
             this.dgvResults = new System.Windows.Forms.DataGridView();
@@ -319,15 +317,11 @@
             // 
             // tableLayoutPanel1
             // 
-            this.tableLayoutPanel1.ColumnCount = 4;
-            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 25F));
-            this.tableLayoutPanel1.Controls.Add(this.btnScan, 0, 0);
-            this.tableLayoutPanel1.Controls.Add(this.btnRefineScan, 1, 0);
-            this.tableLayoutPanel1.Controls.Add(this.btnFilter, 3, 0);
-            this.tableLayoutPanel1.Controls.Add(this.btnCaptureState, 2, 0);
+            this.tableLayoutPanel1.ColumnCount = 2;
+            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            this.tableLayoutPanel1.Controls.Add(this.btnCaptureState, 0, 0);
+            this.tableLayoutPanel1.Controls.Add(this.btnFilter, 1, 0);
             this.tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
             this.tableLayoutPanel1.Name = "tableLayoutPanel1";
@@ -336,37 +330,13 @@
             this.tableLayoutPanel1.Size = new System.Drawing.Size(966, 47);
             this.tableLayoutPanel1.TabIndex = 0;
             // 
-            // btnScan
-            // 
-            this.btnScan.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnScan.Enabled = false;
-            this.btnScan.Location = new System.Drawing.Point(3, 3);
-            this.btnScan.Name = "btnScan";
-            this.btnScan.Size = new System.Drawing.Size(235, 41);
-            this.btnScan.TabIndex = 0;
-            this.btnScan.Text = "New Pointer Scan";
-            this.btnScan.UseVisualStyleBackColor = true;
-            this.btnScan.Click += new System.EventHandler(this.btnScan_Click);
-            // 
-            // btnRefineScan
-            // 
-            this.btnRefineScan.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.btnRefineScan.Enabled = false;
-            this.btnRefineScan.Location = new System.Drawing.Point(244, 3);
-            this.btnRefineScan.Name = "btnRefineScan";
-            this.btnRefineScan.Size = new System.Drawing.Size(235, 41);
-            this.btnRefineScan.TabIndex = 3;
-            this.btnRefineScan.Text = "Refine with New Scan";
-            this.btnRefineScan.UseVisualStyleBackColor = true;
-            this.btnRefineScan.Click += new System.EventHandler(this.btnRefineScan_Click);
-            // 
             // btnFilter
             // 
             this.btnFilter.Dock = System.Windows.Forms.DockStyle.Fill;
             this.btnFilter.Enabled = false;
-            this.btnFilter.Location = new System.Drawing.Point(726, 3);
+            this.btnFilter.Location = new System.Drawing.Point(486, 3);
             this.btnFilter.Name = "btnFilter";
-            this.btnFilter.Size = new System.Drawing.Size(237, 41);
+            this.btnFilter.Size = new System.Drawing.Size(477, 41);
             this.btnFilter.TabIndex = 2;
             this.btnFilter.Text = "Filter Dynamic Paths";
             this.btnFilter.UseVisualStyleBackColor = true;
@@ -376,11 +346,11 @@
             // 
             this.btnCaptureState.Dock = System.Windows.Forms.DockStyle.Fill;
             this.btnCaptureState.Enabled = false;
-            this.btnCaptureState.Location = new System.Drawing.Point(485, 3);
+            this.btnCaptureState.Location = new System.Drawing.Point(3, 3);
             this.btnCaptureState.Name = "btnCaptureState";
-            this.btnCaptureState.Size = new System.Drawing.Size(235, 41);
+            this.btnCaptureState.Size = new System.Drawing.Size(477, 41);
             this.btnCaptureState.TabIndex = 4;
-            this.btnCaptureState.Text = "Capture State";
+            this.btnCaptureState.Text = "State-Based Scan";
             this.btnCaptureState.UseVisualStyleBackColor = true;
             this.btnCaptureState.Click += new System.EventHandler(this.btnCaptureState_Click);
             // 
@@ -543,7 +513,6 @@
         private System.Windows.Forms.Panel panelBottom;
         private System.Windows.Forms.DataGridView dgvResults;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
-        private System.Windows.Forms.Button btnScan;
         private System.Windows.Forms.Button btnFilter;
         private System.Windows.Forms.ToolStripMenuItem debugOptionsToolStripMenuItem;
         private System.Windows.Forms.ContextMenuStrip contextMenuResults;
@@ -557,7 +526,6 @@
         private System.Windows.Forms.Label lblStatus;
         private System.Windows.Forms.Label lblBaseAddress;
         private System.Windows.Forms.Label lblResultCount;
-        private System.Windows.Forms.Button btnRefineScan;
         private System.Windows.Forms.Label lblElapsedTime;
         private System.Windows.Forms.ToolStripMenuItem saveSessionToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem loadSessionToolStripMenuItem;

@@ -283,12 +283,9 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 StaticAddressEnd = "1FFFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
-                MaxResults = 500000,
                 // Provide default for new MaxCandidates setting.
                 MaxCandidates = 10000000,
-                ScanForStructureBase = false,
-                MaxNegativeOffset = 1024,
-                Use16ByteAlignment = false,
+                UseSliderRange = true,
                 StopOnFirstPathFound = false,
                 CandidatesPerLevel = 10
             };

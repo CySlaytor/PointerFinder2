@@ -58,9 +58,6 @@ namespace PointerFinder2
             chkFindAllLevels.Checked = _currentSettings.FindAllPathLevels;
             numCandidatesPerLevel.Value = _currentSettings.CandidatesPerLevel;
 
-            // NOTE: 16-byte alignment checkbox is intentionally removed from this form,
-            // as the state-based algorithm always uses a 4-byte search for maximum accuracy.
-
             // Initialize the grid from the encapsulated manager class.
             for (int i = 0; i < 4; i++)
             {
@@ -243,7 +240,6 @@ namespace PointerFinder2
                     StaticBaseEnd = _manager.UnnormalizeAddress(txtStaticEnd.Text),
                     MaxLevel = (int)numMaxLevel.Value,
                     MaxCandidates = (int)numMaxCandidates.Value,
-                    Use16ByteAlignment = false, // Hardcoded to false for this algorithm for maximum accuracy.
                     StopOnFirstPathFound = chkStopOnFirst.Checked,
                     FindAllPathLevels = chkFindAllLevels.Checked,
                     LimitCpuUsage = GlobalSettings.LimitCpuUsage,

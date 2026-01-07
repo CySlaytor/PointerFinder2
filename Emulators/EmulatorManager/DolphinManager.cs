@@ -287,12 +287,8 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 StaticAddressEnd = "7FFFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
-                MaxResults = 500000,
                 // Provide default for new MaxCandidates setting.
-                MaxCandidates = 10000000,
-                ScanForStructureBase = false,
-                MaxNegativeOffset = 1024,
-                Use16ByteAlignment = false, // Dolphin memory is not typically 16-byte aligned like PS2
+                MaxCandidates = 10000000
             };
         }
 

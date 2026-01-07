@@ -348,57 +348,6 @@ namespace PointerFinder2
         #endregion
 
         #region Scan Button Handlers
-        private async void btnScan_Click(object sender, EventArgs e)
-        {
-            if (_scanCoordinator.IsBusy || _activeProfile == null || !_currentManager.IsAttached) return;
-
-            using (var optionsForm = new ScannerOptionsForm(_currentManager, _currentSettings))
-            {
-                if (optionsForm.ShowDialog() == DialogResult.OK)
-                {
-                    _resultsManager.SetNewResults(new List<PointerPath>(), true);
-                    UpdateStatus("Purging application memory...");
-                    await Task.Run(() => _lifecycleManager.PurgeMemory());
-
-                    var scanParams = optionsForm.GetScanParameters();
-                    if (scanParams == null) return;
-
-                    optionsForm.UpdateSettings(_currentSettings);
-                    SettingsManager.Save(_activeProfile.Target, _currentSettings);
-
-                    var scanner = _activeProfile.ScannerFactory();
-                    await _scanCoordinator.StartScan(_currentManager, scanner, scanParams, isRefine: false);
-                }
-            }
-        }
-
-        private async void btnRefineScan_Click(object sender, EventArgs e)
-        {
-            if (_scanCoordinator.IsBusy || _activeProfile == null || !_currentManager.IsAttached || !_resultsManager.HasResults) return;
-
-            UpdateStatus("Preparing existing results for refinement...");
-            var existingPaths = new HashSet<PointerPath>(_resultsManager.CurrentResults);
-            UpdateStatus("Ready for refinement. Please configure the new scan.");
-
-            using (var optionsForm = new ScannerOptionsForm(_currentManager, _currentSettings))
-            {
-                if (optionsForm.ShowDialog() == DialogResult.OK)
-                {
-                    _resultsManager.SetNewResults(new List<PointerPath>(), true); // Clear UI temporarily
-                    UpdateStatus("Purging application memory...");
-                    await Task.Run(() => _lifecycleManager.PurgeMemory());
-
-                    var scanParams = optionsForm.GetScanParameters();
-                    if (scanParams == null) return;
-
-                    optionsForm.UpdateSettings(_currentSettings);
-                    SettingsManager.Save(_activeProfile.Target, _currentSettings);
-
-                    var scanner = _activeProfile.ScannerFactory();
-                    await _scanCoordinator.StartScan(_currentManager, scanner, scanParams, isRefine: true, existingPaths);
-                }
-            }
-        }
 
         private async void btnCaptureState_Click(object sender, EventArgs e)
         {
@@ -420,7 +369,7 @@ namespace PointerFinder2
                     SettingsManager.Save(_activeProfile.Target, _currentSettings);
 
                     var scanner = _activeProfile.StateBasedScannerFactory();
-                    await _scanCoordinator.StartScan(_currentManager, scanner, scanParams, isRefine: false);
+                    await _scanCoordinator.StartScan(_currentManager, scanner, scanParams);
                 }
             }
         }
@@ -462,7 +411,7 @@ namespace PointerFinder2
 
             if (!string.IsNullOrEmpty(report.StatusMessage)) UpdateStatus(report.StatusMessage);
 
-            int max = (int)Math.Min(report.MaxValue > 0 ? report.MaxValue : _scanCoordinator.LastScanParams?.MaxResults ?? int.MaxValue, int.MaxValue);
+            int max = (int)Math.Min(report.MaxValue > 0 ? report.MaxValue : _scanCoordinator.LastScanParams?.MaxCandidates ?? int.MaxValue, int.MaxValue);
             if (progressBar.Maximum != max) progressBar.Maximum = max;
 
             long current = report.CurrentValue > 0 ? report.CurrentValue : report.FoundCount;
@@ -470,7 +419,7 @@ namespace PointerFinder2
 
             lblProgressPercentage.Text = (report.MaxValue > 0)
                 ? $"{report.CurrentValue:N0} / {report.MaxValue:N0}"
-                : $"{report.FoundCount:N0} / {_scanCoordinator.LastScanParams?.MaxResults:N0}";
+                : $"{report.FoundCount:N0}";
         }
 
         private void OnScanCompleted(ScanCompletedEventArgs e)
@@ -490,24 +439,12 @@ namespace PointerFinder2
                 if (!e.Results.Any())
                 {
                     UpdateStatus($"Scan complete. No paths found {FormatDuration(e.Duration)}.");
-                    if (e.IsRefineScan) SoundManager.PlayFail();
-                    else SoundManager.PlayNotify();
+                    SoundManager.PlayFail();
                 }
                 else
                 {
-                    string message = e.IsRefineScan
-                        ? $"Refine scan complete. Found {e.Results.Count:N0} matching paths {FormatDuration(e.Duration)}."
-                        : $"Scan complete. Found {e.Results.Count:N0} paths {FormatDuration(e.Duration)}.";
-                    UpdateStatus(message);
-
-                    if (e.IsRefineScan || e.IsStateScan)
-                    {
-                        SoundManager.PlaySuccess();
-                    }
-                    else
-                    {
-                        SoundManager.PlayNotify();
-                    }
+                    UpdateStatus($"Scan complete. Found {e.Results.Count:N0} paths {FormatDuration(e.Duration)}.");
+                    SoundManager.PlaySuccess();
                 }
             }
         }
@@ -649,16 +586,12 @@ namespace PointerFinder2
             {
                 if (!string.IsNullOrEmpty(customMessage)) UpdateStatus(customMessage);
                 menuStrip1.Enabled = false;
-                btnScan.Enabled = false;
                 btnFilter.Enabled = false;
-                btnRefineScan.Enabled = false;
                 btnCaptureState.Enabled = false;
             }
             else
             {
                 menuStrip1.Enabled = true;
-                btnScan.Enabled = isAttached;
-                btnRefineScan.Enabled = isAttached && hasResults;
                 btnCaptureState.Enabled = isAttached;
                 btnFilter.Enabled = isAttached && hasResults;
                 if (!isAttached) SetUIStateDetached();
@@ -672,9 +605,7 @@ namespace PointerFinder2
             lblBaseAddress.Text = "";
             lblResultCount.Visible = false;
             menuAttach.Text = "Attach to Emulator...";
-            btnScan.Enabled = false;
             btnFilter.Enabled = false;
-            btnRefineScan.Enabled = false;
             btnCaptureState.Enabled = false;
         }
 
