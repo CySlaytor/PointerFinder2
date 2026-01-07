@@ -86,26 +86,12 @@ namespace PointerFinder2.UI
                 // 1. Parse the flat text into a tree structure.
                 var parsedTree = ParseLinesToTree(lines);
 
-                // 2. Recursively merge nodes with identical content.
+                // 2. Recursively merge AND sort nodes.
+                // The MergeTree method now internally calls SortNodes, so the result is fully sorted.
                 var mergedTree = MergeTree(parsedTree);
 
-                // Sort root nodes. Headers and non-offset lines come first, followed by
-                // offset-based lines sorted numerically.
-                var offsetRegex = new Regex(@"^[\+\-]0x([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
-                mergedTree = mergedTree.OrderBy(node => offsetRegex.IsMatch(node.Content) ? 1 : 0)
-                                       .ThenBy(node =>
-                                       {
-                                           var match = offsetRegex.Match(node.Content);
-                                           if (match.Success)
-                                           {
-                                               return Convert.ToInt64(match.Groups[1].Value, 16);
-                                           }
-                                           return (long)node.OriginalIndex; // Use original index for non-offset nodes
-                                       }).ToList();
-
-
-                // 3. Rebuild the text from the cleaned tree structure, using the detected style.
-                var rebuiltText = RebuildTextFromTree(mergedTree, 0, indentChar);
+                // 3. Rebuild the text from the cleaned tree structure, using the detected style and user preference.
+                var rebuiltText = RebuildTextFromTree(mergedTree, 0, indentChar, chkIndentDescriptions.Checked);
 
                 // 4. Final text is the trimmed result.
                 var finalText = rebuiltText.Trim();
@@ -262,6 +248,7 @@ namespace PointerFinder2.UI
                 var allChildren = group.SelectMany(n => n.Children).ToList();
                 if (allChildren.Any())
                 {
+                    // Recursive merge calls ensure the whole tree is processed.
                     newNode.Children.AddRange(MergeTree(allChildren));
                 }
                 finalNodes.Add(newNode);
@@ -279,13 +266,36 @@ namespace PointerFinder2.UI
                 finalNodes.Add(node);
             }
 
-            // Sort the final list to maintain the original file order before the root-level sort.
-            return finalNodes.OrderBy(n => n.OriginalIndex).ToList();
+            // Finally, sort the processed nodes at this level.
+            // This ensures offsets are numerically sorted, while other content stays in place.
+            return SortNodes(finalNodes);
         }
 
+        // New helper method to sort nodes intelligently.
+        private List<CodeNoteNode> SortNodes(List<CodeNoteNode> nodes)
+        {
+            var offsetRegex = new Regex(@"^[\+\-]0x([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
+
+            // Logic:
+            // 1. Primary Sort: Non-offsets (Group 0) come before Offsets (Group 1).
+            // 2. Secondary Sort:
+            //    - If it's an offset (Group 1), sort by the numeric hexadecimal value.
+            //    - If it's not an offset (Group 0), sort by OriginalIndex to preserve file order.
+            return nodes.OrderBy(node => offsetRegex.IsMatch(node.Content) ? 1 : 0)
+                        .ThenBy(node =>
+                        {
+                            var match = offsetRegex.Match(node.Content);
+                            if (match.Success)
+                            {
+                                return Convert.ToInt64(match.Groups[1].Value, 16);
+                            }
+                            return (long)node.OriginalIndex;
+                        }).ToList();
+        }
 
         // Integrated spacing logic directly into the rebuild function.
-        private string RebuildTextFromTree(List<CodeNoteNode> nodes, int indentLevel, char indentChar)
+        // Now supports optional indentation for description lines.
+        private string RebuildTextFromTree(List<CodeNoteNode> nodes, int indentLevel, char indentChar, bool indentDescriptions)
         {
             var sb = new StringBuilder();
             foreach (var node in nodes)
@@ -296,17 +306,40 @@ namespace PointerFinder2.UI
                     sb.AppendLine();
                 }
 
-                // Attached notes (like comments) always use '.' for their indentation.
-                bool isAttachedNote = !(node.Content.StartsWith("+0x") || node.Content.StartsWith("[") || node.Content.StartsWith("-0x"));
-                char currentChar = isAttachedNote ? '.' : indentChar;
+                // Check if the current line is a pointer offset or a description/note.
+                // This check is slightly broader to catch typical value definitions like "0x01 = On".
+                bool isPointerOffset = node.Content.StartsWith("+0x") || node.Content.StartsWith("-0x");
 
-                string prefix = indentLevel > 0 ? new string(currentChar, indentLevel) : "";
+                // If it's not a pointer, it's a description/note/value line.
+                bool isAttachedNote = !isPointerOffset;
+
+                string prefix = "";
+
+                if (isAttachedNote)
+                {
+                    // If it is a description line, check if user wants indentation.
+                    if (indentDescriptions)
+                    {
+                        // Attached notes always use '.' for indentation if enabled.
+                        prefix = indentLevel > 0 ? new string('.', indentLevel) : "";
+                    }
+                    else
+                    {
+                        // No indentation for descriptions.
+                        prefix = "";
+                    }
+                }
+                else
+                {
+                    // Pointer offsets always use the detected indent char.
+                    prefix = indentLevel > 0 ? new string(indentChar, indentLevel) : "";
+                }
 
                 sb.AppendLine($"{prefix}{node.Content}");
 
                 if (node.Children.Any())
                 {
-                    sb.Append(RebuildTextFromTree(node.Children, indentLevel + 1, indentChar));
+                    sb.Append(RebuildTextFromTree(node.Children, indentLevel + 1, indentChar, indentDescriptions));
                 }
             }
             return sb.ToString();

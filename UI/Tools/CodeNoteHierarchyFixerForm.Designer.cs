@@ -21,6 +21,7 @@
             this.richTextInput = new System.Windows.Forms.RichTextBox();
             this.richTextOutput = new System.Windows.Forms.RichTextBox();
             this.panelBottom = new System.Windows.Forms.Panel();
+            this.chkIndentDescriptions = new System.Windows.Forms.CheckBox();
             this.btnCopy = new System.Windows.Forms.Button();
             this.btnClose = new System.Windows.Forms.Button();
             this.btnFix = new System.Windows.Forms.Button();
@@ -78,6 +79,7 @@
             // 
             // panelBottom
             // 
+            this.panelBottom.Controls.Add(this.chkIndentDescriptions);
             this.panelBottom.Controls.Add(this.btnCopy);
             this.panelBottom.Controls.Add(this.btnClose);
             this.panelBottom.Controls.Add(this.btnFix);
@@ -86,6 +88,18 @@
             this.panelBottom.Name = "panelBottom";
             this.panelBottom.Size = new System.Drawing.Size(784, 43);
             this.panelBottom.TabIndex = 1;
+            // 
+            // chkIndentDescriptions
+            // 
+            this.chkIndentDescriptions.AutoSize = true;
+            this.chkIndentDescriptions.Checked = true;
+            this.chkIndentDescriptions.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.chkIndentDescriptions.Location = new System.Drawing.Point(12, 12);
+            this.chkIndentDescriptions.Name = "chkIndentDescriptions";
+            this.chkIndentDescriptions.Size = new System.Drawing.Size(129, 19);
+            this.chkIndentDescriptions.TabIndex = 3;
+            this.chkIndentDescriptions.Text = "Indent Descriptions";
+            this.chkIndentDescriptions.UseVisualStyleBackColor = true;
             // 
             // btnCopy
             // 
@@ -143,6 +157,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
             this.panelBottom.ResumeLayout(false);
+            this.panelBottom.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -156,5 +171,6 @@
         private System.Windows.Forms.Button btnCopy;
         private System.Windows.Forms.Button btnClose;
         private System.Windows.Forms.Button btnFix;
+        private System.Windows.Forms.CheckBox chkIndentDescriptions;
     }
 }
