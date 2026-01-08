@@ -6,14 +6,13 @@ A powerful and robust multi-emulator pointer scanning tool designed for game rev
 
 ## Features
 
-*   **Multi-Emulator Support:** Works on **PCSX2** (PS2), **DuckStation** (PS1), **Dolphin** (GameCube/Wii), and **Nintendo DS** (via RALibretro).
-*   **Two Powerful Scanning Algorithms:**
-    *   **Live Scan (Algorithm 1):** A fast, real-time scan on a running emulator. Perfect for initial discovery and rapid iteration.
-    *   **State-Based Scan (Algorithm 2):** Capture multiple memory dumps ("states") at different points in a game. The scanner then finds ultra-stable pointers that are valid across all states, ideal for pointers that break between level loads or game resets.
-*   **Static Range Finders:** Built-in tools to automatically find the static memory range for PCSX2, Dolphin, and NDS games, simplifying scan setup.
-*   **Advanced Filtering & Refining:**
-    *   **Refine Scan:** Intersect a new scan with your existing results to quickly narrow down candidates.
-    *   **Filter Dynamic Paths:** Continuously validate results against live memory, automatically removing any pointers that have broken.
+*   **Multi-Emulator Support:** Works on **PCSX2** (PS2), **DuckStation** (PS1), **Dolphin** (GameCube/Wii), **PPSSPP** (PSP), and **Nintendo DS** (via RALibretro).
+*   **State-Based Scanning (Differential Analysis):**
+    *   Instead of guessing based on one moment in time, PF2 captures multiple memory dumps ("states") at different points in a game (e.g., Title Screen, Level 1, Level 2).
+    *   The scanner finds ultra-stable pointers that are guaranteed to be valid across all captured states.
+*   **Static Range Finders:** Built-in tools to automatically find the static memory range for PCSX2, Dolphin, PPSSPP, and NDS games, simplifying scan setup.
+*   **Dynamic Filtering:**
+    *   **Filter Dynamic Paths:** Continuously validate your results against live emulator memory, automatically removing any pointers that break in real-time.
 *   **Smart Attachment & Session Management:**
     *   Automatically detects running emulators. If multiple are found, it provides a clean selection prompt.
     *   Save and load entire scan sessions, including results, parameters, and emulator attachment info.
@@ -26,9 +25,12 @@ A powerful and robust multi-emulator pointer scanning tool designed for game rev
 2.  Run `PointerFinder2.exe`.
 3.  Run a game in a supported emulator.
 4.  In the tool, go to **File -> Attach to Emulator...**.
-5.  Choose your scanning method:
-    *   **For a Live Scan:** Click **"New Pointer Scan"** to configure and start your search.
-    *   **For a State-Based Scan:** Click **"Capture State"**, enter a target address for "State 1" and click **Capture**. Change the game state (e.g., load a level, enter a menu), enter the new target address for "State 2" and click **Capture**. Repeat for 2-4 states, then click **Scan**.
+5.  Click **"State-Based Scan"** (formerly Capture State).
+6.  **Capture States:**
+    *   Enter the target address for your value in the current game state for **State 1** and click **Capture**.
+    *   Change the game state (e.g., load a save, enter a level), find the new address, enter it for **State 2**, and click **Capture**.
+    *   (Optional) Repeat for 3 or 4 states for maximum accuracy.
+7.  Click **Scan** to find paths that link all your captured states together.
 
 ## Building from Source
 
