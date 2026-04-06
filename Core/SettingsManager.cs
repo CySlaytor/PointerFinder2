@@ -60,7 +60,6 @@ namespace PointerFinder2.Core
                 ini.Write("MaxLevel", settings.MaxLevel.ToString(), section);
                 ini.Write("StaticAddressStart", settings.StaticAddressStart, section);
                 ini.Write("StaticAddressEnd", settings.StaticAddressEnd, section);
-                ini.Write("UseSliderRange", settings.UseSliderRange.ToString(), section);
                 ini.Write("StopOnFirstPathFound", settings.StopOnFirstPathFound.ToString(), section);
                 ini.Write("FindAllPathLevels", settings.FindAllPathLevels.ToString(), section);
                 ini.Write("CandidatesPerLevel", settings.CandidatesPerLevel.ToString(), section);
@@ -138,8 +137,6 @@ namespace PointerFinder2.Core
             settings.StaticAddressStart = ini.Read("StaticAddressStart", section, defaultSettings.StaticAddressStart);
             settings.StaticAddressEnd = ini.Read("StaticAddressEnd", section, defaultSettings.StaticAddressEnd);
 
-            if (!bool.TryParse(ini.Read("UseSliderRange", section, defaultSettings.UseSliderRange.ToString()), out bool useSliderRange)) useSliderRange = defaultSettings.UseSliderRange;
-            settings.UseSliderRange = useSliderRange;
             if (!bool.TryParse(ini.Read("StopOnFirstPathFound", section, defaultSettings.StopOnFirstPathFound.ToString()), out bool stopOnFirst)) stopOnFirst = defaultSettings.StopOnFirstPathFound;
             settings.StopOnFirstPathFound = stopOnFirst;
             if (!bool.TryParse(ini.Read("FindAllPathLevels", section, defaultSettings.FindAllPathLevels.ToString()), out bool findAllLevels)) findAllLevels = defaultSettings.FindAllPathLevels;

@@ -28,10 +28,5 @@
             }
             return false;
         }
-
-        public void Reset()
-        {
-            _nextUpdateThreshold = _initialThreshold;
-        }
     }
 }

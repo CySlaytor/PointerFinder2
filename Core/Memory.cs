@@ -24,12 +24,6 @@ namespace PointerFinder2.Core
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool IsWow64Process([In] nint processHandle, [MarshalAs(UnmanagedType.Bool)] out bool wow64Process);
 
-        // Gets the first running process that matches the given name.
-        public static Process GetProcess(string processName)
-        {
-            return Process.GetProcessesByName(processName).FirstOrDefault();
-        }
-
         // Opens a handle to a process with read-only memory permissions.
         public static nint OpenProcessHandle(Process process)
         {

@@ -77,7 +77,6 @@
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
             Text = "Find Address";
-            Load += AddressSearchForm_Load;
             ResumeLayout(false);
             PerformLayout();
         }

@@ -281,15 +281,5 @@ namespace PointerFinder2.UI
         {
             this.Close();
         }
-
-        private void tabToNote_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void tabToTrigger_Click(object sender, EventArgs e)
-        {
-
-        }
     }
 }

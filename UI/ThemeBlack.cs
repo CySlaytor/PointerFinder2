@@ -11,19 +11,12 @@ namespace PointerFinder2.UI
         public static void Apply(Form form)
         {
             if (!Enabled)
-                return; 
+                return;
 
             _ = new DarkModeCS(form)
             {
                 ColorMode = DarkModeCS.DisplayMode.DarkMode
             };
-        }
-
-        public static void SetEnabled(bool enabled)
-        {
-            Enabled = enabled;
-            Properties.Settings.Default.DarkModeEnabled = enabled;
-            Properties.Settings.Default.Save();
         }
 
         public static void Initialize()

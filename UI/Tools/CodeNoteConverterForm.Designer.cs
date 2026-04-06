@@ -95,7 +95,6 @@
             tabToNote.TabIndex = 0;
             tabToNote.Text = "RA Trigger to Code Note";
             tabToNote.UseVisualStyleBackColor = true;
-            tabToNote.Click += tabToNote_Click;
             // 
             // btnCopyToClipboard
             // 
@@ -237,7 +236,6 @@
             tabToTrigger.Size = new Size(589, 331);
             tabToTrigger.TabIndex = 1;
             tabToTrigger.Text = "Code Note to RA Trigger";
-            tabToTrigger.Click += tabToTrigger_Click;
             // 
             // chkUseMask
             // 
