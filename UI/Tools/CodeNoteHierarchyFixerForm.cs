@@ -22,6 +22,7 @@ namespace PointerFinder2.UI
             InitializeComponent();
             SetupPlaceholder();
             SetOutputPlaceholder();
+            cmbIndentStyle.SelectedIndex = 0; // Default to Unicode Tree
         }
 
         // Added Load event handler to restore window position and size.
@@ -81,7 +82,14 @@ namespace PointerFinder2.UI
 
                 var lines = inputText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
-                char indentChar = DetectIndentStyle(lines);
+                string selectedStyle = cmbIndentStyle.SelectedItem?.ToString() ?? "Unicode Tree (├─)";
+                string style = selectedStyle;
+
+                if (selectedStyle.StartsWith("Auto Detect"))
+                {
+                    char detectedIndent = DetectIndentStyle(lines);
+                    style = detectedIndent == '+' ? "Plusses (+)" : "Dots (.)";
+                }
 
                 // 1. Parse the flat text into a tree structure.
                 var parsedTree = ParseLinesToTree(lines);
@@ -91,7 +99,7 @@ namespace PointerFinder2.UI
                 var mergedTree = MergeTree(parsedTree);
 
                 // 3. Rebuild the text from the cleaned tree structure, using the detected style and user preference.
-                var rebuiltText = RebuildTextFromTree(mergedTree, 0, indentChar, chkIndentDescriptions.Checked);
+                var rebuiltText = RebuildTextFromTree(mergedTree, 0, style, chkIndentDescriptions.Checked);
 
                 // 4. Final text is the trimmed result.
                 var finalText = rebuiltText.Trim();
@@ -138,33 +146,55 @@ namespace PointerFinder2.UI
 
                 string untrimmedLine = line.TrimEnd();
 
-                // Count leading characters that define indentation level
-                int prefixLength = untrimmedLine.TakeWhile(c => c == '.' || c == '+').Count();
+                // Count leading characters that define indentation level for traditional styles
+                int classicPrefixLength = untrimmedLine.TakeWhile(c => c == '.' || c == '+').Count();
 
-                if (prefixLength > 0)
+                if (classicPrefixLength > 0)
                 {
                     // For plus-based indents like "++0x...", the indent is one less than the count
-                    if (untrimmedLine[prefixLength - 1] == '+' && untrimmedLine.Length > prefixLength && untrimmedLine[prefixLength] != ' ')
+                    if (untrimmedLine[classicPrefixLength - 1] == '+' && untrimmedLine.Length > classicPrefixLength && untrimmedLine[classicPrefixLength] != ' ')
                     {
-                        indent = prefixLength - 1;
+                        indent = classicPrefixLength - 1;
                         content = untrimmedLine.Substring(indent).Trim();
                     }
                     else
                     {
-                        indent = prefixLength;
+                        indent = classicPrefixLength;
                         content = untrimmedLine.Substring(indent).Trim();
                     }
                 }
                 else
                 {
-                    indent = 0;
-                    content = untrimmedLine.Trim();
+                    // Check for Unicode tree characters so pasting existing formatted trees still works
+                    int unicodePrefixLength = untrimmedLine.TakeWhile(c => c == '│' || c == ' ' || c == '├' || c == '└' || c == '┬' || c == '─').Count();
+                    bool hasBoxChar = untrimmedLine.Substring(0, unicodePrefixLength).Any(c => c == '│' || c == '├' || c == '└' || c == '┬' || c == '─');
+
+                    if (unicodePrefixLength > 0 && hasBoxChar)
+                    {
+                        char lastChar = untrimmedLine[unicodePrefixLength - 1];
+                        if (lastChar == '┬' || lastChar == '─')
+                        {
+                            indent = unicodePrefixLength - 1;
+                        }
+                        else
+                        {
+                            indent = 0; // Force 0 so it attaches to lastNode as an Attached Note
+                        }
+                        content = untrimmedLine.Substring(unicodePrefixLength).Trim();
+                    }
+                    else
+                    {
+                        indent = 0;
+                        content = untrimmedLine.Trim();
+                    }
                 }
 
                 if (indent < 0) indent = 0;
 
                 bool isAttachedNote = (indent == 0) && (lastNode != null) &&
-                                      !(content.StartsWith("+0x") || content.StartsWith("["));
+                                      !(content.StartsWith("+0x", StringComparison.OrdinalIgnoreCase) ||
+                                        content.StartsWith("-0x", StringComparison.OrdinalIgnoreCase) ||
+                                        content.StartsWith("["));
 
                 if (isAttachedNote)
                 {
@@ -187,8 +217,6 @@ namespace PointerFinder2.UI
             return rootNodes;
         }
 
-        // This method has been completely refactored to normalize keys for merging,
-        // preserve descriptions, and produce consistent output formatting.
         private List<CodeNoteNode> MergeTree(List<CodeNoteNode> nodes)
         {
             var finalNodes = new List<CodeNoteNode>();
@@ -271,7 +299,7 @@ namespace PointerFinder2.UI
             return SortNodes(finalNodes);
         }
 
-        // New helper method to sort nodes intelligently.
+        // Helper method to sort nodes intelligently.
         private List<CodeNoteNode> SortNodes(List<CodeNoteNode> nodes)
         {
             var offsetRegex = new Regex(@"^[\+\-]0x([0-9a-fA-F]+)", RegexOptions.IgnoreCase);
@@ -294,52 +322,88 @@ namespace PointerFinder2.UI
         }
 
         // Integrated spacing logic directly into the rebuild function.
-        // Now supports optional indentation for description lines.
-        private string RebuildTextFromTree(List<CodeNoteNode> nodes, int indentLevel, char indentChar, bool indentDescriptions)
+        // Now supports robust Unicode box-drawing Tree generations.
+        private string RebuildTextFromTree(List<CodeNoteNode> nodes, int indentLevel, string style, bool indentDescriptions, List<bool> ancestorIsLast = null)
         {
+            if (ancestorIsLast == null) ancestorIsLast = new List<bool>();
             var sb = new StringBuilder();
-            foreach (var node in nodes)
+
+            for (int i = 0; i < nodes.Count; i++)
             {
+                var node = nodes[i];
+                bool isLastChild = (i == nodes.Count - 1);
+
+                // Check if any actual pointer descendants exist to know whether to draw a "┬" or "─"
+                bool hasPointerChildren = node.Children.Any(c => c.Content.StartsWith("+0x", StringComparison.OrdinalIgnoreCase) || c.Content.StartsWith("-0x", StringComparison.OrdinalIgnoreCase));
+
                 // Add a blank line before any top-level node except the very first one.
                 if (indentLevel == 0 && sb.Length > 0)
                 {
                     sb.AppendLine();
                 }
 
-                // Check if the current line is a pointer offset or a description/note.
-                // This check is slightly broader to catch typical value definitions like "0x01 = On".
-                bool isPointerOffset = node.Content.StartsWith("+0x") || node.Content.StartsWith("-0x");
-
-                // If it's not a pointer, it's a description/note/value line.
+                bool isPointerOffset = node.Content.StartsWith("+0x", StringComparison.OrdinalIgnoreCase) || node.Content.StartsWith("-0x", StringComparison.OrdinalIgnoreCase);
                 bool isAttachedNote = !isPointerOffset;
 
                 string prefix = "";
 
-                if (isAttachedNote)
+                if (style.StartsWith("Unicode Tree"))
                 {
-                    // If it is a description line, check if user wants indentation.
-                    if (indentDescriptions)
+                    if (isAttachedNote)
                     {
-                        // Attached notes always use '.' for indentation if enabled.
-                        prefix = indentLevel > 0 ? new string('.', indentLevel) : "";
+                        if (indentDescriptions && indentLevel > 0)
+                        {
+                            for (int a = 0; a < indentLevel - 1; a++)
+                            {
+                                prefix += ancestorIsLast[a] ? " " : "│";
+                            }
+                            prefix += " "; // Fixed: Use a blank space for notes so they align cleanly under the parent text
+                        }
                     }
                     else
                     {
-                        // No indentation for descriptions.
-                        prefix = "";
+                        if (indentLevel > 0)
+                        {
+                            for (int a = 0; a < indentLevel - 1; a++)
+                            {
+                                prefix += ancestorIsLast[a] ? " " : "│";
+                            }
+                            prefix += isLastChild ? "└" : "├";
+                            prefix += hasPointerChildren ? "┬" : "─";
+                        }
                     }
                 }
                 else
                 {
-                    // Pointer offsets always use the detected indent char.
-                    prefix = indentLevel > 0 ? new string(indentChar, indentLevel) : "";
+                    char indentChar = style.StartsWith("Plusses") ? '+' : '.';
+
+                    if (isAttachedNote)
+                    {
+                        if (indentDescriptions)
+                        {
+                            prefix = indentLevel > 0 ? new string('.', indentLevel) : "";
+                        }
+                    }
+                    else
+                    {
+                        prefix = indentLevel > 0 ? new string(indentChar, indentLevel) : "";
+                    }
                 }
 
                 sb.AppendLine($"{prefix}{node.Content}");
 
                 if (node.Children.Any())
                 {
-                    sb.Append(RebuildTextFromTree(node.Children, indentLevel + 1, indentChar, indentDescriptions));
+                    List<bool> newAncestorIsLast;
+                    if (indentLevel == 0)
+                    {
+                        newAncestorIsLast = new List<bool>();
+                    }
+                    else
+                    {
+                        newAncestorIsLast = new List<bool>(ancestorIsLast) { isLastChild };
+                    }
+                    sb.Append(RebuildTextFromTree(node.Children, indentLevel + 1, style, indentDescriptions, newAncestorIsLast));
                 }
             }
             return sb.ToString();
