@@ -110,6 +110,9 @@ namespace PointerFinder2
                 actionCell.Value = "Capture";
                 addressCell.Value = "";
                 UpdateScanButtonState();
+
+                // Aggressively reclaim memory to update Task Manager immediately.
+                Memory.ForceGarbageCollection();
                 return;
             }
 
@@ -159,6 +162,10 @@ namespace PointerFinder2
             dgvStates.Enabled = false;
             this.UseWaitCursor = true;
 
+            // Force a GC before capturing to ensure we clear out any previously released/overwritten memory 
+            // from the Large Object Heap before we request another 30MB+ from the OS.
+            Memory.ForceGarbageCollection();
+
             byte[] memoryDump = await Task.Run(() => _manager.ReadMemory(_manager.MainMemoryStart, (int)_manager.MainMemorySize));
 
             // Restore UI
@@ -203,6 +210,9 @@ namespace PointerFinder2
                 (row.Cells["colAction"] as DataGridViewButtonCell).Value = "Capture";
             }
             UpdateScanButtonState();
+
+            // Aggressively reclaim memory to update Task Manager immediately.
+            Memory.ForceGarbageCollection();
         }
 
         private void UpdateScanButtonState()

@@ -1,7 +1,4 @@
-﻿
-
-
-namespace PointerFinder2
+﻿namespace PointerFinder2
 {
     partial class SettingsForm
     {
@@ -47,12 +44,10 @@ namespace PointerFinder2
             tabDebug = new TabPage();
             grpLogging = new GroupBox();
             chkLogStateScanDetails = new CheckBox();
-            chkLogRefineScan = new CheckBox();
             chkLogFilter = new CheckBox();
-            chkLogLiveScan = new CheckBox();
+            chkLogGeneralEvents = new CheckBox();
             btnClose = new Button();
             toolTip1 = new ToolTip(components);
-            btnPurgeMemory = new Button();
             tabControlSettings.SuspendLayout();
             tabGeneral.SuspendLayout();
             groupBox3.SuspendLayout();
@@ -392,13 +387,12 @@ namespace PointerFinder2
             // 
             grpLogging.BackColor = Color.Transparent;
             grpLogging.Controls.Add(chkLogStateScanDetails);
-            grpLogging.Controls.Add(chkLogRefineScan);
             grpLogging.Controls.Add(chkLogFilter);
-            grpLogging.Controls.Add(chkLogLiveScan);
+            grpLogging.Controls.Add(chkLogGeneralEvents);
             grpLogging.ForeColor = SystemColors.ControlText;
             grpLogging.Location = new Point(6, 6);
             grpLogging.Name = "grpLogging";
-            grpLogging.Size = new Size(439, 154);
+            grpLogging.Size = new Size(439, 120);
             grpLogging.TabIndex = 1;
             grpLogging.TabStop = false;
             grpLogging.Text = "Logging and Debug Toggles";
@@ -408,7 +402,7 @@ namespace PointerFinder2
             chkLogStateScanDetails.AutoSize = true;
             chkLogStateScanDetails.BackColor = Color.Transparent;
             chkLogStateScanDetails.ForeColor = SystemColors.ControlText;
-            chkLogStateScanDetails.Location = new Point(18, 110);
+            chkLogStateScanDetails.Location = new Point(18, 83);
             chkLogStateScanDetails.Name = "chkLogStateScanDetails";
             chkLogStateScanDetails.Size = new Size(177, 19);
             chkLogStateScanDetails.TabIndex = 3;
@@ -416,19 +410,6 @@ namespace PointerFinder2
             toolTip1.SetToolTip(chkLogStateScanDetails, "Outputs an extremely verbose log of the state-based scan validation process.");
             chkLogStateScanDetails.UseVisualStyleBackColor = false;
             chkLogStateScanDetails.CheckedChanged += chkLogStateScanDetails_CheckedChanged;
-            // 
-            // chkLogRefineScan
-            // 
-            chkLogRefineScan.AutoSize = true;
-            chkLogRefineScan.BackColor = Color.Transparent;
-            chkLogRefineScan.ForeColor = SystemColors.ControlText;
-            chkLogRefineScan.Location = new Point(18, 83);
-            chkLogRefineScan.Name = "chkLogRefineScan";
-            chkLogRefineScan.Size = new Size(183, 19);
-            chkLogRefineScan.TabIndex = 2;
-            chkLogRefineScan.Text = "Log Refine Scan (Intersection)";
-            chkLogRefineScan.UseVisualStyleBackColor = false;
-            chkLogRefineScan.CheckedChanged += chkLogRefineScan_CheckedChanged;
             // 
             // chkLogFilter
             // 
@@ -443,18 +424,19 @@ namespace PointerFinder2
             chkLogFilter.UseVisualStyleBackColor = false;
             chkLogFilter.CheckedChanged += chkLogFilter_CheckedChanged;
             // 
-            // chkLogLiveScan
+            // chkLogGeneralEvents
             // 
-            chkLogLiveScan.AutoSize = true;
-            chkLogLiveScan.BackColor = Color.Transparent;
-            chkLogLiveScan.ForeColor = SystemColors.ControlText;
-            chkLogLiveScan.Location = new Point(18, 29);
-            chkLogLiveScan.Name = "chkLogLiveScan";
-            chkLogLiveScan.Size = new Size(98, 19);
-            chkLogLiveScan.TabIndex = 0;
-            chkLogLiveScan.Text = "Log Live Scan";
-            chkLogLiveScan.UseVisualStyleBackColor = false;
-            chkLogLiveScan.CheckedChanged += chkLogLiveScan_CheckedChanged;
+            chkLogGeneralEvents.AutoSize = true;
+            chkLogGeneralEvents.BackColor = Color.Transparent;
+            chkLogGeneralEvents.ForeColor = SystemColors.ControlText;
+            chkLogGeneralEvents.Location = new Point(18, 29);
+            chkLogGeneralEvents.Name = "chkLogGeneralEvents";
+            chkLogGeneralEvents.Size = new Size(125, 19);
+            chkLogGeneralEvents.TabIndex = 0;
+            chkLogGeneralEvents.Text = "Log General Events";
+            toolTip1.SetToolTip(chkLogGeneralEvents, "Outputs general application events like emulator attachment and settings management.");
+            chkLogGeneralEvents.UseVisualStyleBackColor = false;
+            chkLogGeneralEvents.CheckedChanged += chkLogGeneralEvents_CheckedChanged;
             // 
             // btnClose
             // 
@@ -472,29 +454,12 @@ namespace PointerFinder2
             btnClose.UseVisualStyleBackColor = true;
             btnClose.Click += btnClose_Click;
             // 
-            // btnPurgeMemory
-            // 
-            btnPurgeMemory.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            btnPurgeMemory.BackColor = Color.Transparent;
-            btnPurgeMemory.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
-            btnPurgeMemory.FlatAppearance.CheckedBackColor = Color.FromArgb(136, 54, 82, 104);
-            btnPurgeMemory.ForeColor = SystemColors.ControlText;
-            btnPurgeMemory.Location = new Point(12, 328);
-            btnPurgeMemory.Name = "btnPurgeMemory";
-            btnPurgeMemory.Size = new Size(91, 28);
-            btnPurgeMemory.TabIndex = 4;
-            btnPurgeMemory.Text = "Purge Memory";
-            toolTip1.SetToolTip(btnPurgeMemory, "Forces the application to release unused RAM back to the operating system.");
-            btnPurgeMemory.UseVisualStyleBackColor = false;
-            btnPurgeMemory.Click += btnPurgeMemory_Click;
-            // 
             // SettingsForm
             // 
             AcceptButton = btnClose;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(484, 368);
-            Controls.Add(btnPurgeMemory);
             Controls.Add(btnClose);
             Controls.Add(tabControlSettings);
             ForeColor = SystemColors.ControlText;
@@ -526,7 +491,7 @@ namespace PointerFinder2
             ResumeLayout(false);
 
         }
-        
+
         #endregion
 
         private System.Windows.Forms.TabControl tabControlSettings;
@@ -534,14 +499,12 @@ namespace PointerFinder2
         private System.Windows.Forms.TabPage tabDebug;
         private System.Windows.Forms.Button btnClose;
         private System.Windows.Forms.GroupBox grpLogging;
-        private System.Windows.Forms.CheckBox chkLogRefineScan;
         private System.Windows.Forms.CheckBox chkLogFilter;
-        private System.Windows.Forms.CheckBox chkLogLiveScan;
+        private System.Windows.Forms.CheckBox chkLogGeneralEvents;
         private System.Windows.Forms.GroupBox grpSound;
         private System.Windows.Forms.CheckBox chkUseDefaultSounds;
         private System.Windows.Forms.Button btnRestartApp;
         private System.Windows.Forms.ToolTip toolTip1;
-        private System.Windows.Forms.Button btnPurgeMemory;
         private System.Windows.Forms.GroupBox grpPerformance;
         private System.Windows.Forms.CheckBox chkLimitCpuUsage;
         private System.Windows.Forms.CheckBox chkLogStateScanDetails;

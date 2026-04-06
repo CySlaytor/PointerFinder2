@@ -24,6 +24,11 @@ namespace PointerFinder2.Core
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool IsWow64Process([In] nint processHandle, [MarshalAs(UnmanagedType.Bool)] out bool wow64Process);
 
+        // Required to force Windows to update the Task Manager memory footprint immediately.
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, UIntPtr dwMinimumWorkingSetSize, UIntPtr dwMaximumWorkingSetSize);
+
         // Opens a handle to a process with read-only memory permissions.
         public static nint OpenProcessHandle(Process process)
         {
@@ -35,7 +40,6 @@ namespace PointerFinder2.Core
         }
 
         // Finds the memory address of an exported variable (e.g., "EEMem") by parsing the process's PE header.
-        // This is the key to attaching robustly without hardcoded offsets, which would break with every new emulator version.
         public static nint FindExportedAddress(Process process, nint processHandle, string exportName)
         {
             if (process?.MainModule == null || processHandle == IntPtr.Zero) return IntPtr.Zero;
@@ -46,7 +50,6 @@ namespace PointerFinder2.Core
                 if (peHeader == null) return IntPtr.Zero;
 
                 int peHeaderOffset = BitConverter.ToInt32(peHeader, 60);
-                // The offset to the export table is different for 32-bit vs 64-bit processes.
                 int rvaOffset = peHeaderOffset + (!Wow64Process(process) ? 136 : 120);
 
                 int exportTableRVA = BitConverter.ToInt32(peHeader, rvaOffset);
@@ -67,14 +70,12 @@ namespace PointerFinder2.Core
 
                 if (nameTable == null || ordinalTable == null || functionTable == null) return IntPtr.Zero;
 
-                // Iterate through the export names to find a match.
                 for (int i = 0; i < numberOfFunctions; i++)
                 {
                     int nameRVA = BitConverter.ToInt32(nameTable, i * 4);
                     string currentExportName = ReadString(processHandle, baseAddress + nameRVA);
                     if (currentExportName.Equals(exportName, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Once the name matches, find its address via the ordinal table.
                         ushort ordinal = BitConverter.ToUInt16(ordinalTable, i * 2);
                         int functionRVA = BitConverter.ToInt32(functionTable, ordinal * 4);
                         return baseAddress + functionRVA;
@@ -129,6 +130,31 @@ namespace PointerFinder2.Core
                 return IsWow64Process(process.Handle, out bool isWow64) && isWow64;
             }
             return IsWow64Process(process.Handle, out bool _isWow64) && _isWow64;
+        }
+
+        // Aggressively forces the application to release all unused memory back to the OS.
+        public static void ForceGarbageCollection()
+        {
+            try
+            {
+                // 1. Force the Large Object Heap (LOH) to compact.
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+
+                // 2. Run a full, blocking, compacting Garbage Collection for all generations.
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+
+                // 3. Command Windows to trim the process's working set memory back to minimum immediately.
+                using (Process currentProcess = Process.GetCurrentProcess())
+                {
+                    SetProcessWorkingSetSize(currentProcess.Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogForm.Instance.Log($"[Memory] Failed to force garbage collection: {ex.Message}");
+            }
         }
     }
 }

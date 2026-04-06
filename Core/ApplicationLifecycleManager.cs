@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace PointerFinder2.Core
@@ -11,10 +10,6 @@ namespace PointerFinder2.Core
     // Handles application lifecycle events like restart, memory management, and process monitoring.
     public class ApplicationLifecycleManager : IDisposable
     {
-        [DllImport("kernel32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, UIntPtr dwMinimumWorkingSetSize, UIntPtr dwMaximumWorkingSetSize);
-
         public event EventHandler EmulatorProcessExited;
 
         private readonly Form _mainForm;
@@ -109,22 +104,9 @@ namespace PointerFinder2.Core
 
         public void PurgeMemory()
         {
-            try
-            {
-                _logger.Log("--- Purging Application Memory ---");
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-                GC.Collect();
-                using (Process currentProcess = Process.GetCurrentProcess())
-                {
-                    SetProcessWorkingSetSize(currentProcess.Handle, (UIntPtr)0xFFFFFFFF, (UIntPtr)0xFFFFFFFF);
-                }
-                _logger.Log("--- Memory Purge Complete ---");
-            }
-            catch (Exception ex)
-            {
-                _logger.Log($"[ERROR] Failed to purge memory: {ex.Message}");
-            }
+            _logger.Log("--- Purging Application Memory ---");
+            Memory.ForceGarbageCollection();
+            _logger.Log("--- Memory Purge Complete ---");
         }
 
         private void ProcessMonitorTimer_Tick(object sender, EventArgs e)

@@ -34,9 +34,8 @@ namespace PointerFinder2
             // Load the new sorting preference setting.
             chkSortByLevelFirst.Checked = GlobalSettings.SortByLevelFirst;
             // --- Load Debug Settings ---
-            chkLogLiveScan.Checked = DebugSettings.LogLiveScan;
+            chkLogGeneralEvents.Checked = DebugSettings.LogGeneralEvents;
             chkLogFilter.Checked = DebugSettings.LogFilterValidation;
-            chkLogRefineScan.Checked = DebugSettings.LogRefineScan;
             chkLogStateScanDetails.Checked = DebugSettings.LogStateBasedScanDetails;
             // Load Code Note settings
             txtPrefix.Text = GlobalSettings.CodeNotePrefix;
@@ -52,6 +51,7 @@ namespace PointerFinder2
         {
             Close();
         }
+
         // This button now triggers the smart self-restart to fully reset the application's memory.
         private void btnRestartApp_Click(object sender, EventArgs e)
         {
@@ -65,17 +65,6 @@ namespace PointerFinder2
             {
                 _mainForm?.RestartApplication();
             }
-        }
-        // Event handler for the new "Purge Memory" button.
-        private void btnPurgeMemory_Click(object sender, EventArgs e)
-        {
-            // Call the public PurgeMemory method on the MainForm instance.
-            _mainForm?.PurgeMemory();
-            MessageBox.Show(
-                "Application memory has been purged.\n\nYou should see the RAM usage drop in Task Manager.",
-                "Success",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
         }
 
         private void btnResetAll_Click(object sender, EventArgs e)
@@ -137,10 +126,10 @@ namespace PointerFinder2
             SettingsManager.SaveGlobalSettingsOnly();
         }
 
-        private void chkLogLiveScan_CheckedChanged(object sender, EventArgs e)
+        private void chkLogGeneralEvents_CheckedChanged(object sender, EventArgs e)
         {
             if (_isInitializing) return;
-            DebugSettings.LogLiveScan = chkLogLiveScan.Checked;
+            DebugSettings.LogGeneralEvents = chkLogGeneralEvents.Checked;
             SettingsManager.SaveDebugSettingsOnly();
         }
 
@@ -148,13 +137,6 @@ namespace PointerFinder2
         {
             if (_isInitializing) return;
             DebugSettings.LogFilterValidation = chkLogFilter.Checked;
-            SettingsManager.SaveDebugSettingsOnly();
-        }
-
-        private void chkLogRefineScan_CheckedChanged(object sender, EventArgs e)
-        {
-            if (_isInitializing) return;
-            DebugSettings.LogRefineScan = chkLogRefineScan.Checked;
             SettingsManager.SaveDebugSettingsOnly();
         }
 

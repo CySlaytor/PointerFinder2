@@ -30,43 +30,43 @@ namespace PointerFinder2.Emulators.EmulatorManager
         // Attaches by finding PCSX2's exported "EEMem" variable, which points to the emulated RAM.
         public bool Attach(Process process)
         {
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Attempting to attach...");
 
             EmulatorProcess = process;
 
             if (EmulatorProcess?.MainModule == null)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
                 return false;
             }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
             ProcessHandle = Memory.OpenProcessHandle(EmulatorProcess);
             if (ProcessHandle == IntPtr.Zero)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
                 return false;
             }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
             nint eeMemBasePC = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "EEMem");
             if (eeMemBasePC == IntPtr.Zero)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'EEMem' export. Ensure the game is fully loaded.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'EEMem' export. Ensure the game is fully loaded.");
                 return false;
             }
 
             long? eeMemPtr = Memory.ReadInt64(ProcessHandle, eeMemBasePC);
             if (!eeMemPtr.HasValue)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'EEMem' export address.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'EEMem' export address.");
                 return false;
             }
             MemoryBasePC = (nint)eeMemPtr.Value;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: EEMem base found in PC memory at 0x{MemoryBasePC:X}.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: EEMem base found in PC memory at 0x{MemoryBasePC:X}.");
 
             Ps2MemoryBaseInPC = IntPtr.Subtract(MemoryBasePC, (int)PS2_EEMEM_START);
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
 
@@ -81,7 +81,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
             MemoryBasePC = IntPtr.Zero;
             Ps2MemoryBaseInPC = IntPtr.Zero;
             EmulatorProcess = null;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
         // Reads a block of memory from the emulated PS2 RAM.
@@ -229,14 +229,13 @@ namespace PointerFinder2.Emulators.EmulatorManager
         // Provides a set of default settings specifically for PCSX2.
         public AppSettings GetDefaultSettings()
         {
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Getting default settings.");
             return new AppSettings
             {
                 StaticAddressStart = "100000",
                 StaticAddressEnd = "7FFFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
-                // Provide default for new MaxCandidates setting.
                 MaxCandidates = 10000000,
                 StopOnFirstPathFound = false,
                 CandidatesPerLevel = 10

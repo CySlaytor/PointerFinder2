@@ -33,7 +33,8 @@ namespace PointerFinder2.Core
         {
             if (IsBusy) return;
 
-            LastScanParams = parameters;
+            // Save history, but clone WITHOUT the memory dumps to prevent massive memory leaks.
+            LastScanParams = parameters.CloneWithoutStates();
             _operationCts = new CancellationTokenSource();
             _operationStopwatch.Restart();
 
@@ -69,7 +70,6 @@ namespace PointerFinder2.Core
             finally
             {
                 _operationStopwatch.Stop();
-                // Removed the unused 'stoppedByMemoryMonitor' parameter from the event args.
                 var eventArgs = new ScanCompletedEventArgs(
                     results,
                     _operationStopwatch.Elapsed,

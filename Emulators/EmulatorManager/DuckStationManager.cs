@@ -28,42 +28,42 @@ namespace PointerFinder2.Emulators.EmulatorManager
         // Attaches by finding DuckStation's exported "RAM" variable, which points to the emulated RAM.
         public bool Attach(Process process)
         {
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attempting to attach...");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Attempting to attach...");
 
             EmulatorProcess = process;
 
             if (EmulatorProcess?.MainModule == null)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
                 return false;
             }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
             ProcessHandle = Memory.OpenProcessHandle(EmulatorProcess);
             if (ProcessHandle == IntPtr.Zero)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
                 return false;
             }
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened.");
 
             nint ramExportAddress = Memory.FindExportedAddress(EmulatorProcess, ProcessHandle, "RAM");
             if (ramExportAddress == IntPtr.Zero)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'RAM' export. Ensure the game is fully loaded.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not find the 'RAM' export. Ensure the game is fully loaded.");
                 return false;
             }
 
             long? ramPtr = Memory.ReadInt64(ProcessHandle, ramExportAddress);
             if (!ramPtr.HasValue)
             {
-                if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'RAM' export address.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not read the pointer from the 'RAM' export address.");
                 return false;
             }
 
             this.MemoryBasePC = (nint)ramPtr.Value;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] SUCCESS: PS1 RAM base found in PC memory at 0x{this.MemoryBasePC:X}.");
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: PS1 RAM base found in PC memory at 0x{this.MemoryBasePC:X}.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
 
@@ -77,7 +77,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
             ProcessHandle = IntPtr.Zero;
             MemoryBasePC = IntPtr.Zero;
             EmulatorProcess = null;
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Detached from process.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
         // Reads a block of memory from the emulated PS1 RAM.
@@ -202,14 +202,13 @@ namespace PointerFinder2.Emulators.EmulatorManager
         // Provides a set of default settings specifically for DuckStation.
         public AppSettings GetDefaultSettings()
         {
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Getting default settings.");
             return new AppSettings
             {
                 StaticAddressStart = "10000",
                 StaticAddressEnd = "7FFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
-                // Provide default for new MaxCandidates setting.
                 MaxCandidates = 10000000,
                 StopOnFirstPathFound = false,
                 CandidatesPerLevel = 10

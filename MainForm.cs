@@ -693,7 +693,6 @@ namespace PointerFinder2
 
         #region Context Menu Handlers
         public void RestartApplication() => _lifecycleManager.RestartApplication(_activeProfile);
-        public void PurgeMemory() => _lifecycleManager.PurgeMemory();
         private void videoTutorialToolStripMenuItem_Click(object sender, EventArgs e)
         {
             const string tutorialUrl = "https://youtu.be/QwHTML0kRtI";

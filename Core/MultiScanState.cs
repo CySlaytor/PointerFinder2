@@ -5,9 +5,7 @@ using System.Linq;
 
 namespace PointerFinder2.Core
 {
-    // Created a new class to encapsulate the logic and storage for multi-state captures.
-    // This improves decoupling between MainForm and StateCaptureForm, as the form no longer
-    // directly manipulates MainForm's internal array.
+    // Encapsulates the logic and storage for multi-state captures.
     public class MultiScanState
     {
         private readonly ScanState[] _capturedStates = new ScanState[4];
@@ -31,6 +29,13 @@ namespace PointerFinder2.Core
         public void CaptureState(int slotIndex, ScanState state)
         {
             if (slotIndex < 0 || slotIndex >= _capturedStates.Length) return;
+
+            // Ensure any existing dump in this slot is explicitly released first
+            if (_capturedStates[slotIndex] != null)
+            {
+                _capturedStates[slotIndex].MemoryDump = null;
+            }
+
             _capturedStates[slotIndex] = state;
             UpdateLastCapturedIndex();
         }
@@ -38,7 +43,12 @@ namespace PointerFinder2.Core
         public void ReleaseState(int slotIndex)
         {
             if (slotIndex < 0 || slotIndex >= _capturedStates.Length) return;
-            _capturedStates[slotIndex] = null;
+            if (_capturedStates[slotIndex] != null)
+            {
+                // Explicitly null the heavy byte array to sever references immediately
+                _capturedStates[slotIndex].MemoryDump = null;
+                _capturedStates[slotIndex] = null;
+            }
             UpdateLastCapturedIndex();
         }
 
@@ -46,7 +56,12 @@ namespace PointerFinder2.Core
         {
             for (int i = 0; i < _capturedStates.Length; i++)
             {
-                _capturedStates[i] = null;
+                if (_capturedStates[i] != null)
+                {
+                    // Explicitly null the heavy byte array to sever references immediately
+                    _capturedStates[i].MemoryDump = null;
+                    _capturedStates[i] = null;
+                }
             }
             LastCapturedSlotIndex = -1;
         }

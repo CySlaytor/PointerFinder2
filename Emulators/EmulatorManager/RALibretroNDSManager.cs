@@ -8,6 +8,9 @@ using System.Runtime.InteropServices;
 
 namespace PointerFinder2.Emulators.EmulatorManager
 {
+    // Manages all interaction with the RALibretro NDS core.
+    // Unlike other emulators, RALibretro doesn't provide a consistent memory pointer,
+    // so this manager uses signature scanning to locate the RAM block dynamically.
     public class RALibretroNDSManager : IEmulatorManager
     {
         private readonly DebugLogForm logger = DebugLogForm.Instance;
@@ -18,7 +21,6 @@ namespace PointerFinder2.Emulators.EmulatorManager
         public const uint NDS_STATIC_START = 0x00100000;
         public const uint NDS_STATIC_END = 0x003FFFFF + 1;
 
-        // Replaced fragile hardcoded offset with a robust signature scanning method.
         #region WinAPI
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern nint OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
@@ -53,6 +55,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
         #endregion
 
         // Added a struct to define core-specific memory signatures.
+        // Different cores (DeSmuME vs melonDS) have different memory layouts in RALibretro.
         private struct CoreProfile
         {
             public string Name;
@@ -83,16 +86,16 @@ namespace PointerFinder2.Emulators.EmulatorManager
         // Rewrote the Attach method to use memory scanning instead of a hardcoded offset.
         public bool Attach(Process process)
         {
-            logger.Log($"[{EmulatorName}] Attempting to attach...");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Attempting to attach...");
 
             EmulatorProcess = process;
 
             if (EmulatorProcess?.MainModule == null)
             {
-                logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Process not found or main module is not accessible.");
                 return false;
             }
-            logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: Attaching to process '{EmulatorProcess.ProcessName}' (ID: {EmulatorProcess.Id}).");
 
             if (!Environment.Is64BitProcess)
             {
@@ -103,24 +106,27 @@ namespace PointerFinder2.Emulators.EmulatorManager
             ProcessHandle = OpenProcess(ALL_ACCESS, false, EmulatorProcess.Id);
             if (ProcessHandle == IntPtr.Zero)
             {
-                logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] FAILURE: Could not open process handle. Try running this tool as Administrator.");
                 return false;
             }
-            logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened. Searching for core memory signatures...");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] SUCCESS: Process handle opened. Searching for core memory signatures...");
 
             nint parentBlockBase = nint.Zero;
             foreach (var profile in CoreProfiles)
             {
-                logger.Log($"  -> Searching for {profile.Name} signature (Region size: {profile.SearchSize} bytes)...");
+                if (DebugSettings.LogGeneralEvents) logger.Log($"  -> Searching for {profile.Name} signature (Region size: {profile.SearchSize} bytes)...");
                 parentBlockBase = FindBaseAddressBySize(profile.SearchSize);
                 if (parentBlockBase != nint.Zero)
                 {
                     _foundCoreName = profile.Name;
                     this.MemoryBasePC = parentBlockBase + profile.Offset;
-                    logger.Log($"\n[{EmulatorName}] SUCCESS! Detected {_foundCoreName} core.");
-                    logger.Log($"  -> Found parent block at: 0x{parentBlockBase:X}");
-                    logger.Log($"  -> Applying offset:       + 0x{profile.Offset:X}");
-                    logger.Log("--------------------------------------------------");
+                    if (DebugSettings.LogGeneralEvents)
+                    {
+                        logger.Log($"\n[{EmulatorName}] SUCCESS! Detected {_foundCoreName} core.");
+                        logger.Log($"  -> Found parent block at: 0x{parentBlockBase:X}");
+                        logger.Log($"  -> Applying offset:       + 0x{profile.Offset:X}");
+                        logger.Log("--------------------------------------------------");
+                    }
                     break;
                 }
             }
@@ -133,10 +139,10 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 return false;
             }
 
-            logger.Log($"[{EmulatorName}] Calculated DS Main RAM Base at PC Address: 0x{this.MemoryBasePC:X}.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Calculated DS Main RAM Base at PC Address: 0x{this.MemoryBasePC:X}.");
 
             NdsMemoryBaseInPC = IntPtr.Subtract(MemoryBasePC, (int)NDS_RAM_START);
-            logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Attachment complete. Ready for scanning.");
             return true;
         }
 
@@ -153,7 +159,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
             EmulatorProcess = null;
             // Reset the found core name on detach.
             _foundCoreName = "Unknown";
-            logger.Log($"[{EmulatorName}] Detached from process.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Detached from process.");
         }
 
         // Reads a block of memory from the emulated NDS system.
@@ -276,7 +282,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
         // Provides a set of default settings specifically for NDS on RALibretro.
         public AppSettings GetDefaultSettings()
         {
-            if (DebugSettings.LogLiveScan) logger.Log($"[{EmulatorName}] Getting default settings.");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"[{EmulatorName}] Getting default settings.");
             return new AppSettings
             {
                 StaticAddressStart = "100000",

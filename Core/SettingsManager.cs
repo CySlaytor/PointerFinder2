@@ -16,7 +16,7 @@ namespace PointerFinder2.Core
         public static void SaveGlobalSettingsOnly()
         {
             var logger = DebugLogForm.Instance;
-            if (DebugSettings.LogLiveScan) logger.Log("Saving global settings only.");
+            if (DebugSettings.LogGeneralEvents) logger.Log("Saving global settings only.");
             var ini = new IniFile(_settingsFile);
             ini.Write("UseWindowsDefaultSound", GlobalSettings.UseWindowsDefaultSound.ToString(), "Global");
             ini.Write("LimitCpuUsage", GlobalSettings.LimitCpuUsage.ToString(), "Global");
@@ -29,27 +29,31 @@ namespace PointerFinder2.Core
             ini.Write("CodeNoteAlignSuffixes", GlobalSettings.CodeNoteAlignSuffixes.ToString(), "CodeNotes");
             ini.Write("CodeNoteSuffixOnLastLineOnly", GlobalSettings.CodeNoteSuffixOnLastLineOnly.ToString(), "CodeNotes");
 
-            if (DebugSettings.LogLiveScan) logger.Log("Global settings saved successfully.");
+            if (DebugSettings.LogGeneralEvents) logger.Log("Global settings saved successfully.");
         }
 
         // Saves only the debug logging settings.
         public static void SaveDebugSettingsOnly()
         {
             var logger = DebugLogForm.Instance;
-            if (DebugSettings.LogLiveScan) logger.Log("Saving debug settings only.");
+            if (DebugSettings.LogGeneralEvents) logger.Log("Saving debug settings only.");
             var ini = new IniFile(_settingsFile);
-            ini.Write("LogLiveScan", DebugSettings.LogLiveScan.ToString(), "Debug");
+            ini.Write("LogGeneralEvents", DebugSettings.LogGeneralEvents.ToString(), "Debug");
             ini.Write("LogFilterValidation", DebugSettings.LogFilterValidation.ToString(), "Debug");
-            ini.Write("LogRefineScan", DebugSettings.LogRefineScan.ToString(), "Debug");
             ini.Write("LogStateBasedScanDetails", DebugSettings.LogStateBasedScanDetails.ToString(), "Debug");
-            if (DebugSettings.LogLiveScan) logger.Log("Debug settings saved successfully.");
+
+            // Clean up old legacy keys if they exist
+            ini.Write("LogLiveScan", "", "Debug");
+            ini.Write("LogRefineScan", "", "Debug");
+
+            if (DebugSettings.LogGeneralEvents) logger.Log("Debug settings saved successfully.");
         }
 
         // Saves settings for a specific emulator, plus all global settings.
         public static void Save(EmulatorTarget target, AppSettings settings)
         {
             var logger = DebugLogForm.Instance;
-            if (DebugSettings.LogLiveScan) logger.Log($"Saving settings for profile: {target}");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"Saving settings for profile: {target}");
             var ini = new IniFile(_settingsFile);
             string section = $"Scanner_{target}";
 
@@ -68,7 +72,7 @@ namespace PointerFinder2.Core
 
             SaveGlobalSettingsOnly();
             SaveDebugSettingsOnly();
-            if (DebugSettings.LogLiveScan) logger.Log("Settings saved successfully.");
+            if (DebugSettings.LogGeneralEvents) logger.Log("Settings saved successfully.");
         }
 
         //New public method to be called once on application startup.
@@ -99,30 +103,30 @@ namespace PointerFinder2.Core
             if (!bool.TryParse(ini.Read("CodeNoteSuffixOnLastLineOnly", "CodeNotes", "False"), out bool suffixLastLine)) suffixLastLine = false;
             GlobalSettings.CodeNoteSuffixOnLastLineOnly = suffixLastLine;
 
-            // Load debug settings
-            if (!bool.TryParse(ini.Read("LogLiveScan", "Debug", DebugSettings.LogLiveScan.ToString()), out bool logLiveScan)) logLiveScan = false;
-            DebugSettings.LogLiveScan = logLiveScan;
+            // Load debug settings (handling legacy 'LogLiveScan' as fallback for users updating)
+            string legacyLogLiveScan = ini.Read("LogLiveScan", "Debug", "False");
+            if (!bool.TryParse(ini.Read("LogGeneralEvents", "Debug", legacyLogLiveScan), out bool logGeneralEvents)) logGeneralEvents = false;
+            DebugSettings.LogGeneralEvents = logGeneralEvents;
+
             if (!bool.TryParse(ini.Read("LogFilterValidation", "Debug", DebugSettings.LogFilterValidation.ToString()), out bool logFilterValidation)) logFilterValidation = false;
             DebugSettings.LogFilterValidation = logFilterValidation;
-            if (!bool.TryParse(ini.Read("LogRefineScan", "Debug", DebugSettings.LogRefineScan.ToString()), out bool logRefineScan)) logRefineScan = false;
-            DebugSettings.LogRefineScan = logRefineScan;
+
             if (!bool.TryParse(ini.Read("LogStateBasedScanDetails", "Debug", DebugSettings.LogStateBasedScanDetails.ToString()), out bool logStateBasedScanDetails)) logStateBasedScanDetails = false;
             DebugSettings.LogStateBasedScanDetails = logStateBasedScanDetails;
         }
-
 
         // Loads settings for a specific emulator and all global settings from the INI file.
         public static AppSettings Load(EmulatorTarget target, AppSettings defaultSettings)
         {
             var logger = DebugLogForm.Instance;
-            if (DebugSettings.LogLiveScan) logger.Log($"Loading settings for profile: {target}");
+            if (DebugSettings.LogGeneralEvents) logger.Log($"Loading settings for profile: {target}");
             var settings = new AppSettings();
             var ini = new IniFile(_settingsFile);
             string section = $"Scanner_{target}";
 
             if (!File.Exists(_settingsFile))
             {
-                if (DebugSettings.LogLiveScan) logger.Log("Settings file not found, using default settings.");
+                if (DebugSettings.LogGeneralEvents) logger.Log("Settings file not found, using default settings.");
                 return defaultSettings;
             }
 
@@ -152,7 +156,7 @@ namespace PointerFinder2.Core
             //Re-load all global sections to ensure they are up-to-date.
             LoadGlobalAndDebugSections(ini);
 
-            if (DebugSettings.LogLiveScan) logger.Log("Settings loaded successfully.");
+            if (DebugSettings.LogGeneralEvents) logger.Log("Settings loaded successfully.");
             return settings;
         }
     }
