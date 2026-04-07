@@ -31,6 +31,8 @@ namespace PointerFinder2.DataModels
         public int MaxCandidates { get; set; } = 500000;
         // The address to use for the final 'FinalAddress' column in the results grid.
         public uint FinalAddressTarget { get; set; }
+        // If true, utilizes aggressive pruning to prevent memory explosion.
+        public bool FastScanMode { get; set; } = true;
         // A list containing all the captured memory states for multi-state comparison.
         public List<ScanState>? CapturedStates { get; set; }
 
@@ -50,6 +52,7 @@ namespace PointerFinder2.DataModels
                 FindAllPathLevels = FindAllPathLevels,
                 CandidatesPerLevel = CandidatesPerLevel,
                 MaxCandidates = MaxCandidates,
+                FastScanMode = FastScanMode,
                 FinalAddressTarget = FinalAddressTarget,
                 CapturedStates = null // Break the strong reference to the LOH memory dumps!
             };

@@ -16,10 +16,33 @@ namespace PointerFinder2.Emulators.StateBased
     // against all provided states. Console-specific details are handled by inheriting classes.
     public abstract class StateBasedScannerStrategyBase : IPointerScannerStrategy
     {
-        protected class PathCandidate
+        // Replaced PathCandidate with a memory-efficient linked-list Node structure.
+        // This avoids instantiating millions of List<int> objects, saving massive amounts of RAM
+        // and garbage collection pauses during deep, explosive scans.
+        protected class PathNode
         {
-            public uint HeadAddress { get; set; }
-            public List<int> ReverseOffsets { get; set; }
+            public uint Address { get; }
+            public int Offset { get; }
+            public PathNode Child { get; }
+
+            public PathNode(uint address, int offset, PathNode child)
+            {
+                Address = address;
+                Offset = offset;
+                Child = child;
+            }
+
+            public List<int> GetForwardOffsets()
+            {
+                var offsets = new List<int>();
+                PathNode current = this;
+                while (current != null)
+                {
+                    offsets.Add(current.Offset);
+                    current = current.Child;
+                }
+                return offsets;
+            }
         }
 
         protected ScanParameters _params;
@@ -28,14 +51,19 @@ namespace PointerFinder2.Emulators.StateBased
         protected readonly DebugLogForm logger = DebugLogForm.Instance;
 
         protected Dictionary<uint, List<uint>> _pointerMap;
+        // Global deduplication dictionary. Maps a dynamic memory address to the shortest Level it was reached at.
+        // This prevents Re-convergence (duplicating subtrees) and completely kills Cycles/Linked List loops.
+        protected ConcurrentDictionary<uint, int> _visitedNodes;
+
         private ConcurrentBag<PointerPath> _foundPaths;
-        // Added a dedicated counter for found paths to avoid performance issues with ConcurrentBag.Count.
         private long _foundPathsCounter;
         private long _candidatesValidated;
         private long _candidatesGenerated;
         private CancellationTokenSource _stopOnFirstCts;
-        // Replaced the threshold field with a dedicated manager class to remove duplicated logic.
         private ProgressThresholdManager _progressThresholdManager;
+
+        // Hard limit to prevent RAM/CPU death if a specific level fans out astronomically.
+        private const int MAX_NODES_PER_LEVEL = 150000;
 
         #region Abstract Methods
         // Builds the pointer map by scanning the relevant memory regions from a captured memory dump.
@@ -51,10 +79,10 @@ namespace PointerFinder2.Emulators.StateBased
             _params = parameters;
             _progress = progress;
             _foundPaths = new ConcurrentBag<PointerPath>();
+            _visitedNodes = new ConcurrentDictionary<uint, int>();
             _candidatesValidated = 0;
             _candidatesGenerated = 0;
             _foundPathsCounter = 0;
-            // Initialize the progress threshold manager with a starting threshold of 1 for immediate feedback.
             _progressThresholdManager = new ProgressThresholdManager(1);
             _stopOnFirstCts = new CancellationTokenSource();
 
@@ -69,6 +97,10 @@ namespace PointerFinder2.Emulators.StateBased
             logger.Log("=====================================================================");
             logger.Log($"[{_manager.EmulatorName}] --- STARTING STATE-BASED SCAN ({_params.CapturedStates.Count} states) ---");
             logger.Log("This algorithm uses a Breadth-First Search (BFS) to find the shortest pointer paths first.");
+            if (_params.FastScanMode)
+            {
+                logger.Log("Fast Mode (Aggressive Pruning) is ENABLED. Redundant paths and loops will be skipped.");
+            }
 
             try
             {
@@ -89,14 +121,13 @@ namespace PointerFinder2.Emulators.StateBased
             finally
             {
                 _stopOnFirstCts.Dispose();
+                _visitedNodes.Clear(); // Free memory immediately
             }
 
             var finalList = _foundPaths.ToList();
 
-            // Added an option to either return all found paths or only the shortest ones.
             if (!_params.FindAllPathLevels && finalList.Any())
             {
-                // Old behavior: find the minimum level and return only paths of that level.
                 int minLevel = finalList.Min(p => p.Offsets.Count);
                 return finalList.Where(p => p.Offsets.Count == minLevel)
                                 .OrderBy(p => p.BaseAddress)
@@ -104,7 +135,6 @@ namespace PointerFinder2.Emulators.StateBased
             }
             else
             {
-                // New behavior: return all paths, sorted by level.
                 return finalList.OrderBy(p => p.Offsets.Count)
                                 .ThenBy(p => p.BaseAddress)
                                 .ToList();
@@ -113,9 +143,15 @@ namespace PointerFinder2.Emulators.StateBased
 
         private Task SearchAndValidateAsync(CancellationToken token)
         {
-            var currentLevelCandidates = new List<PathCandidate>();
-
+            var currentLevelCandidates = new List<PathNode>();
             uint targetAddress = _params.CapturedStates[0].TargetAddress;
+
+            // Seed the deduplication dictionary only if Fast Mode is active
+            if (_params.FastScanMode)
+            {
+                _visitedNodes[targetAddress] = 0;
+            }
+
             logger.Log("[Phase 2] Finding Level 1 candidates...");
             ReportProgress("Searching Level 1...", 0, _params.MaxOffset / 4, 0);
             int candidatesFound = 0;
@@ -127,15 +163,32 @@ namespace PointerFinder2.Emulators.StateBased
 
                 uint valueToFind = targetAddress - (uint)offset;
                 var sources = FindSourcesForValue(valueToFind).ToList();
-                if (sources.Any())
+
+                foreach (var source in sources)
                 {
-                    foreach (var source in sources)
+                    bool shouldProcess = true;
+
+                    if (_params.FastScanMode)
                     {
-                        currentLevelCandidates.Add(new PathCandidate { HeadAddress = source, ReverseOffsets = new List<int> { offset } });
-                        Interlocked.Increment(ref _candidatesGenerated);
+                        shouldProcess = false;
+                        // Thread-safe deduplication check: Have we reached this address via a shorter or equal path?
+                        _visitedNodes.AddOrUpdate(source,
+                            (k) => { shouldProcess = true; return 1; },
+                            (k, existingLevel) =>
+                            {
+                                if (1 < existingLevel) { shouldProcess = true; return 1; }
+                                return existingLevel;
+                            });
                     }
-                    candidatesFound++;
+
+                    if (shouldProcess)
+                    {
+                        currentLevelCandidates.Add(new PathNode(source, offset, null));
+                        Interlocked.Increment(ref _candidatesGenerated);
+                        candidatesFound++;
+                    }
                 }
+
                 if (offset % 1024 == 0) ReportProgress("Searching Level 1...", offset / 4, _params.MaxOffset / 4, 0);
             }
             logger.Log($"[Phase 2] Found {currentLevelCandidates.Count:N0} Level 1 candidates.");
@@ -143,7 +196,7 @@ namespace PointerFinder2.Emulators.StateBased
             foreach (var candidate in currentLevelCandidates)
             {
                 if (token.IsCancellationRequested) break;
-                if (candidate.HeadAddress >= _params.StaticBaseStart && candidate.HeadAddress <= _params.StaticBaseEnd)
+                if (candidate.Address >= _params.StaticBaseStart && candidate.Address <= _params.StaticBaseEnd)
                 {
                     ValidateAndAdd(candidate);
                 }
@@ -159,27 +212,25 @@ namespace PointerFinder2.Emulators.StateBased
 
             for (int level = 2; level <= _params.MaxLevel; level++)
             {
-                // Use the new MaxCandidates parameter instead of MaxResults.
                 if (token.IsCancellationRequested || !currentLevelCandidates.Any() || _candidatesGenerated >= _params.MaxCandidates) break;
 
                 logger.Log($"[Phase 2] Finding Level {level} candidates from {currentLevelCandidates.Count:N0} previous level nodes...");
-                var nextLevelCandidates = new ConcurrentBag<PathCandidate>();
+                var nextLevelCandidates = new ConcurrentBag<PathNode>();
                 var parallelOptions = new ParallelOptions { CancellationToken = token };
                 if (_params.LimitCpuUsage) parallelOptions.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
 
-                // Report progress based on iterating through the current level's candidates for a smoother UI experience.
                 long processedCandidates = 0;
                 ReportProgress($"Searching Level {level}...", 0, currentLevelCandidates.Count, (int)_foundPathsCounter);
 
                 Parallel.ForEach(currentLevelCandidates, parallelOptions, (candidate, loopState) =>
                 {
-                    // Use the new MaxCandidates parameter instead of MaxResults.
                     if (_candidatesGenerated >= _params.MaxCandidates)
                     {
                         loopState.Stop();
                         return;
                     }
-                    if (candidate.HeadAddress >= _params.StaticBaseStart && candidate.HeadAddress <= _params.StaticBaseEnd)
+
+                    if (candidate.Address >= _params.StaticBaseStart && candidate.Address <= _params.StaticBaseEnd)
                     {
                         // No need to search deeper from a static address.
                     }
@@ -188,7 +239,6 @@ namespace PointerFinder2.Emulators.StateBased
                         int candidatesFoundThisLevel = 0;
                         for (int offset = 0; offset <= _params.MaxOffset; offset += 4)
                         {
-                            // Use the new MaxCandidates parameter instead of MaxResults.
                             if (token.IsCancellationRequested || _candidatesGenerated >= _params.MaxCandidates)
                             {
                                 loopState.Stop();
@@ -196,42 +246,69 @@ namespace PointerFinder2.Emulators.StateBased
                             }
                             if (candidatesFoundThisLevel >= _params.CandidatesPerLevel) break;
 
-                            uint valueToFind = candidate.HeadAddress - (uint)offset;
+                            uint valueToFind = candidate.Address - (uint)offset;
                             var sources = FindSourcesForValue(valueToFind).ToList();
-                            if (sources.Any())
+
+                            foreach (var source in sources)
                             {
-                                foreach (var source in sources)
+                                bool shouldProcess = true;
+
+                                if (_params.FastScanMode)
                                 {
-                                    var newOffsets = new List<int>(candidate.ReverseOffsets);
-                                    newOffsets.Add(offset);
-                                    nextLevelCandidates.Add(new PathCandidate { HeadAddress = source, ReverseOffsets = newOffsets });
-                                    Interlocked.Increment(ref _candidatesGenerated);
+                                    shouldProcess = false;
+                                    // Deduplication & Cycle Prevention
+                                    _visitedNodes.AddOrUpdate(source,
+                                        (k) => { shouldProcess = true; return level; },
+                                        (k, existingLevel) =>
+                                        {
+                                            if (level < existingLevel) { shouldProcess = true; return level; }
+                                            return existingLevel;
+                                        });
                                 }
-                                candidatesFoundThisLevel++;
+
+                                if (shouldProcess)
+                                {
+                                    nextLevelCandidates.Add(new PathNode(source, offset, candidate));
+                                    Interlocked.Increment(ref _candidatesGenerated);
+                                    candidatesFoundThisLevel++;
+                                }
                             }
                         }
                     }
 
                     long currentProcessed = Interlocked.Increment(ref processedCandidates);
-                    if (currentProcessed % 256 == 0) // Update progress bar periodically
+                    if (currentProcessed % 256 == 0)
                     {
                         ReportProgress($"Searching Level {level}...", currentProcessed, currentLevelCandidates.Count, (int)_foundPathsCounter);
                     }
                 });
 
-                currentLevelCandidates = nextLevelCandidates.ToList();
-                logger.Log($"[Phase 2] Found {currentLevelCandidates.Count:N0} Level {level} candidates.");
+                // Fan-out Limiter: Prevents memory exhaustion if the level explodes massively.
+                if (_params.FastScanMode && nextLevelCandidates.Count > MAX_NODES_PER_LEVEL)
+                {
+                    logger.Log($"[Phase 2] Level {level} produced {nextLevelCandidates.Count:N0} nodes. Truncating to top {MAX_NODES_PER_LEVEL:N0} (ranked by lowest immediate offset) to prevent combinatorial explosion...");
+
+                    currentLevelCandidates = nextLevelCandidates
+                        .OrderBy(n => Math.Abs(n.Offset))
+                        .Take(MAX_NODES_PER_LEVEL)
+                        .ToList();
+                }
+                else
+                {
+                    currentLevelCandidates = nextLevelCandidates.ToList();
+                }
+
+                logger.Log($"[Phase 2] Moving forward with {currentLevelCandidates.Count:N0} Level {level} candidates.");
 
                 foreach (var candidate in currentLevelCandidates)
                 {
                     if (token.IsCancellationRequested) break;
-                    if (candidate.HeadAddress >= _params.StaticBaseStart && candidate.HeadAddress <= _params.StaticBaseEnd)
+                    if (candidate.Address >= _params.StaticBaseStart && candidate.Address <= _params.StaticBaseEnd)
                     {
                         ValidateAndAdd(candidate);
                     }
                 }
 
-                // Stop early if valid paths were found at the current level and we don't want to dig deeper
                 if (!_params.FindAllPathLevels && Interlocked.Read(ref _foundPathsCounter) > 0)
                 {
                     logger.Log($"[Phase 2] Found {Interlocked.Read(ref _foundPathsCounter):N0} paths at Level {level}. Stopping deeper search because 'Find all path levels' is unchecked.");
@@ -239,33 +316,29 @@ namespace PointerFinder2.Emulators.StateBased
                 }
             }
 
-            // Use the new MaxCandidates parameter instead of MaxResults.
             ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)Interlocked.Read(ref _foundPathsCounter));
             return Task.CompletedTask;
         }
 
-        private void ValidateAndAdd(PathCandidate candidate)
+        private void ValidateAndAdd(PathNode candidate)
         {
             if (_stopOnFirstCts.IsCancellationRequested) return;
             Interlocked.Increment(ref _candidatesValidated);
 
             var finalPath = new PointerPath
             {
-                BaseAddress = candidate.HeadAddress,
-                Offsets = candidate.ReverseOffsets,
+                BaseAddress = candidate.Address,
+                Offsets = candidate.GetForwardOffsets(), // Returns offsets accurately from Base -> Target
                 FinalAddress = _params.FinalAddressTarget
             };
-            finalPath.Offsets.Reverse();
 
             if (IsValidInAllStates(finalPath))
             {
                 _foundPaths.Add(finalPath);
                 long currentCount = Interlocked.Increment(ref _foundPathsCounter);
 
-                // Use the new manager class to decide when to report progress.
                 if (_progressThresholdManager.ShouldUpdate(currentCount))
                 {
-                    // Report a count-only update.
                     ReportProgress(null, -1, -1, (int)currentCount);
                 }
 
@@ -328,8 +401,15 @@ namespace PointerFinder2.Emulators.StateBased
                 if (!currentAddress.HasValue) return null;
             }
 
-            uint finalAddress = currentAddress.Value + (uint)path.Offsets.Last();
-            logBuilder?.AppendLine($"  -> Final: 0x{currentAddress.Value:X8} + {path.Offsets.Last():+X;-X} = 0x{finalAddress:X8}");
+            int lastOffset = path.Offsets.Last();
+            uint finalAddress = currentAddress.Value + (uint)lastOffset;
+
+            if (logBuilder != null)
+            {
+                string offsetStr = lastOffset < 0 ? $"- 0x{Math.Abs(lastOffset):X}" : $"+ 0x{lastOffset:X}";
+                logBuilder.AppendLine($"  -> Final: 0x{currentAddress.Value:X8} {offsetStr} = 0x{finalAddress:X8}");
+            }
+
             return finalAddress;
         }
 
@@ -337,7 +417,6 @@ namespace PointerFinder2.Emulators.StateBased
         {
             (uint normalizedReadAddress, bool isShort) = _manager.NormalizeAddressForRead(address);
 
-            // Use the new manager method to get the correct index for any memory layout.
             long indexInDump = _manager.GetIndexForStateDump(normalizedReadAddress);
 
             if (indexInDump < 0 || indexInDump + 3 >= memory.Length)
@@ -346,7 +425,6 @@ namespace PointerFinder2.Emulators.StateBased
                 return null;
             }
 
-            // Handle Big-Endian conversion when reading directly from the memory dump.
             byte[] valueBytes = new byte[4];
             Buffer.BlockCopy(memory, (int)indexInDump, valueBytes, 0, 4);
             if (_manager.RetroAchievementsPrefix == "G") // "G" is our flag for Big-Endian systems like Dolphin.

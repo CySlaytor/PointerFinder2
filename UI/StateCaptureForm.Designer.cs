@@ -16,309 +16,323 @@
         #region Windows Form Designer generated code
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(StateCaptureForm));
-            numMaxLevel = new NumericUpDown();
-            label2 = new Label();
-            label3 = new Label();
-            txtMaxOffset = new TextBox();
-            btnScan = new Button();
-            btnCancel = new Button();
-            groupBoxRange = new GroupBox();
-            btnResetRange = new Button();
-            label5 = new Label();
-            txtStaticEnd = new TextBox();
-            txtStaticStart = new TextBox();
-            label6 = new Label();
-            numMaxCandidates = new NumericUpDown();
-            dgvStates = new DataGridView();
-            colSlot = new DataGridViewTextBoxColumn();
-            colAddress = new DataGridViewTextBoxColumn();
-            colStatus = new DataGridViewTextBoxColumn();
-            colAction = new DataGridViewButtonColumn();
-            groupBox1 = new GroupBox();
-            chkFindAllLevels = new CheckBox();
-            chkStopOnFirst = new CheckBox();
-            btnClearAll = new Button();
-            label1 = new Label();
-            numCandidatesPerLevel = new NumericUpDown();
-            toolTip1 = new ToolTip(components);
-            ((System.ComponentModel.ISupportInitialize)numMaxLevel).BeginInit();
-            groupBoxRange.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)numMaxCandidates).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)dgvStates).BeginInit();
-            groupBox1.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)numCandidatesPerLevel).BeginInit();
-            SuspendLayout();
+            this.numMaxLevel = new System.Windows.Forms.NumericUpDown();
+            this.label2 = new System.Windows.Forms.Label();
+            this.label3 = new System.Windows.Forms.Label();
+            this.txtMaxOffset = new System.Windows.Forms.TextBox();
+            this.btnScan = new System.Windows.Forms.Button();
+            this.btnCancel = new System.Windows.Forms.Button();
+            this.groupBoxRange = new System.Windows.Forms.GroupBox();
+            this.btnResetRange = new System.Windows.Forms.Button();
+            this.label5 = new System.Windows.Forms.Label();
+            this.txtStaticEnd = new System.Windows.Forms.TextBox();
+            this.txtStaticStart = new System.Windows.Forms.TextBox();
+            this.label6 = new System.Windows.Forms.Label();
+            this.numMaxCandidates = new System.Windows.Forms.NumericUpDown();
+            this.dgvStates = new System.Windows.Forms.DataGridView();
+            this.colSlot = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.colAddress = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.colStatus = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.colAction = new System.Windows.Forms.DataGridViewButtonColumn();
+            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.chkFastScanMode = new System.Windows.Forms.CheckBox();
+            this.chkFindAllLevels = new System.Windows.Forms.CheckBox();
+            this.chkStopOnFirst = new System.Windows.Forms.CheckBox();
+            this.btnClearAll = new System.Windows.Forms.Button();
+            this.label1 = new System.Windows.Forms.Label();
+            this.numCandidatesPerLevel = new System.Windows.Forms.NumericUpDown();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            ((System.ComponentModel.ISupportInitialize)(this.numMaxLevel)).BeginInit();
+            this.groupBoxRange.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numMaxCandidates)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.dgvStates)).BeginInit();
+            this.groupBox1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numCandidatesPerLevel)).BeginInit();
+            this.SuspendLayout();
             // 
             // numMaxLevel
             // 
-            numMaxLevel.Location = new Point(12, 252);
-            numMaxLevel.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
-            numMaxLevel.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            numMaxLevel.Name = "numMaxLevel";
-            numMaxLevel.Size = new Size(96, 23);
-            numMaxLevel.TabIndex = 4;
-            numMaxLevel.Value = new decimal(new int[] { 7, 0, 0, 0 });
+            this.numMaxLevel.Location = new System.Drawing.Point(12, 252);
+            this.numMaxLevel.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
+            this.numMaxLevel.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            this.numMaxLevel.Name = "numMaxLevel";
+            this.numMaxLevel.Size = new System.Drawing.Size(96, 23);
+            this.numMaxLevel.TabIndex = 4;
+            this.numMaxLevel.Value = new decimal(new int[] { 7, 0, 0, 0 });
             // 
             // label2
             // 
-            label2.AutoSize = true;
-            label2.Location = new Point(9, 233);
-            label2.Name = "label2";
-            label2.Size = new Size(59, 15);
-            label2.TabIndex = 3;
-            label2.Text = "Max Level";
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(9, 233);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(59, 15);
+            this.label2.TabIndex = 3;
+            this.label2.Text = "Max Level";
             // 
             // label3
             // 
-            label3.AutoSize = true;
-            label3.Location = new Point(9, 183);
-            label3.Name = "label3";
-            label3.Size = new Size(95, 15);
-            label3.TabIndex = 5;
-            label3.Text = "Max Offset (Hex)";
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(9, 183);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(95, 15);
+            this.label3.TabIndex = 5;
+            this.label3.Text = "Max Offset (Hex)";
             // 
             // txtMaxOffset
             // 
-            txtMaxOffset.Location = new Point(12, 202);
-            txtMaxOffset.Name = "txtMaxOffset";
-            txtMaxOffset.Size = new Size(96, 23);
-            txtMaxOffset.TabIndex = 1;
+            this.txtMaxOffset.Location = new System.Drawing.Point(12, 202);
+            this.txtMaxOffset.Name = "txtMaxOffset";
+            this.txtMaxOffset.Size = new System.Drawing.Size(96, 23);
+            this.txtMaxOffset.TabIndex = 1;
             // 
             // btnScan
             // 
-            btnScan.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnScan.Location = new Point(232, 372);
-            btnScan.Name = "btnScan";
-            btnScan.Size = new Size(83, 29);
-            btnScan.TabIndex = 10;
-            btnScan.Text = "Scan";
-            btnScan.UseVisualStyleBackColor = true;
-            btnScan.Click += btnScan_Click;
+            this.btnScan.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnScan.Location = new System.Drawing.Point(232, 391);
+            this.btnScan.Name = "btnScan";
+            this.btnScan.Size = new System.Drawing.Size(83, 29);
+            this.btnScan.TabIndex = 10;
+            this.btnScan.Text = "Scan";
+            this.btnScan.UseVisualStyleBackColor = true;
+            this.btnScan.Click += new System.EventHandler(this.btnScan_Click);
             // 
             // btnCancel
             // 
-            btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(321, 372);
-            btnCancel.Name = "btnCancel";
-            btnCancel.Size = new Size(83, 29);
-            btnCancel.TabIndex = 11;
-            btnCancel.Text = "Cancel";
-            btnCancel.UseVisualStyleBackColor = true;
+            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+            this.btnCancel.Location = new System.Drawing.Point(321, 391);
+            this.btnCancel.Name = "btnCancel";
+            this.btnCancel.Size = new System.Drawing.Size(83, 29);
+            this.btnCancel.TabIndex = 11;
+            this.btnCancel.Text = "Cancel";
+            this.btnCancel.UseVisualStyleBackColor = true;
             // 
             // groupBoxRange
             // 
-            groupBoxRange.Controls.Add(btnResetRange);
-            groupBoxRange.Controls.Add(label5);
-            groupBoxRange.Controls.Add(txtStaticEnd);
-            groupBoxRange.Controls.Add(txtStaticStart);
-            groupBoxRange.Location = new Point(114, 178);
-            groupBoxRange.Name = "groupBoxRange";
-            groupBoxRange.Size = new Size(290, 53);
-            groupBoxRange.TabIndex = 2;
-            groupBoxRange.TabStop = false;
-            groupBoxRange.Text = "Static Base Address Range ({sys}, Hex)";
+            this.groupBoxRange.Controls.Add(this.btnResetRange);
+            this.groupBoxRange.Controls.Add(this.label5);
+            this.groupBoxRange.Controls.Add(this.txtStaticEnd);
+            this.groupBoxRange.Controls.Add(this.txtStaticStart);
+            this.groupBoxRange.Location = new System.Drawing.Point(114, 178);
+            this.groupBoxRange.Name = "groupBoxRange";
+            this.groupBoxRange.Size = new System.Drawing.Size(290, 53);
+            this.groupBoxRange.TabIndex = 2;
+            this.groupBoxRange.TabStop = false;
+            this.groupBoxRange.Text = "Static Base Address Range ({sys}, Hex)";
             // 
             // btnResetRange
             // 
-            btnResetRange.Location = new Point(228, 21);
-            btnResetRange.Name = "btnResetRange";
-            btnResetRange.Size = new Size(55, 25);
-            btnResetRange.TabIndex = 13;
-            btnResetRange.Text = "Reset";
-            toolTip1.SetToolTip(btnResetRange, "Reset the range to the recommended default for this emulator.");
-            btnResetRange.UseVisualStyleBackColor = true;
-            btnResetRange.Click += btnResetRange_Click;
+            this.btnResetRange.Location = new System.Drawing.Point(228, 21);
+            this.btnResetRange.Name = "btnResetRange";
+            this.btnResetRange.Size = new System.Drawing.Size(55, 25);
+            this.btnResetRange.TabIndex = 13;
+            this.btnResetRange.Text = "Reset";
+            this.toolTip1.SetToolTip(this.btnResetRange, "Reset the range to the recommended default for this emulator.");
+            this.btnResetRange.UseVisualStyleBackColor = true;
+            this.btnResetRange.Click += new System.EventHandler(this.btnResetRange_Click);
             // 
             // label5
             // 
-            label5.AutoSize = true;
-            label5.Location = new Point(110, 26);
-            label5.Name = "label5";
-            label5.Size = new Size(12, 15);
-            label5.TabIndex = 12;
-            label5.Text = "-";
+            this.label5.AutoSize = true;
+            this.label5.Location = new System.Drawing.Point(110, 26);
+            this.label5.Name = "label5";
+            this.label5.Size = new System.Drawing.Size(12, 15);
+            this.label5.TabIndex = 12;
+            this.label5.Text = "-";
             // 
             // txtStaticEnd
             // 
-            txtStaticEnd.Location = new Point(124, 22);
-            txtStaticEnd.Name = "txtStaticEnd";
-            txtStaticEnd.Size = new Size(98, 23);
-            txtStaticEnd.TabIndex = 1;
+            this.txtStaticEnd.Location = new System.Drawing.Point(124, 22);
+            this.txtStaticEnd.Name = "txtStaticEnd";
+            this.txtStaticEnd.Size = new System.Drawing.Size(98, 23);
+            this.txtStaticEnd.TabIndex = 1;
             // 
             // txtStaticStart
             // 
-            txtStaticStart.Location = new Point(6, 22);
-            txtStaticStart.Name = "txtStaticStart";
-            txtStaticStart.Size = new Size(98, 23);
-            txtStaticStart.TabIndex = 0;
+            this.txtStaticStart.Location = new System.Drawing.Point(6, 22);
+            this.txtStaticStart.Name = "txtStaticStart";
+            this.txtStaticStart.Size = new System.Drawing.Size(98, 23);
+            this.txtStaticStart.TabIndex = 0;
             // 
             // label6
             // 
-            label6.AutoSize = true;
-            label6.Location = new Point(267, 234);
-            label6.Name = "label6";
-            label6.Size = new Size(118, 15);
-            label6.TabIndex = 10;
-            label6.Text = "Max Candidate Paths";
+            this.label6.AutoSize = true;
+            this.label6.Location = new System.Drawing.Point(267, 234);
+            this.label6.Name = "label6";
+            this.label6.Size = new System.Drawing.Size(118, 15);
+            this.label6.TabIndex = 10;
+            this.label6.Text = "Max Candidate Paths";
             // 
             // numMaxCandidates
             // 
-            numMaxCandidates.Location = new Point(270, 252);
-            numMaxCandidates.Maximum = new decimal(new int[] { 100000000, 0, 0, 0 });
-            numMaxCandidates.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            numMaxCandidates.Name = "numMaxCandidates";
-            numMaxCandidates.Size = new Size(134, 23);
-            numMaxCandidates.TabIndex = 5;
-            numMaxCandidates.ThousandsSeparator = true;
-            numMaxCandidates.Value = new decimal(new int[] { 500000, 0, 0, 0 });
+            this.numMaxCandidates.Location = new System.Drawing.Point(270, 252);
+            this.numMaxCandidates.Maximum = new decimal(new int[] { 100000000, 0, 0, 0 });
+            this.numMaxCandidates.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            this.numMaxCandidates.Name = "numMaxCandidates";
+            this.numMaxCandidates.Size = new System.Drawing.Size(134, 23);
+            this.numMaxCandidates.TabIndex = 5;
+            this.numMaxCandidates.ThousandsSeparator = true;
+            this.numMaxCandidates.Value = new decimal(new int[] { 500000, 0, 0, 0 });
             // 
             // dgvStates
             // 
-            dgvStates.AllowUserToAddRows = false;
-            dgvStates.AllowUserToDeleteRows = false;
-            dgvStates.AllowUserToResizeColumns = false;
-            dgvStates.AllowUserToResizeRows = false;
-            dgvStates.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvStates.Columns.AddRange(new DataGridViewColumn[] { colSlot, colAddress, colStatus, colAction });
-            dgvStates.Dock = DockStyle.Top;
-            dgvStates.Location = new Point(0, 0);
-            dgvStates.Name = "dgvStates";
-            dgvStates.RowHeadersVisible = false;
-            dgvStates.Size = new Size(416, 172);
-            dgvStates.TabIndex = 12;
-            dgvStates.CellContentClick += dgvStates_CellContentClick;
+            this.dgvStates.AllowUserToAddRows = false;
+            this.dgvStates.AllowUserToDeleteRows = false;
+            this.dgvStates.AllowUserToResizeColumns = false;
+            this.dgvStates.AllowUserToResizeRows = false;
+            this.dgvStates.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dgvStates.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] { this.colSlot, this.colAddress, this.colStatus, this.colAction });
+            this.dgvStates.Dock = System.Windows.Forms.DockStyle.Top;
+            this.dgvStates.Location = new System.Drawing.Point(0, 0);
+            this.dgvStates.Name = "dgvStates";
+            this.dgvStates.RowHeadersVisible = false;
+            this.dgvStates.Size = new System.Drawing.Size(416, 172);
+            this.dgvStates.TabIndex = 12;
+            this.dgvStates.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dgvStates_CellContentClick);
             // 
             // colSlot
             // 
-            colSlot.HeaderText = "Slot";
-            colSlot.Name = "colSlot";
-            colSlot.ReadOnly = true;
-            colSlot.Width = 40;
+            this.colSlot.HeaderText = "Slot";
+            this.colSlot.Name = "colSlot";
+            this.colSlot.ReadOnly = true;
+            this.colSlot.Width = 40;
             // 
             // colAddress
             // 
-            colAddress.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            colAddress.HeaderText = "Target Address (Hex)";
-            colAddress.Name = "colAddress";
+            this.colAddress.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.Fill;
+            this.colAddress.HeaderText = "Target Address (Hex)";
+            this.colAddress.Name = "colAddress";
             // 
             // colStatus
             // 
-            colStatus.HeaderText = "Status";
-            colStatus.Name = "colStatus";
-            colStatus.ReadOnly = true;
-            colStatus.Width = 80;
+            this.colStatus.HeaderText = "Status";
+            this.colStatus.Name = "colStatus";
+            this.colStatus.ReadOnly = true;
+            this.colStatus.Width = 80;
             // 
             // colAction
             // 
-            colAction.HeaderText = "Action";
-            colAction.Name = "colAction";
-            colAction.Width = 80;
+            this.colAction.HeaderText = "Action";
+            this.colAction.Name = "colAction";
+            this.colAction.Width = 80;
             // 
             // groupBox1
             // 
-            groupBox1.Controls.Add(chkFindAllLevels);
-            groupBox1.Controls.Add(chkStopOnFirst);
-            groupBox1.Location = new Point(12, 280);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(392, 86);
-            groupBox1.TabIndex = 13;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "Scan Options";
+            this.groupBox1.Controls.Add(this.chkFastScanMode);
+            this.groupBox1.Controls.Add(this.chkFindAllLevels);
+            this.groupBox1.Controls.Add(this.chkStopOnFirst);
+            this.groupBox1.Location = new System.Drawing.Point(12, 280);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(392, 100);
+            this.groupBox1.TabIndex = 13;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "Scan Options";
+            // 
+            // chkFastScanMode
+            // 
+            this.chkFastScanMode.AutoSize = true;
+            this.chkFastScanMode.Location = new System.Drawing.Point(12, 72);
+            this.chkFastScanMode.Name = "chkFastScanMode";
+            this.chkFastScanMode.Size = new System.Drawing.Size(193, 19);
+            this.chkFastScanMode.TabIndex = 3;
+            this.chkFastScanMode.Text = "Fast Mode (Aggressive Pruning)";
+            this.toolTip1.SetToolTip(this.chkFastScanMode, "Dramatically speeds up deep scans and prevents memory explosion by skipping redundant pointer paths.\r\nUncheck to perform an exhaustive (but much slower) search.");
+            this.chkFastScanMode.UseVisualStyleBackColor = true;
             // 
             // chkFindAllLevels
             // 
-            chkFindAllLevels.AutoSize = true;
-            chkFindAllLevels.Location = new Point(12, 47);
-            chkFindAllLevels.Name = "chkFindAllLevels";
-            chkFindAllLevels.Size = new Size(168, 19);
-            chkFindAllLevels.TabIndex = 2;
-            chkFindAllLevels.Text = "Find all path levels (slower)";
-            toolTip1.SetToolTip(chkFindAllLevels, resources.GetString("chkFindAllLevels.ToolTip"));
-            chkFindAllLevels.UseVisualStyleBackColor = true;
+            this.chkFindAllLevels.AutoSize = true;
+            this.chkFindAllLevels.Location = new System.Drawing.Point(12, 47);
+            this.chkFindAllLevels.Name = "chkFindAllLevels";
+            this.chkFindAllLevels.Size = new System.Drawing.Size(168, 19);
+            this.chkFindAllLevels.TabIndex = 2;
+            this.chkFindAllLevels.Text = "Find all path levels (slower)";
+            this.toolTip1.SetToolTip(this.chkFindAllLevels, resources.GetString("chkFindAllLevels.ToolTip"));
+            this.chkFindAllLevels.UseVisualStyleBackColor = true;
             // 
             // chkStopOnFirst
             // 
-            chkStopOnFirst.AutoSize = true;
-            chkStopOnFirst.Location = new Point(12, 22);
-            chkStopOnFirst.Name = "chkStopOnFirst";
-            chkStopOnFirst.Size = new Size(167, 19);
-            chkStopOnFirst.TabIndex = 1;
-            chkStopOnFirst.Text = "Stop when first path found";
-            chkStopOnFirst.UseVisualStyleBackColor = true;
+            this.chkStopOnFirst.AutoSize = true;
+            this.chkStopOnFirst.Location = new System.Drawing.Point(12, 22);
+            this.chkStopOnFirst.Name = "chkStopOnFirst";
+            this.chkStopOnFirst.Size = new System.Drawing.Size(167, 19);
+            this.chkStopOnFirst.TabIndex = 1;
+            this.chkStopOnFirst.Text = "Stop when first path found";
+            this.chkStopOnFirst.UseVisualStyleBackColor = true;
             // 
             // btnClearAll
             // 
-            btnClearAll.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            btnClearAll.Location = new Point(12, 372);
-            btnClearAll.Name = "btnClearAll";
-            btnClearAll.Size = new Size(83, 29);
-            btnClearAll.TabIndex = 14;
-            btnClearAll.Text = "Clear All";
-            btnClearAll.UseVisualStyleBackColor = true;
-            btnClearAll.Click += btnClearAll_Click;
+            this.btnClearAll.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.btnClearAll.Location = new System.Drawing.Point(12, 391);
+            this.btnClearAll.Name = "btnClearAll";
+            this.btnClearAll.Size = new System.Drawing.Size(83, 29);
+            this.btnClearAll.TabIndex = 14;
+            this.btnClearAll.Text = "Clear All";
+            this.btnClearAll.UseVisualStyleBackColor = true;
+            this.btnClearAll.Click += new System.EventHandler(this.btnClearAll_Click);
             // 
             // label1
             // 
-            label1.AutoSize = true;
-            label1.Location = new Point(111, 233);
-            label1.Name = "label1";
-            label1.Size = new Size(116, 15);
-            label1.TabIndex = 15;
-            label1.Text = "Candidates per Level";
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(111, 233);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(116, 15);
+            this.label1.TabIndex = 15;
+            this.label1.Text = "Candidates per Level";
             // 
             // numCandidatesPerLevel
             // 
-            numCandidatesPerLevel.Location = new Point(114, 252);
-            numCandidatesPerLevel.Maximum = new decimal(new int[] { 1000, 0, 0, 0 });
-            numCandidatesPerLevel.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-            numCandidatesPerLevel.Name = "numCandidatesPerLevel";
-            numCandidatesPerLevel.Size = new Size(150, 23);
-            numCandidatesPerLevel.TabIndex = 16;
-            toolTip1.SetToolTip(numCandidatesPerLevel, "Limits how many candidate offsets are found for each pointer.\r\nA low value (e.g., 1-5) makes the scan faster and more targeted at the closest offsets.");
-            numCandidatesPerLevel.Value = new decimal(new int[] { 10, 0, 0, 0 });
+            this.numCandidatesPerLevel.Location = new System.Drawing.Point(114, 252);
+            this.numCandidatesPerLevel.Maximum = new decimal(new int[] { 1000, 0, 0, 0 });
+            this.numCandidatesPerLevel.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            this.numCandidatesPerLevel.Name = "numCandidatesPerLevel";
+            this.numCandidatesPerLevel.Size = new System.Drawing.Size(150, 23);
+            this.numCandidatesPerLevel.TabIndex = 16;
+            this.toolTip1.SetToolTip(this.numCandidatesPerLevel, "Limits how many candidate offsets are found for each pointer.\r\nA low value (e.g., 1-5) makes the scan faster and more targeted at the closest offsets.");
+            this.numCandidatesPerLevel.Value = new decimal(new int[] { 10, 0, 0, 0 });
             // 
             // StateCaptureForm
             // 
-            AcceptButton = btnScan;
-            AutoScaleDimensions = new SizeF(7F, 15F);
-            AutoScaleMode = AutoScaleMode.Font;
-            CancelButton = btnCancel;
-            ClientSize = new Size(416, 413);
-            Controls.Add(numCandidatesPerLevel);
-            Controls.Add(label1);
-            Controls.Add(btnClearAll);
-            Controls.Add(groupBox1);
-            Controls.Add(dgvStates);
-            Controls.Add(label6);
-            Controls.Add(numMaxCandidates);
-            Controls.Add(btnCancel);
-            Controls.Add(btnScan);
-            Controls.Add(label3);
-            Controls.Add(txtMaxOffset);
-            Controls.Add(label2);
-            Controls.Add(numMaxLevel);
-            Controls.Add(groupBoxRange);
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            Name = "StateCaptureForm";
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.CenterParent;
-            Text = "State Capture";
-            Load += StateCaptureForm_Load;
-            ((System.ComponentModel.ISupportInitialize)numMaxLevel).EndInit();
-            groupBoxRange.ResumeLayout(false);
-            groupBoxRange.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)numMaxCandidates).EndInit();
-            ((System.ComponentModel.ISupportInitialize)dgvStates).EndInit();
-            groupBox1.ResumeLayout(false);
-            groupBox1.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)numCandidatesPerLevel).EndInit();
-            ResumeLayout(false);
-            PerformLayout();
+            this.AcceptButton = this.btnScan;
+            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.CancelButton = this.btnCancel;
+            this.ClientSize = new System.Drawing.Size(416, 432);
+            this.Controls.Add(this.numCandidatesPerLevel);
+            this.Controls.Add(this.label1);
+            this.Controls.Add(this.btnClearAll);
+            this.Controls.Add(this.groupBox1);
+            this.Controls.Add(this.dgvStates);
+            this.Controls.Add(this.label6);
+            this.Controls.Add(this.numMaxCandidates);
+            this.Controls.Add(this.btnCancel);
+            this.Controls.Add(this.btnScan);
+            this.Controls.Add(this.label3);
+            this.Controls.Add(this.txtMaxOffset);
+            this.Controls.Add(this.label2);
+            this.Controls.Add(this.numMaxLevel);
+            this.Controls.Add(this.groupBoxRange);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.Name = "StateCaptureForm";
+            this.ShowInTaskbar = false;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            this.Text = "State Capture";
+            this.Load += new System.EventHandler(this.StateCaptureForm_Load);
+            ((System.ComponentModel.ISupportInitialize)(this.numMaxLevel)).EndInit();
+            this.groupBoxRange.ResumeLayout(false);
+            this.groupBoxRange.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numMaxCandidates)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.dgvStates)).EndInit();
+            this.groupBox1.ResumeLayout(false);
+            this.groupBox1.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numCandidatesPerLevel)).EndInit();
+            this.ResumeLayout(false);
+            this.PerformLayout();
+
         }
 
         #endregion
@@ -346,6 +360,7 @@
         private System.Windows.Forms.NumericUpDown numCandidatesPerLevel;
         private System.Windows.Forms.ToolTip toolTip1;
         private System.Windows.Forms.CheckBox chkFindAllLevels;
-        private Button btnResetRange;
+        private System.Windows.Forms.Button btnResetRange;
+        private System.Windows.Forms.CheckBox chkFastScanMode;
     }
 }

@@ -17,13 +17,13 @@ namespace PointerFinder2.Core
         public string? StaticAddressEnd { get; set; }
         // If true, the state-based scan will stop as soon as the first valid path is found.
         public bool StopOnFirstPathFound { get; set; } = false;
-        // Added a setting to control whether the state-based scan returns all paths or only the shortest.
         // If true, the state-based scan will return all valid paths, not just the shortest ones.
         public bool FindAllPathLevels { get; set; } = false;
         // The number of candidate offsets to find per address in a state-based scan before moving on.
         public int CandidatesPerLevel { get; set; } = 10;
-        // Added separate setting for State-Based scan candidate limit.
         // The maximum number of candidate paths to generate during a state-based scan.
         public int MaxCandidates { get; set; }
+        // If true, utilizes aggressive pruning to prevent memory explosion and speed up deep scans.
+        public bool FastScanMode { get; set; } = true;
     }
 }

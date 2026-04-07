@@ -18,10 +18,8 @@ namespace PointerFinder2
         private readonly IEmulatorManager _manager;
         private readonly AppSettings _currentSettings;
         private readonly AppSettings _defaultSettings;
-        // Changed the field to use the new encapsulated manager class.
         private readonly MultiScanState _multiScanState;
 
-        // Updated the constructor to accept the new manager class.
         public StateCaptureForm(IEmulatorManager manager, AppSettings settings, MultiScanState multiScanState)
         {
             InitializeComponent();
@@ -57,6 +55,7 @@ namespace PointerFinder2
             chkStopOnFirst.Checked = _currentSettings.StopOnFirstPathFound;
             chkFindAllLevels.Checked = _currentSettings.FindAllPathLevels;
             numCandidatesPerLevel.Value = _currentSettings.CandidatesPerLevel;
+            chkFastScanMode.Checked = _currentSettings.FastScanMode;
 
             // Initialize the grid from the encapsulated manager class.
             for (int i = 0; i < 4; i++)
@@ -254,6 +253,7 @@ namespace PointerFinder2
                     FindAllPathLevels = chkFindAllLevels.Checked,
                     LimitCpuUsage = GlobalSettings.LimitCpuUsage,
                     CandidatesPerLevel = (int)numCandidatesPerLevel.Value,
+                    FastScanMode = chkFastScanMode.Checked,
                     FinalAddressTarget = finalTarget,
                     // Get the list of captured states from the manager.
                     CapturedStates = _multiScanState.GetCapturedStates()
@@ -265,7 +265,7 @@ namespace PointerFinder2
                 return null;
             }
         }
-        // This method now updates the existing settings object instead of creating a new one.
+
         public void UpdateSettings(AppSettings settings)
         {
             // Sanitize values before saving.
@@ -277,8 +277,8 @@ namespace PointerFinder2
             settings.StopOnFirstPathFound = chkStopOnFirst.Checked;
             settings.FindAllPathLevels = chkFindAllLevels.Checked;
             settings.CandidatesPerLevel = (int)numCandidatesPerLevel.Value;
+            settings.FastScanMode = chkFastScanMode.Checked;
         }
-
 
         private void btnScan_Click(object sender, EventArgs e)
         {
@@ -289,7 +289,6 @@ namespace PointerFinder2
             }
         }
 
-        // Updated sanitization to also remove leading zeros.
         private string SanitizeHexInput(string input)
         {
             if (string.IsNullOrWhiteSpace(input)) return "0";
@@ -306,7 +305,6 @@ namespace PointerFinder2
             return string.IsNullOrEmpty(result) ? "0" : result;
         }
 
-        // Added a shared event handler to apply sanitization when a hex textbox loses focus.
         private void SanitizeHexTextBox_Leave(object sender, EventArgs e)
         {
             if (sender is TextBox tb)

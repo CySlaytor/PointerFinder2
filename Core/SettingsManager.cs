@@ -68,6 +68,7 @@ namespace PointerFinder2.Core
                 ini.Write("FindAllPathLevels", settings.FindAllPathLevels.ToString(), section);
                 ini.Write("CandidatesPerLevel", settings.CandidatesPerLevel.ToString(), section);
                 ini.Write("MaxCandidates", settings.MaxCandidates.ToString(), section);
+                ini.Write("FastScanMode", settings.FastScanMode.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -152,6 +153,9 @@ namespace PointerFinder2.Core
             if (!int.TryParse(ini.Read("MaxCandidates", section, defaultSettings.MaxCandidates.ToString()), out int maxCandidates)) maxCandidates = defaultSettings.MaxCandidates;
             if (maxCandidates < 1) maxCandidates = defaultSettings.MaxCandidates;
             settings.MaxCandidates = maxCandidates;
+
+            if (!bool.TryParse(ini.Read("FastScanMode", section, defaultSettings.FastScanMode.ToString()), out bool fastScan)) fastScan = defaultSettings.FastScanMode;
+            settings.FastScanMode = fastScan;
 
             //Re-load all global sections to ensure they are up-to-date.
             LoadGlobalAndDebugSections(ini);

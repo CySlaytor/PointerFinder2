@@ -218,7 +218,8 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 StaticAddressEnd = "CFFFFF",
                 MaxOffset = 4095,
                 MaxLevel = 7,
-                MaxCandidates = 10000000
+                MaxCandidates = 10000000,
+                FastScanMode = true
             };
         }
 

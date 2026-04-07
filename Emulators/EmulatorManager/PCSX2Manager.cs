@@ -238,7 +238,8 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 MaxLevel = 7,
                 MaxCandidates = 10000000,
                 StopOnFirstPathFound = false,
-                CandidatesPerLevel = 10
+                CandidatesPerLevel = 10,
+                FastScanMode = true
             };
         }
 
