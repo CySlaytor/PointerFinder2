@@ -149,6 +149,14 @@ namespace PointerFinder2.Emulators.StateBased
                 }
             }
 
+            // Stop early if valid paths were found at Level 1 and we don't want to dig deeper
+            if (!_params.FindAllPathLevels && Interlocked.Read(ref _foundPathsCounter) > 0)
+            {
+                logger.Log($"[Phase 2] Found {Interlocked.Read(ref _foundPathsCounter):N0} paths at Level 1. Stopping deeper search because 'Find all path levels' is unchecked.");
+                ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)Interlocked.Read(ref _foundPathsCounter));
+                return Task.CompletedTask;
+            }
+
             for (int level = 2; level <= _params.MaxLevel; level++)
             {
                 // Use the new MaxCandidates parameter instead of MaxResults.
@@ -222,9 +230,17 @@ namespace PointerFinder2.Emulators.StateBased
                         ValidateAndAdd(candidate);
                     }
                 }
+
+                // Stop early if valid paths were found at the current level and we don't want to dig deeper
+                if (!_params.FindAllPathLevels && Interlocked.Read(ref _foundPathsCounter) > 0)
+                {
+                    logger.Log($"[Phase 2] Found {Interlocked.Read(ref _foundPathsCounter):N0} paths at Level {level}. Stopping deeper search because 'Find all path levels' is unchecked.");
+                    break;
+                }
             }
+
             // Use the new MaxCandidates parameter instead of MaxResults.
-            ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)_foundPathsCounter);
+            ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)Interlocked.Read(ref _foundPathsCounter));
             return Task.CompletedTask;
         }
 

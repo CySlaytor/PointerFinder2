@@ -53,18 +53,12 @@ namespace PointerFinder2.Emulators.EmulatorManager
         public const uint MEM1_INGAME_BASE = 0x80000000;
         public const uint MEM1_SIZE = 24 * 1024 * 1024;
         public const uint MEM1_INGAME_END = MEM1_INGAME_BASE + MEM1_SIZE;
-        private static readonly byte[] MEM1_SIGNATURE = { 0x7C, 0x90, 0x43, 0xA6, 0x80, 0x80, 0x00, 0xC0, 0x90, 0x64, 0x00, 0x0C, 0x7C, 0x70, 0x42, 0xA6, 0x90, 0x64, 0x00, 0x10, 0x90, 0xA4, 0x00, 0x14, 0xA0, 0x64, 0x01, 0xA2, 0x60, 0x63, 0x00, 0x02, 0xB0, 0x64, 0x01, 0xA2, 0x7C, 0x60, 0x00, 0x26, 0x90, 0x64, 0x00, 0x80, 0x7C, 0x68, 0x02, 0xA6, 0x90, 0x64, 0x00, 0x84, 0x7C, 0x69, 0x02, 0xA6, 0x90, 0x64, 0x00, 0x88, 0x7C, 0x61, 0x02, 0xA6 };
-        private const int SIGNATURE_OFFSET_IN_MEM1 = 0x100;
 
         // --- MEM2 (Wii RAM Extension, 56MB) ---
         public const uint MEM2_INGAME_BASE = 0x90000000;
         public const uint MEM2_SIZE = 56 * 1024 * 1024; // Actually 64MB, but only ~56MB is usable by games. We use the allocation size.
         public const uint MEM2_INGAME_END = MEM2_INGAME_BASE + MEM2_SIZE;
-        private static readonly byte[] MEM2_SIGNATURE = { 0x02, 0x9f, 0x00, 0x10, 0x02, 0x9f, 0x00, 0x33, 0x02, 0x9f, 0x00, 0x34, 0x02, 0x9f, 0x00, 0x35, 0x02, 0x9f, 0x00, 0x36, 0x02, 0x9f, 0x00, 0x37, 0x02, 0x9f, 0x00, 0x38, 0x02, 0x9f, 0x00, 0x39 };
-        private const int SIGNATURE_OFFSET_IN_MEM2 = 0;
 
-        // --- Wii-Specific Validation ---
-        private const long MEM1_MEM2_PC_OFFSET = 0x10000000;
         #endregion
 
         private enum SystemType { Unknown, GameCube, Wii }
@@ -94,8 +88,18 @@ namespace PointerFinder2.Emulators.EmulatorManager
             }
 
             // --- Find Memory Candidates ---
-            var mem1Candidates = FindCandidateAddresses("MEM1", MEM1_SIGNATURE, SIGNATURE_OFFSET_IN_MEM1, MEM1_SIZE);
-            var mem2Candidates = FindCandidateAddresses("MEM2", MEM2_SIGNATURE, SIGNATURE_OFFSET_IN_MEM2, MEM2_SIZE);
+            // Checking both RAIntegration sizes (24/56) and pure Dolphin sizes (32/64) to ensure absolute compatibility
+            var mem1Candidates = FindCandidateAddresses("MEM1 (24MB)", MEM1_SIZE);
+            if (!mem1Candidates.Any())
+            {
+                mem1Candidates = FindCandidateAddresses("MEM1 (32MB)", 32 * 1024 * 1024);
+            }
+
+            var mem2Candidates = FindCandidateAddresses("MEM2 (56MB)", MEM2_SIZE);
+            if (!mem2Candidates.Any())
+            {
+                mem2Candidates = FindCandidateAddresses("MEM2 (64MB)", 64 * 1024 * 1024);
+            }
 
             if (!mem1Candidates.Any())
             {
@@ -104,30 +108,43 @@ namespace PointerFinder2.Emulators.EmulatorManager
                 return false;
             }
 
-            _mem1BasePC = mem1Candidates.Last(); // Primary heuristic: the last found block is the correct one.
-            logger.Log($"[{EmulatorName}] SUCCESS! Found MEM1 at PC Address: 0x{_mem1BasePC:X}");
-
             // --- Auto-Detect System (GC vs Wii) ---
             if (mem2Candidates.Any())
             {
-                nint lastMem2Candidate = mem2Candidates.Last();
-                logger.Log($"[{EmulatorName}] Found MEM2 candidate at 0x{lastMem2Candidate:X}. Validating layout...");
-
-                // Secondary heuristic: for Wii, MEM2 must be at a fixed offset from MEM1.
-                if (lastMem2Candidate == _mem1BasePC + MEM1_MEM2_PC_OFFSET)
+                bool wiiDetected = false;
+                // We must find a MEM1 and MEM2 that are close together.
+                // "dolphin has a fixed memory and no space between them" -> diff could be exactly 24MB or 32MB.
+                // "RA_Integration ... does a little spread size" -> diff might be slightly larger.
+                foreach (var m1 in mem1Candidates)
                 {
-                    _mem2BasePC = lastMem2Candidate;
-                    _detectedSystem = SystemType.Wii;
-                    logger.Log($"[{EmulatorName}] SUCCESS! MEM2 validated. System is Wii.");
+                    foreach (var m2 in mem2Candidates)
+                    {
+                        long diff = (long)m2 - (long)m1;
+                        // Checking if MEM2 sequentially follows MEM1 within a reasonable 256MB proximity window.
+                        if (diff >= (24 * 1024 * 1024) && diff <= 0x10000000)
+                        {
+                            _mem1BasePC = m1;
+                            _mem2BasePC = m2;
+                            _detectedSystem = SystemType.Wii;
+                            wiiDetected = true;
+                            logger.Log($"[{EmulatorName}] SUCCESS! MEM1 and MEM2 pair found (diff: 0x{diff:X}). System is Wii.");
+                            break;
+                        }
+                    }
+                    if (wiiDetected) break;
                 }
-                else
+
+                if (!wiiDetected)
                 {
+                    // Fallback to GameCube if no paired MEM2 is found close enough.
+                    _mem1BasePC = mem1Candidates.Last();
                     _detectedSystem = SystemType.GameCube;
-                    logger.Log($"[{EmulatorName}] WARNING: MEM2 found but layout is incorrect. Falling back to GameCube mode. This can happen if RAIntegration is active.");
+                    logger.Log($"[{EmulatorName}] WARNING: MEM2 found but layout is incorrect (too far from MEM1). Falling back to GameCube mode.");
                 }
             }
             else
             {
+                _mem1BasePC = mem1Candidates.Last();
                 _detectedSystem = SystemType.GameCube;
                 logger.Log($"[{EmulatorName}] INFO: MEM2 not found. System is GameCube.");
             }
@@ -305,7 +322,7 @@ namespace PointerFinder2.Emulators.EmulatorManager
             return -1; // Invalid address
         }
 
-        private List<nint> FindCandidateAddresses(string blockName, byte[] signature, int signatureOffset, uint exactRegionSize)
+        private List<nint> FindCandidateAddresses(string blockName, uint exactRegionSize)
         {
             var foundAddresses = new List<nint>();
             nint currentAddress = nint.Zero;
@@ -318,21 +335,12 @@ namespace PointerFinder2.Emulators.EmulatorManager
                     break;
                 }
 
+                // Scanning OS memory of exactly their size without signature checking.
                 if (mbi.State == MEM_COMMIT && (long)mbi.RegionSize == exactRegionSize)
                 {
-                    logger.Log($"  -> Found candidate region of exact size at 0x{mbi.BaseAddress:X}. Verifying signature...");
-                    byte[] regionBuffer = ReadMemoryBlock(mbi.BaseAddress, signature.Length + signatureOffset);
-
-                    if (regionBuffer != null)
-                    {
-                        var signatureSlice = new Span<byte>(regionBuffer, signatureOffset, signature.Length);
-                        if (signatureSlice.SequenceEqual(signature))
-                        {
-                            nint baseAddress = mbi.BaseAddress;
-                            logger.Log($"  --> Signature VALID. Calculated base: 0x{baseAddress:X}");
-                            foundAddresses.Add(baseAddress);
-                        }
-                    }
+                    nint baseAddress = mbi.BaseAddress;
+                    logger.Log($"  -> Found candidate region of exact size at 0x{baseAddress:X}.");
+                    foundAddresses.Add(baseAddress);
                 }
                 currentAddress = mbi.BaseAddress + mbi.RegionSize;
             }
