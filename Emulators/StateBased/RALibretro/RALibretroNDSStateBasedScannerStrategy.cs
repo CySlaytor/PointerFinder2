@@ -13,7 +13,7 @@ namespace PointerFinder2.Emulators.StateBased.RALibretro
         protected override Task BuildPointerMapAsync(ScanState state, CancellationToken token)
         {
             _pointerMap = new Dictionary<uint, List<uint>>();
-            ReportProgress("Building map for State 1...", 0, 1, 0);
+            ReportProgress("Building map for State 1...", 0, 1);
 
             return Task.Run(() =>
             {
@@ -32,7 +32,7 @@ namespace PointerFinder2.Emulators.StateBased.RALibretro
                         list.Add(_manager.MainMemoryStart + (uint)addr);
                     }
                 }
-                ReportProgress("Building map for State 1... Complete", 1, 1, 0);
+                ReportProgress("Building map for State 1... Complete", 1, 1);
             }, token);
         }
 

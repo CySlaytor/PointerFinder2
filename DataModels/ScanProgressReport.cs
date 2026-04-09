@@ -9,8 +9,11 @@
         // The current value for the progress bar (e.g., memory scanned so far).
         public long CurrentValue { get; set; }
 
-        // The number of pointer paths found so far.
+        // The number of fully valid static pointer paths found so far.
         public int FoundCount { get; set; }
+
+        // The number of broken/partial paths found so far (if enabled).
+        public int PartialCount { get; set; }
 
         // A message to display in the status bar (e.g., "Building pointer map...").
         public string StatusMessage { get; set; } = string.Empty;

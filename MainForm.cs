@@ -37,7 +37,8 @@ namespace PointerFinder2
         private EmulatorProfile _activeProfile;
         // Replaced the raw ScanState array with an encapsulated manager class.
         private readonly MultiScanState _multiScanState = new MultiScanState();
-        private int _lastFoundCount = 0;
+        private int _lastFoundCount = 0; // Total valid static paths
+        private int _lastPartialCount = 0; // Broken partial paths
         private string _currentSearchTerm = string.Empty;
 
         // --- Timers ---
@@ -393,6 +394,7 @@ namespace PointerFinder2
             _scanStopwatch.Restart();
             _scanTimer.Start();
             _lastFoundCount = 0;
+            _lastPartialCount = 0;
             progressBar.Value = 0;
         }
 
@@ -417,9 +419,12 @@ namespace PointerFinder2
             long current = report.CurrentValue > 0 ? report.CurrentValue : report.FoundCount;
             progressBar.Value = (int)Math.Min(current, progressBar.Maximum);
 
+            _lastFoundCount = report.FoundCount;
+            _lastPartialCount = report.PartialCount;
+
             lblProgressPercentage.Text = (report.MaxValue > 0)
                 ? $"{report.CurrentValue:N0} / {report.MaxValue:N0}"
-                : $"{report.FoundCount:N0}";
+                : $"{report.FoundCount + report.PartialCount:N0}";
         }
 
         private void OnScanCompleted(ScanCompletedEventArgs e)
@@ -459,6 +464,7 @@ namespace PointerFinder2
         private void OnFoundCountUpdated(int count)
         {
             if (InvokeRequired) { Invoke((Action)(() => OnFoundCountUpdated(count))); return; }
+            // Note: This is mostly used by filtering now, so it updates the main found count.
             _lastFoundCount = count;
         }
         #endregion
@@ -490,7 +496,12 @@ namespace PointerFinder2
             {
                 TimeSpan ts = _scanStopwatch.Elapsed;
                 string timeText = $"Time: {ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100}";
-                if (_lastFoundCount > 0)
+
+                if (_scanCoordinator.LastScanParams?.PrintPartialPaths == true)
+                {
+                    lblElapsedTime.Text = $"{timeText} | Static Paths: {_lastFoundCount:N0} | Partial Paths: {_lastPartialCount:N0}";
+                }
+                else if (_lastFoundCount > 0)
                 {
                     lblElapsedTime.Text = $"{timeText} | Found: {_lastFoundCount:N0}";
                 }
@@ -527,7 +538,7 @@ namespace PointerFinder2
                     int maxOffsets = results.Max(p => p.Offsets.Count);
                     if (maxOffsets == 0) maxOffsets = 1;
                     dgvResults.Columns.Add("colBase", "Base Address");
-                    dgvResults.Columns["colBase"].Width = 120;
+                    dgvResults.Columns["colBase"].Width = 140; // Widened slightly to fit [Partial] text better
                     for (int i = 0; i < maxOffsets; i++)
                     {
                         var col = new DataGridViewTextBoxColumn { Name = $"colOffset{i + 1}", HeaderText = $"Offset {i + 1}", Width = 80 };
@@ -550,8 +561,13 @@ namespace PointerFinder2
             string colName = dgvResults.Columns[e.ColumnIndex].Name;
             switch (colName)
             {
-                case "colBase": e.Value = _currentManager.FormatDisplayAddress(path.BaseAddress); break;
-                case "colFinal": e.Value = _currentManager.FormatDisplayAddress(path.FinalAddress); break;
+                case "colBase":
+                    string baseStr = _currentManager.FormatDisplayAddress(path.BaseAddress);
+                    e.Value = path.IsPartial ? $"[Partial] {baseStr}" : baseStr;
+                    break;
+                case "colFinal":
+                    e.Value = _currentManager.FormatDisplayAddress(path.FinalAddress);
+                    break;
                 default:
                     int offsetIndex = e.ColumnIndex - 1;
                     if (offsetIndex >= 0 && offsetIndex < path.Offsets.Count)
@@ -714,6 +730,53 @@ namespace PointerFinder2
             copyAsRetroAchievementsFormatToolStripMenuItem.Enabled = dgvResults.SelectedRows.Count == 1;
             copyAsCodeNoteToolStripMenuItem.Enabled = dgvResults.SelectedRows.Count == 1;
             sortByLowestOffsetsToolStripMenuItem.Enabled = _resultsManager.HasResults;
+
+            // Remove any dynamically added items from a previous right-click
+            for (int i = contextMenuResults.Items.Count - 1; i >= 0; i--)
+            {
+                if (contextMenuResults.Items[i].Tag?.ToString() == "DynamicPartial")
+                {
+                    contextMenuResults.Items.RemoveAt(i);
+                }
+            }
+
+            // If a single partial path is selected, add dynamic options to copy its broken state addresses
+            if (dgvResults.SelectedRows.Count == 1 && _currentManager != null)
+            {
+                PointerPath path = _resultsManager.CurrentResults[dgvResults.SelectedRows[0].Index];
+                if (path.IsPartial && path.BrokenStateAddresses != null && path.BrokenStateAddresses.Count > 0)
+                {
+                    var separator = new ToolStripSeparator { Tag = "DynamicPartial" };
+                    contextMenuResults.Items.Add(separator);
+
+                    // Determine RA size prefix to use in the format string
+                    string sizePrefix = "X";
+                    var profile = EmulatorProfileRegistry.Profiles.FirstOrDefault(p => p.Name.StartsWith(_currentManager.EmulatorName.Split(' ')[0]));
+                    if (profile != null)
+                    {
+                        if (profile.Target == EmulatorTarget.DuckStation || profile.Target == EmulatorTarget.RALibretroNDS) sizePrefix = "W";
+                        else if (profile.Target == EmulatorTarget.Dolphin) sizePrefix = "G";
+                    }
+
+                    foreach (var kvp in path.BrokenStateAddresses)
+                    {
+                        int stateIndex = kvp.Key + 1;
+                        uint brokenAddress = kvp.Value;
+                        string displayAddr = _currentManager.FormatDisplayAddress(brokenAddress);
+                        string raFormatAddr = $"0x{sizePrefix}{displayAddr.PadLeft(8, '0').ToLower()}";
+
+                        var menuItem = new ToolStripMenuItem($"Copy Broken Address (State {stateIndex}): {displayAddr}");
+                        menuItem.Tag = "DynamicPartial";
+                        menuItem.Click += (s, ev) => { Clipboard.SetText(displayAddr); UpdateStatus($"Copied broken address for State {stateIndex}."); };
+                        contextMenuResults.Items.Add(menuItem);
+
+                        var menuRaItem = new ToolStripMenuItem($"Copy Broken RA Format (State {stateIndex}): {raFormatAddr}");
+                        menuRaItem.Tag = "DynamicPartial";
+                        menuRaItem.Click += (s, ev) => { Clipboard.SetText(raFormatAddr); UpdateStatus($"Copied broken RA address for State {stateIndex}."); };
+                        contextMenuResults.Items.Add(menuRaItem);
+                    }
+                }
+            }
         }
         private void copyBaseAddressToolStripMenuItem_Click(object sender, EventArgs e)
         {

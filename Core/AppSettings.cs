@@ -25,5 +25,7 @@ namespace PointerFinder2.Core
         public int MaxCandidates { get; set; }
         // If true, utilizes aggressive pruning to prevent memory explosion and speed up deep scans.
         public bool FastScanMode { get; set; } = true;
+        // Output broken paths that failed to resolve a static base.
+        public bool PrintPartialPaths { get; set; } = false;
     }
 }

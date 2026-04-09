@@ -37,6 +37,7 @@
             this.colStatus = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colAction = new System.Windows.Forms.DataGridViewButtonColumn();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.chkPrintPartialPaths = new System.Windows.Forms.CheckBox();
             this.chkFastScanMode = new System.Windows.Forms.CheckBox();
             this.chkFindAllLevels = new System.Windows.Forms.CheckBox();
             this.chkStopOnFirst = new System.Windows.Forms.CheckBox();
@@ -90,7 +91,7 @@
             // btnScan
             // 
             this.btnScan.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnScan.Location = new System.Drawing.Point(232, 391);
+            this.btnScan.Location = new System.Drawing.Point(232, 416);
             this.btnScan.Name = "btnScan";
             this.btnScan.Size = new System.Drawing.Size(83, 29);
             this.btnScan.TabIndex = 10;
@@ -102,7 +103,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(321, 391);
+            this.btnCancel.Location = new System.Drawing.Point(321, 416);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(83, 29);
             this.btnCancel.TabIndex = 11;
@@ -220,15 +221,27 @@
             // 
             // groupBox1
             // 
+            this.groupBox1.Controls.Add(this.chkPrintPartialPaths);
             this.groupBox1.Controls.Add(this.chkFastScanMode);
             this.groupBox1.Controls.Add(this.chkFindAllLevels);
             this.groupBox1.Controls.Add(this.chkStopOnFirst);
             this.groupBox1.Location = new System.Drawing.Point(12, 280);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(392, 100);
+            this.groupBox1.Size = new System.Drawing.Size(392, 125);
             this.groupBox1.TabIndex = 13;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Scan Options";
+            // 
+            // chkPrintPartialPaths
+            // 
+            this.chkPrintPartialPaths.AutoSize = true;
+            this.chkPrintPartialPaths.Location = new System.Drawing.Point(12, 97);
+            this.chkPrintPartialPaths.Name = "chkPrintPartialPaths";
+            this.chkPrintPartialPaths.Size = new System.Drawing.Size(256, 19);
+            this.chkPrintPartialPaths.TabIndex = 4;
+            this.chkPrintPartialPaths.Text = "Output partial/broken paths (State 1 only)";
+            this.toolTip1.SetToolTip(this.chkPrintPartialPaths, "Outputs dead-end paths that never reach the static range. Useful for analyzing dynamic addresses and arrays.");
+            this.chkPrintPartialPaths.UseVisualStyleBackColor = true;
             // 
             // chkFastScanMode
             // 
@@ -265,7 +278,7 @@
             // btnClearAll
             // 
             this.btnClearAll.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.btnClearAll.Location = new System.Drawing.Point(12, 391);
+            this.btnClearAll.Location = new System.Drawing.Point(12, 416);
             this.btnClearAll.Name = "btnClearAll";
             this.btnClearAll.Size = new System.Drawing.Size(83, 29);
             this.btnClearAll.TabIndex = 14;
@@ -299,7 +312,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(416, 432);
+            this.ClientSize = new System.Drawing.Size(416, 457);
             this.Controls.Add(this.numCandidatesPerLevel);
             this.Controls.Add(this.label1);
             this.Controls.Add(this.btnClearAll);
@@ -362,5 +375,6 @@
         private System.Windows.Forms.CheckBox chkFindAllLevels;
         private System.Windows.Forms.Button btnResetRange;
         private System.Windows.Forms.CheckBox chkFastScanMode;
+        private System.Windows.Forms.CheckBox chkPrintPartialPaths;
     }
 }

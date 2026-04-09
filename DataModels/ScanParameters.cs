@@ -33,6 +33,9 @@ namespace PointerFinder2.DataModels
         public uint FinalAddressTarget { get; set; }
         // If true, utilizes aggressive pruning to prevent memory explosion.
         public bool FastScanMode { get; set; } = true;
+        // Output broken paths that failed to resolve a static base.
+        public bool PrintPartialPaths { get; set; } = false;
+
         // A list containing all the captured memory states for multi-state comparison.
         public List<ScanState>? CapturedStates { get; set; }
 
@@ -53,6 +56,7 @@ namespace PointerFinder2.DataModels
                 CandidatesPerLevel = CandidatesPerLevel,
                 MaxCandidates = MaxCandidates,
                 FastScanMode = FastScanMode,
+                PrintPartialPaths = PrintPartialPaths,
                 FinalAddressTarget = FinalAddressTarget,
                 CapturedStates = null // Break the strong reference to the LOH memory dumps!
             };

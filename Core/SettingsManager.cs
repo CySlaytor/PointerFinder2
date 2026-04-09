@@ -69,6 +69,7 @@ namespace PointerFinder2.Core
                 ini.Write("CandidatesPerLevel", settings.CandidatesPerLevel.ToString(), section);
                 ini.Write("MaxCandidates", settings.MaxCandidates.ToString(), section);
                 ini.Write("FastScanMode", settings.FastScanMode.ToString(), section);
+                ini.Write("PrintPartialPaths", settings.PrintPartialPaths.ToString(), section);
             }
 
             SaveGlobalSettingsOnly();
@@ -156,6 +157,9 @@ namespace PointerFinder2.Core
 
             if (!bool.TryParse(ini.Read("FastScanMode", section, defaultSettings.FastScanMode.ToString()), out bool fastScan)) fastScan = defaultSettings.FastScanMode;
             settings.FastScanMode = fastScan;
+
+            if (!bool.TryParse(ini.Read("PrintPartialPaths", section, defaultSettings.PrintPartialPaths.ToString()), out bool printPartial)) printPartial = defaultSettings.PrintPartialPaths;
+            settings.PrintPartialPaths = printPartial;
 
             //Re-load all global sections to ensure they are up-to-date.
             LoadGlobalAndDebugSections(ini);

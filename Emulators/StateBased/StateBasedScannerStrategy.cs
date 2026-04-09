@@ -57,6 +57,7 @@ namespace PointerFinder2.Emulators.StateBased
 
         private ConcurrentBag<PointerPath> _foundPaths;
         private long _foundPathsCounter;
+        private long _staticPathsFoundCounter;
         private long _candidatesValidated;
         private long _candidatesGenerated;
         private CancellationTokenSource _stopOnFirstCts;
@@ -83,6 +84,7 @@ namespace PointerFinder2.Emulators.StateBased
             _candidatesValidated = 0;
             _candidatesGenerated = 0;
             _foundPathsCounter = 0;
+            _staticPathsFoundCounter = 0;
             _progressThresholdManager = new ProgressThresholdManager(1);
             _stopOnFirstCts = new CancellationTokenSource();
 
@@ -126,10 +128,10 @@ namespace PointerFinder2.Emulators.StateBased
 
             var finalList = _foundPaths.ToList();
 
-            if (!_params.FindAllPathLevels && finalList.Any())
+            if (!_params.FindAllPathLevels && finalList.Any(p => !p.IsPartial))
             {
-                int minLevel = finalList.Min(p => p.Offsets.Count);
-                return finalList.Where(p => p.Offsets.Count == minLevel)
+                int minLevel = finalList.Where(p => !p.IsPartial).Min(p => p.Offsets.Count);
+                return finalList.Where(p => p.IsPartial || p.Offsets.Count == minLevel)
                                 .OrderBy(p => p.BaseAddress)
                                 .ToList();
             }
@@ -153,7 +155,7 @@ namespace PointerFinder2.Emulators.StateBased
             }
 
             logger.Log("[Phase 2] Finding Level 1 candidates...");
-            ReportProgress("Searching Level 1...", 0, _params.MaxOffset / 4, 0);
+            ReportProgress("Searching Level 1...", 0, _params.MaxOffset / 4);
             int candidatesFound = 0;
 
             for (int offset = 0; offset <= _params.MaxOffset; offset += 4)
@@ -189,7 +191,7 @@ namespace PointerFinder2.Emulators.StateBased
                     }
                 }
 
-                if (offset % 1024 == 0) ReportProgress("Searching Level 1...", offset / 4, _params.MaxOffset / 4, 0);
+                if (offset % 1024 == 0) ReportProgress("Searching Level 1...", offset / 4, _params.MaxOffset / 4);
             }
             logger.Log($"[Phase 2] Found {currentLevelCandidates.Count:N0} Level 1 candidates.");
 
@@ -203,10 +205,10 @@ namespace PointerFinder2.Emulators.StateBased
             }
 
             // Stop early if valid paths were found at Level 1 and we don't want to dig deeper
-            if (!_params.FindAllPathLevels && Interlocked.Read(ref _foundPathsCounter) > 0)
+            if (!_params.FindAllPathLevels && Interlocked.Read(ref _staticPathsFoundCounter) > 0)
             {
-                logger.Log($"[Phase 2] Found {Interlocked.Read(ref _foundPathsCounter):N0} paths at Level 1. Stopping deeper search because 'Find all path levels' is unchecked.");
-                ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)Interlocked.Read(ref _foundPathsCounter));
+                logger.Log($"[Phase 2] Found {Interlocked.Read(ref _staticPathsFoundCounter):N0} static paths at Level 1. Stopping deeper search because 'Find all path levels' is unchecked.");
+                ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates);
                 return Task.CompletedTask;
             }
 
@@ -220,7 +222,7 @@ namespace PointerFinder2.Emulators.StateBased
                 if (_params.LimitCpuUsage) parallelOptions.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
 
                 long processedCandidates = 0;
-                ReportProgress($"Searching Level {level}...", 0, currentLevelCandidates.Count, (int)_foundPathsCounter);
+                ReportProgress($"Searching Level {level}...", 0, currentLevelCandidates.Count);
 
                 Parallel.ForEach(currentLevelCandidates, parallelOptions, (candidate, loopState) =>
                 {
@@ -274,12 +276,18 @@ namespace PointerFinder2.Emulators.StateBased
                                 }
                             }
                         }
+
+                        // --- DEAD END CHECK ---
+                        if (candidatesFoundThisLevel == 0 && _params.PrintPartialPaths)
+                        {
+                            AddPartialPath(candidate);
+                        }
                     }
 
                     long currentProcessed = Interlocked.Increment(ref processedCandidates);
                     if (currentProcessed % 256 == 0)
                     {
-                        ReportProgress($"Searching Level {level}...", currentProcessed, currentLevelCandidates.Count, (int)_foundPathsCounter);
+                        ReportProgress($"Searching Level {level}...", currentProcessed, currentLevelCandidates.Count);
                     }
                 });
 
@@ -309,14 +317,26 @@ namespace PointerFinder2.Emulators.StateBased
                     }
                 }
 
-                if (!_params.FindAllPathLevels && Interlocked.Read(ref _foundPathsCounter) > 0)
+                if (!_params.FindAllPathLevels && Interlocked.Read(ref _staticPathsFoundCounter) > 0)
                 {
-                    logger.Log($"[Phase 2] Found {Interlocked.Read(ref _foundPathsCounter):N0} paths at Level {level}. Stopping deeper search because 'Find all path levels' is unchecked.");
+                    logger.Log($"[Phase 2] Found {Interlocked.Read(ref _staticPathsFoundCounter):N0} static paths at Level {level}. Stopping deeper search because 'Find all path levels' is unchecked.");
                     break;
                 }
             }
 
-            ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates, (int)Interlocked.Read(ref _foundPathsCounter));
+            // --- CATCH MAX LEVEL DEAD ENDS ---
+            if (_params.PrintPartialPaths && !token.IsCancellationRequested && currentLevelCandidates.Any())
+            {
+                foreach (var candidate in currentLevelCandidates)
+                {
+                    if (candidate.Address < _params.StaticBaseStart || candidate.Address > _params.StaticBaseEnd)
+                    {
+                        AddPartialPath(candidate);
+                    }
+                }
+            }
+
+            ReportProgress("Search phase complete.", _params.MaxCandidates, _params.MaxCandidates);
             return Task.CompletedTask;
         }
 
@@ -336,16 +356,69 @@ namespace PointerFinder2.Emulators.StateBased
             {
                 _foundPaths.Add(finalPath);
                 long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+                Interlocked.Increment(ref _staticPathsFoundCounter);
 
                 if (_progressThresholdManager.ShouldUpdate(currentCount))
                 {
-                    ReportProgress(null, -1, -1, (int)currentCount);
+                    ReportProgress(null, -1, -1);
                 }
 
                 if (_params.StopOnFirstPathFound)
                 {
                     _stopOnFirstCts.Cancel();
                 }
+            }
+        }
+
+        private void AddPartialPath(PathNode candidate)
+        {
+            if (_stopOnFirstCts.IsCancellationRequested) return;
+
+            var finalPath = new PointerPath
+            {
+                BaseAddress = candidate.Address,
+                Offsets = candidate.GetForwardOffsets(),
+                FinalAddress = _params.FinalAddressTarget,
+                IsPartial = true
+            };
+
+            var brokenAddresses = new Dictionary<int, uint>();
+            for (int i = 0; i < _params.CapturedStates.Count; i++)
+            {
+                // Trace the path forward to see where it breaks
+                uint lastValidAddress = finalPath.BaseAddress;
+                uint? currentAddress = ReadValueFromState(finalPath.BaseAddress, _params.CapturedStates[i].MemoryDump, null, "");
+
+                if (currentAddress.HasValue)
+                {
+                    bool broke = false;
+                    for (int j = 0; j < finalPath.Offsets.Count - 1; j++)
+                    {
+                        uint nextAddressToRead = currentAddress.Value + (uint)finalPath.Offsets[j];
+                        lastValidAddress = nextAddressToRead; // Note where we are trying to read
+                        currentAddress = ReadValueFromState(nextAddressToRead, _params.CapturedStates[i].MemoryDump, null, "");
+
+                        if (!currentAddress.HasValue)
+                        {
+                            broke = true;
+                            break;
+                        }
+                    }
+                    if (!broke && finalPath.Offsets.Count > 0)
+                    {
+                        lastValidAddress = currentAddress.Value + (uint)finalPath.Offsets.Last();
+                    }
+                }
+                brokenAddresses[i] = lastValidAddress;
+            }
+            finalPath.BrokenStateAddresses = brokenAddresses;
+
+            _foundPaths.Add(finalPath);
+            long currentCount = Interlocked.Increment(ref _foundPathsCounter);
+
+            if (_progressThresholdManager.ShouldUpdate(currentCount))
+            {
+                ReportProgress(null, -1, -1);
             }
         }
 
@@ -447,14 +520,18 @@ namespace PointerFinder2.Emulators.StateBased
             return value;
         }
 
-        protected void ReportProgress(string message, long current, long max, int found)
+        protected void ReportProgress(string message, long current, long max)
         {
+            long currentStatic = Interlocked.Read(ref _staticPathsFoundCounter);
+            long currentTotal = Interlocked.Read(ref _foundPathsCounter);
+
             var report = new ScanProgressReport
             {
                 StatusMessage = message,
                 CurrentValue = current,
                 MaxValue = max,
-                FoundCount = found
+                FoundCount = (int)currentStatic,
+                PartialCount = (int)(currentTotal - currentStatic)
             };
             _progress?.Report(report);
         }

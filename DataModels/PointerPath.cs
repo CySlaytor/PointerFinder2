@@ -20,6 +20,12 @@ namespace PointerFinder2.DataModels
         // The final, dynamic address that this path resolves to.
         public uint FinalAddress { get; set; }
 
+        // Indicates if this path broke/dead-ended before reaching a static base.
+        public bool IsPartial { get; set; } = false;
+
+        // Stores the final resolved address (or the address where it broke out-of-bounds) for each captured state.
+        public Dictionary<int, uint> BrokenStateAddresses { get; set; } = new Dictionary<int, uint>();
+
         // Returns a user-friendly string of the offsets (e.g., "+C, +F40, -1A").
         public string GetOffsetsString()
         {

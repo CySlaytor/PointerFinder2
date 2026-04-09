@@ -280,17 +280,17 @@ namespace DarkModeForms
 
 		private bool _IsDarkMode; //<- storage for the Read Only Proerty 'IsDarkMode'
 
-		private IntPtr originalWndProc;
-		private WndProc newWndProcDelegate;
-		private IntPtr formHandle;
-		private bool applyingTheme; // Flag to prevent recursion
+        private IntPtr originalWndProc;
+        private WndProc newWndProcDelegate;
+        // private IntPtr formHandle; // Removed to clear CS0169 warning
+        private bool applyingTheme; // Flag to prevent recursion
 
-		#endregion
+        #endregion
 
 
-		#region Public Members
+        #region Public Members
 
-		public enum DisplayMode
+        public enum DisplayMode
 		{
 			/// <summary>Uses the Color Mode of the System, set by the User in Windows Settings.</summary>
 			SystemDefault,

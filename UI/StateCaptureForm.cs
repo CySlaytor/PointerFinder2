@@ -54,6 +54,7 @@ namespace PointerFinder2
             txtStaticEnd.Text = _currentSettings.StaticAddressEnd;
             chkStopOnFirst.Checked = _currentSettings.StopOnFirstPathFound;
             chkFindAllLevels.Checked = _currentSettings.FindAllPathLevels;
+            chkPrintPartialPaths.Checked = _currentSettings.PrintPartialPaths;
             numCandidatesPerLevel.Value = _currentSettings.CandidatesPerLevel;
             chkFastScanMode.Checked = _currentSettings.FastScanMode;
 
@@ -251,6 +252,7 @@ namespace PointerFinder2
                     MaxCandidates = (int)numMaxCandidates.Value,
                     StopOnFirstPathFound = chkStopOnFirst.Checked,
                     FindAllPathLevels = chkFindAllLevels.Checked,
+                    PrintPartialPaths = chkPrintPartialPaths.Checked,
                     LimitCpuUsage = GlobalSettings.LimitCpuUsage,
                     CandidatesPerLevel = (int)numCandidatesPerLevel.Value,
                     FastScanMode = chkFastScanMode.Checked,
@@ -276,6 +278,7 @@ namespace PointerFinder2
             settings.MaxCandidates = (int)numMaxCandidates.Value;
             settings.StopOnFirstPathFound = chkStopOnFirst.Checked;
             settings.FindAllPathLevels = chkFindAllLevels.Checked;
+            settings.PrintPartialPaths = chkPrintPartialPaths.Checked;
             settings.CandidatesPerLevel = (int)numCandidatesPerLevel.Value;
             settings.FastScanMode = chkFastScanMode.Checked;
         }
