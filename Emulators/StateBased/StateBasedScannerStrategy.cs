@@ -158,7 +158,19 @@ namespace PointerFinder2.Emulators.StateBased
             ReportProgress("Searching Level 1...", 0, _params.MaxOffset / 4);
             int candidatesFound = 0;
 
-            for (int offset = 0; offset <= _params.MaxOffset; offset += 4)
+            // NEW: Setup bounds for the Level 1 offset search based on the Hint
+            int startOffset = 0;
+            int endOffset = _params.MaxOffset;
+            int stepSize = 4;
+
+            if (_params.LastOffsetHint.HasValue)
+            {
+                startOffset = _params.LastOffsetHint.Value;
+                endOffset = _params.LastOffsetHint.Value;
+                logger.Log($"[Phase 2] Last Offset Hint applied: 0x{startOffset:X}. Skipping all other offsets for Level 1.");
+            }
+
+            for (int offset = startOffset; offset <= endOffset; offset += stepSize)
             {
                 if (token.IsCancellationRequested) break;
                 if (candidatesFound >= _params.CandidatesPerLevel) break;
@@ -191,7 +203,8 @@ namespace PointerFinder2.Emulators.StateBased
                     }
                 }
 
-                if (offset % 1024 == 0) ReportProgress("Searching Level 1...", offset / 4, _params.MaxOffset / 4);
+                if (!_params.LastOffsetHint.HasValue && offset % 1024 == 0)
+                    ReportProgress("Searching Level 1...", offset / 4, _params.MaxOffset / 4);
             }
             logger.Log($"[Phase 2] Found {currentLevelCandidates.Count:N0} Level 1 candidates.");
 

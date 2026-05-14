@@ -36,6 +36,9 @@ namespace PointerFinder2.DataModels
         // Output broken paths that failed to resolve a static base.
         public bool PrintPartialPaths { get; set; } = false;
 
+        // The specific last offset to enforce from a debugger breakpoint.
+        public int? LastOffsetHint { get; set; }
+
         // A list containing all the captured memory states for multi-state comparison.
         public List<ScanState>? CapturedStates { get; set; }
 
@@ -58,6 +61,7 @@ namespace PointerFinder2.DataModels
                 FastScanMode = FastScanMode,
                 PrintPartialPaths = PrintPartialPaths,
                 FinalAddressTarget = FinalAddressTarget,
+                LastOffsetHint = LastOffsetHint,
                 CapturedStates = null // Break the strong reference to the LOH memory dumps!
             };
         }

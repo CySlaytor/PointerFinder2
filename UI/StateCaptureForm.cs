@@ -48,6 +48,9 @@ namespace PointerFinder2
 
             // Populate settings
             txtMaxOffset.Text = _currentSettings.MaxOffset.ToString("X");
+            chkUseLastOffsetHint.Checked = _currentSettings.UseLastOffsetHint;
+            txtLastOffsetHint.Enabled = _currentSettings.UseLastOffsetHint;
+            txtLastOffsetHint.Text = _currentSettings.LastOffsetHint ?? "";
             numMaxLevel.Value = _currentSettings.MaxLevel;
             numMaxCandidates.Value = _currentSettings.MaxCandidates;
             txtStaticStart.Text = _currentSettings.StaticAddressStart;
@@ -85,8 +88,14 @@ namespace PointerFinder2
 
             // Wire up Leave events for automatic hex input sanitization.
             txtMaxOffset.Leave += SanitizeHexTextBox_Leave;
+            txtLastOffsetHint.Leave += SanitizeOptionalHexTextBox_Leave;
             txtStaticStart.Leave += SanitizeHexTextBox_Leave;
             txtStaticEnd.Leave += SanitizeHexTextBox_Leave;
+        }
+
+        private void chkUseLastOffsetHint_CheckedChanged(object sender, EventArgs e)
+        {
+            txtLastOffsetHint.Enabled = chkUseLastOffsetHint.Checked;
         }
 
         private async void dgvStates_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -215,6 +224,25 @@ namespace PointerFinder2
             Memory.ForceGarbageCollection();
         }
 
+        private void btnHelp_Click(object sender, EventArgs e)
+        {
+            string helpText =
+                "--- State-Based Pointer Scan Help ---\n\n" +
+                "How it works:\n" +
+                "This tool uses a Breadth-First Search (BFS) algorithm to work backwards from your target address. By verifying candidates across multiple memory dumps (states), it quickly filters out temporary addresses and isolates highly reliable, static pointer chains.\n\n" +
+                "Crucial Settings for Beginners:\n\n" +
+                "• Candidates per Level:\n" +
+                "Keep this LOW (e.g., 2 to 5). This forces the scanner to prefer smaller, tighter offsets. A low number usually results in a much more accurate and stable pointer chain that makes logical sense. Setting this too high will cause the scan to take forever and return messy, unrealistic paths.\n\n" +
+                "• Last Offset Hint:\n" +
+                "If you used a debugger and know the exact final offset the game uses for your value (e.g., +4C0), enter it here. This massively speeds up the scan by skipping thousands of incorrect branches right at Level 1.\n\n" +
+                "• Fast Mode (Aggressive Pruning):\n" +
+                "Leaving this ON is optional. However, it stops the scanner from going in circles or duplicating work, preventing your computer from running out of RAM during deep scans.\n\n" +
+                "General Tips:\n" +
+                "- Capture your states in wildly different situations (e.g., State 1: Level 1, State 2: Level 2, State 3: After rebooting the emulator). The more different the states are, the better the tool can filter out bad pointers!";
+
+            MessageBox.Show(this, helpText, "Scanner Information & Tips", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         private void UpdateScanButtonState()
         {
             // Use the manager's property to check the count.
@@ -227,8 +255,16 @@ namespace PointerFinder2
             {
                 // Sanitize hex inputs before parsing to ensure a clean format.
                 txtMaxOffset.Text = SanitizeHexInput(txtMaxOffset.Text);
+                txtLastOffsetHint.Text = SanitizeOptionalHexInput(txtLastOffsetHint.Text);
                 txtStaticStart.Text = SanitizeHexInput(txtStaticStart.Text);
                 txtStaticEnd.Text = SanitizeHexInput(txtStaticEnd.Text);
+
+                // Only extract the hint if the checkbox is checked.
+                int? lastOffsetHint = null;
+                if (chkUseLastOffsetHint.Checked && !string.IsNullOrEmpty(txtLastOffsetHint.Text))
+                {
+                    lastOffsetHint = int.Parse(txtLastOffsetHint.Text, NumberStyles.HexNumber);
+                }
 
                 uint finalTarget = 0;
                 // Get the final target address safely from the manager.
@@ -246,6 +282,7 @@ namespace PointerFinder2
                 return new ScanParameters
                 {
                     MaxOffset = int.Parse(txtMaxOffset.Text, NumberStyles.HexNumber),
+                    LastOffsetHint = lastOffsetHint,
                     StaticBaseStart = _manager.UnnormalizeAddress(txtStaticStart.Text),
                     StaticBaseEnd = _manager.UnnormalizeAddress(txtStaticEnd.Text),
                     MaxLevel = (int)numMaxLevel.Value,
@@ -272,6 +309,8 @@ namespace PointerFinder2
         {
             // Sanitize values before saving.
             settings.MaxOffset = int.Parse(SanitizeHexInput(txtMaxOffset.Text), NumberStyles.HexNumber);
+            settings.UseLastOffsetHint = chkUseLastOffsetHint.Checked;
+            settings.LastOffsetHint = txtLastOffsetHint.Text;
             settings.StaticAddressStart = SanitizeHexInput(txtStaticStart.Text);
             settings.StaticAddressEnd = SanitizeHexInput(txtStaticEnd.Text);
             settings.MaxLevel = (int)numMaxLevel.Value;
@@ -308,11 +347,35 @@ namespace PointerFinder2
             return string.IsNullOrEmpty(result) ? "0" : result;
         }
 
+        private string SanitizeOptionalHexInput(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "";
+            var sb = new StringBuilder();
+            foreach (char c in input.ToUpperInvariant())
+            {
+                if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))
+                {
+                    sb.Append(c);
+                }
+            }
+            if (sb.Length == 0) return "";
+            string result = sb.ToString().TrimStart('0');
+            return string.IsNullOrEmpty(result) ? "0" : result;
+        }
+
         private void SanitizeHexTextBox_Leave(object sender, EventArgs e)
         {
             if (sender is TextBox tb)
             {
                 tb.Text = SanitizeHexInput(tb.Text);
+            }
+        }
+
+        private void SanitizeOptionalHexTextBox_Leave(object sender, EventArgs e)
+        {
+            if (sender is TextBox tb)
+            {
+                tb.Text = SanitizeOptionalHexInput(tb.Text);
             }
         }
 

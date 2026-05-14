@@ -7,5 +7,10 @@
             ThemeBlack.Apply(this);
             this.TopMost = false;
         }
+
+        private void InitializeComponent()
+        {
+
+        }
     }
 }

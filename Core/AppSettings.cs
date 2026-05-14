@@ -27,5 +27,9 @@ namespace PointerFinder2.Core
         public bool FastScanMode { get; set; } = true;
         // Output broken paths that failed to resolve a static base.
         public bool PrintPartialPaths { get; set; } = false;
+        // Saves the optional offset hint from the user.
+        public string? LastOffsetHint { get; set; }
+        // Saves whether the user has the Last Offset Hint checkbox enabled.
+        public bool UseLastOffsetHint { get; set; } = false;
     }
 }

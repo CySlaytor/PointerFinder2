@@ -61,6 +61,8 @@ namespace PointerFinder2.Core
             {
                 ini.Write("LastTargetAddress", settings.LastTargetAddress, section);
                 ini.Write("MaxOffset", settings.MaxOffset.ToString(), section);
+                ini.Write("UseLastOffsetHint", settings.UseLastOffsetHint.ToString(), section);
+                ini.Write("LastOffsetHint", settings.LastOffsetHint ?? "", section);
                 ini.Write("MaxLevel", settings.MaxLevel.ToString(), section);
                 ini.Write("StaticAddressStart", settings.StaticAddressStart, section);
                 ini.Write("StaticAddressEnd", settings.StaticAddressEnd, section);
@@ -136,6 +138,11 @@ namespace PointerFinder2.Core
             settings.LastTargetAddress = ini.Read("LastTargetAddress", section, defaultSettings.LastTargetAddress);
             if (!int.TryParse(ini.Read("MaxOffset", section, defaultSettings.MaxOffset.ToString()), out int maxOffset)) maxOffset = defaultSettings.MaxOffset;
             settings.MaxOffset = maxOffset;
+
+            if (!bool.TryParse(ini.Read("UseLastOffsetHint", section, defaultSettings.UseLastOffsetHint.ToString()), out bool useHint)) useHint = defaultSettings.UseLastOffsetHint; // NEW
+            settings.UseLastOffsetHint = useHint;
+            settings.LastOffsetHint = ini.Read("LastOffsetHint", section, "");
+
             if (!int.TryParse(ini.Read("MaxLevel", section, defaultSettings.MaxLevel.ToString()), out int maxLevel)) maxLevel = defaultSettings.MaxLevel;
             if (maxLevel < 1) maxLevel = defaultSettings.MaxLevel;
             settings.MaxLevel = maxLevel;
