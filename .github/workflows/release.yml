@@ -1,0 +1,77 @@
+name: Build and Create Release Draft
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release Draft
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Version from CMakeLists.txt
+        id: get_version
+        shell: pwsh
+        run: |
+          $content = Get-Content -Path "CMakeLists.txt" -Raw
+          if ($content -match 'project\([^)]*VERSION\s+([0-9.]+)') {
+            $version = $Matches[1]
+            Write-Output "Parsed Project Version: $version"
+            "PROJECT_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } else {
+            Write-Error "Failed to parse version from CMakeLists.txt"
+            exit 1
+          }
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt 6
+        id: Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.8.0'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="${{ github.workspace }}/build/Release"
+
+      - name: Build Application
+        run: |
+          cmake --build build
+
+      - name: Package Standalone Binary as ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/Release/*" -DestinationPath "PointerFinder2_v${{ env.PROJECT_VERSION }}.zip"
+
+      - name: Read Release Notes
+        shell: pwsh
+        run: |
+          if (Test-Path "RELEASE_NOTES.md") {
+            Get-Content -Path "RELEASE_NOTES.md" -Raw | Out-File -FilePath "release_body.txt" -Encoding utf8
+          } else {
+            "No release notes provided." | Out-File -FilePath "release_body.txt" -Encoding utf8
+          }
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.PROJECT_VERSION }}
+          name: Pointer Finder v${{ env.PROJECT_VERSION }}
+          body_path: release_body.txt
+          draft: true
+          files: PointerFinder2_v${{ env.PROJECT_VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

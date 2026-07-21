@@ -1,0 +1,33 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+	<qresource prefix="/">
+		<file>sounds/fail.wav</file>
+		<file>sounds/notify.wav</file>
+		<file>sounds/success.wav</file>
+		<file>appicon.ico</file>
+		<file alias="styles/dark_theme.qss">../src/UI/Styles/dark_theme.qss</file>
+		<file alias="styles/light_theme.qss">../src/UI/Styles/light_theme.qss</file>
+
+		<!-- Icons -->
+		<file>icons/undo.svg</file>
+		<file>icons/redo.svg</file>
+		<file>icons/find.svg</file>
+		<file>icons/settings.svg</file>
+		<file>icons/range_finder.svg</file>
+		<file>icons/converter.svg</file>
+		<file>icons/hierarchy_fixer.svg</file>
+		<file>icons/tutorial.svg</file>
+		<file>icons/attach.svg</file>
+		<file>icons/save.svg</file>
+		<file>icons/load.svg</file>
+		<file>icons/copy.svg</file>
+		<file>icons/copy_ra.svg</file>
+		<file>icons/copy_note.svg</file>
+		<file>icons/delete.svg</file>
+		<file>icons/sort.svg</file>
+		<file>icons/bookmark_add.svg</file>
+		<file>icons/rename.svg</file>
+		<file>icons/about.svg</file>
+		<file>icons/update.svg</file>
+	</qresource>
+</RCC>

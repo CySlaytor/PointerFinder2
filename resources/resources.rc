@@ -1,0 +1,54 @@
+// resources/resources.rc
+#pragma code_page(65001) // Instructs rc.exe to parse this file as UTF-8 to prevent the 'Â©' encoding glitch
+#include <winver.h>
+
+#ifndef RC_VERSION_MAJOR
+#define RC_VERSION_MAJOR 0
+#endif
+
+#ifndef RC_VERSION_MINOR
+#define RC_VERSION_MINOR 0
+#endif
+
+#ifndef RC_VERSION_PATCH
+#define RC_VERSION_PATCH 0
+#endif
+
+#ifndef RC_VERSION_BUILD
+#define RC_VERSION_BUILD 0
+#endif
+
+#ifndef RC_VERSION_STRING
+#define RC_VERSION_STRING "0.0.0.0"
+#endif
+
+IDI_ICON1 ICON DISCARDABLE "appicon.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     RC_VERSION_MAJOR, RC_VERSION_MINOR, RC_VERSION_PATCH, RC_VERSION_BUILD
+PRODUCTVERSION  RC_VERSION_MAJOR, RC_VERSION_MINOR, RC_VERSION_PATCH, RC_VERSION_BUILD
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     0x0L
+BEGIN
+BLOCK "StringFileInfo"
+BEGIN
+BLOCK "040904B0" // U.S. English, Unicode
+BEGIN
+VALUE "CompanyName", "RetroAchievements\0"
+VALUE "FileDescription", "PointerFinder2\0"
+VALUE "FileVersion", RC_VERSION_STRING "\0"
+VALUE "InternalName", "PointerFinder2.exe\0"
+VALUE "LegalCopyright", "© 2026 RetroAchievements\0"
+VALUE "OriginalFilename", "PointerFinder2.exe\0"
+VALUE "ProductName", "Pointer Finder 2.0\0"
+VALUE "ProductVersion", RC_VERSION_STRING "\0"
+END
+END
+BLOCK "VarFileInfo"
+BEGIN
+VALUE "Translation", 0x409, 1200
+END
+END
