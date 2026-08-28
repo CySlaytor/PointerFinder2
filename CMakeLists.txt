@@ -6,7 +6,7 @@ else()
     set(CMAKE_PREFIX_PATH "C:/Qt/6.11.1/msvc2022_64") # Local fallback path
 endif()
 
-project(PointerFinder2 VERSION 2.0.0 LANGUAGES CXX)
+project(PointerFinder2 VERSION 2.0.1 LANGUAGES CXX)
 
 # Enable folders in the Visual Studio Solution Explorer. This automatically 
 # moves utility projects (ALL_BUILD, ZERO_CHECK) into a subfolder.

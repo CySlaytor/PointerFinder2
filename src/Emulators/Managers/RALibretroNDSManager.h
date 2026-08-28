@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BaseEmulatorManager.h"
+#include <string>
 
 namespace PointerFinder2::Emulators::EmulatorManager {
 
@@ -43,6 +44,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         uintptr_t m_ndsMemoryBaseInPC = 0;
         QString m_foundCoreName = "Unknown";
         uintptr_t findBaseAddressBySize(int64_t exactRegionSizeBytes);
+        uintptr_t findModuleBase(const std::wstring& moduleName);
     };
 
 }
