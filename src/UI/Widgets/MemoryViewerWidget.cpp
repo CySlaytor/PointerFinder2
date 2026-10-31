@@ -253,18 +253,39 @@ namespace PointerFinder2::UI::Widgets {
                 }
 
                 if (it != m_highlights.end()) {
-                    QString tip = QString("<b>0x%1</b>: %2<br>%3")
-                        .arg(QString::number(addr, 16).toUpper())
-                        .arg(it->second.label)
-                        .arg(it->second.isPointer ? "<span style='color: #FF7B72;'>[Pointer Target] (Double-click to follow)</span>" : "<span style='color: #79C0FF;'>[Documented Variable]</span>");
+                    QString addrHex = "0x" + QString("%1").arg(addr, 8, 16, QChar('0')).toUpper();
+
+                    QString line1 = it->second.offset.isEmpty()
+                        ? QString("<b>%1</b>").arg(addrHex)
+                        : QString("<b>%1</b> (%2)").arg(addrHex, it->second.offset);
+
+                    QString line2 = it->second.name.isEmpty() ? it->second.label : it->second.name;
+
+                    QString line3 = it->second.isPointer
+                        ? "<span style='color: #FF7B72;'>[Pointer Target]</span>"
+                        : "<span style='color: #79C0FF;'>[Documented Variable]</span>";
+
+                    QString tip = QString("<div style='margin:0; padding:0; line-height:115%;'>%1<br>%2<br>%3</div>")
+                        .arg(line1)
+                        .arg(line2)
+                        .arg(line3);
+
                     QToolTip::showText(event->globalPosition().toPoint(), tip, viewport());
                 }
                 else {
                     QToolTip::hideText();
                 }
             }
+            else {
+                QToolTip::hideText();
+            }
         }
         QAbstractScrollArea::mouseMoveEvent(event);
+    }
+
+    void MemoryViewerWidget::leaveEvent(QEvent* event) {
+        QToolTip::hideText();
+        QAbstractScrollArea::leaveEvent(event);
     }
 
     void MemoryViewerWidget::keyPressEvent(QKeyEvent* event) {

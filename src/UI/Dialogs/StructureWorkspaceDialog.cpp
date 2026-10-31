@@ -734,7 +734,20 @@ namespace PointerFinder2::UI {
             if (resolved != 0) {
                 uint32_t nativeAddr = m_manager->unnormalizeAddress(QString::number(resolved, 16));
                 Widgets::MemoryViewerWidget::HighlightInfo info;
-                info.label = item->text(0) + " (" + item->text(1) + ")";
+
+                // Extract clean name by removing redundant size/format tag like [32-bit], [Float], etc.
+                QString rawDesc = item->text(0).trimmed();
+                static const QRegularExpression sizeTagRegex("^\\s*\\[[^\\]]+\\]\\s*");
+                QString cleanName = rawDesc;
+                cleanName.remove(sizeTagRegex);
+                cleanName = cleanName.trimmed();
+                if (cleanName.isEmpty()) {
+                    cleanName = rawDesc;
+                }
+
+                info.name = cleanName;
+                info.offset = item->text(1).trimmed();
+                info.label = cleanName + " (" + info.offset + ")";
                 info.isPointer = (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive));
                 info.isChildOfActive = (activeItem && (item == activeItem || item->parent() == activeItem));
                 info.size = 4;

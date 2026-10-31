@@ -24,6 +24,8 @@ namespace PointerFinder2::UI::Widgets {
 
         struct HighlightInfo {
             QString label;
+            QString name;
+            QString offset;
             bool isPointer = false;
             bool isChildOfActive = false;
             uint32_t size = 4;
@@ -61,6 +63,7 @@ namespace PointerFinder2::UI::Widgets {
         void mousePressEvent(QMouseEvent* event) override;
         void mouseDoubleClickEvent(QMouseEvent* event) override;
         void mouseMoveEvent(QMouseEvent* event) override;
+        void leaveEvent(QEvent* event) override;
         void keyPressEvent(QKeyEvent* event) override;
 
     private:

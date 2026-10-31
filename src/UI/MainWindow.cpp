@@ -432,13 +432,67 @@ namespace PointerFinder2::UI {
         if (obj && obj->isWidgetType()) {
             auto* w = static_cast<QWidget*>(obj);
             if ((w->windowFlags() & Qt::WindowType_Mask) == Qt::ToolTip) {
-                HWND hwnd = reinterpret_cast<HWND>(w->winId());
-                if (hwnd) {
-                    if (event->type() == QEvent::Show) {
-                        AnimateWindow(hwnd, 120, AW_BLEND);
+                if (event->type() == QEvent::Show) {
+                    auto* existingAnim = w->findChild<QPropertyAnimation*>("tooltip_anim");
+                    if (existingAnim) {
+                        existingAnim->stop();
+                        delete existingAnim;
                     }
-                    else if (event->type() == QEvent::Hide && IsWindowVisible(hwnd)) {
-                        AnimateWindow(hwnd, 120, AW_BLEND | AW_HIDE);
+
+                    w->setProperty("pf_closing", false);
+                    w->setProperty("pf_allow_close", false);
+                    w->setWindowOpacity(0.0);
+
+                    auto* anim = new QPropertyAnimation(w, "windowOpacity", w);
+                    anim->setObjectName("tooltip_anim");
+                    anim->setDuration(120);
+                    anim->setStartValue(0.0);
+                    anim->setEndValue(1.0);
+                    anim->setEasingCurve(QEasingCurve::OutQuad);
+                    anim->start(QAbstractAnimation::DeleteWhenStopped);
+                }
+                else if (event->type() == QEvent::Close) {
+                    if (w->property("pf_allow_close").toBool()) {
+                        return false;
+                    }
+
+                    event->ignore();
+
+                    if (!w->property("pf_closing").toBool()) {
+                        w->setProperty("pf_closing", true);
+
+                        auto* existingAnim = w->findChild<QPropertyAnimation*>("tooltip_anim");
+                        if (existingAnim) {
+                            existingAnim->stop();
+                            delete existingAnim;
+                        }
+
+                        if (w->windowOpacity() <= 0.05) {
+                            w->setProperty("pf_allow_close", true);
+                            w->close();
+                            w->deleteLater();
+                            return true;
+                        }
+
+                        auto* anim = new QPropertyAnimation(w, "windowOpacity", w);
+                        anim->setObjectName("tooltip_anim");
+                        anim->setDuration(140);
+                        anim->setStartValue(w->windowOpacity());
+                        anim->setEndValue(0.0);
+                        anim->setEasingCurve(QEasingCurve::OutQuad);
+                        connect(anim, &QPropertyAnimation::finished, w, [w]() {
+                            w->setProperty("pf_allow_close", true);
+                            w->close();
+                            w->deleteLater();
+                        });
+                        anim->start(QAbstractAnimation::DeleteWhenStopped);
+                    }
+                    return true;
+                }
+                else if (event->type() == QEvent::DeferredDelete) {
+                    // Prevent Qt from destroying the tooltip widget immediately before the fade-out animation completes
+                    if (!w->property("pf_allow_close").toBool()) {
+                        return true;
                     }
                 }
             }
