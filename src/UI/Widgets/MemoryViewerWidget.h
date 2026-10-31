@@ -26,9 +26,10 @@ namespace PointerFinder2::UI::Widgets {
             QString label;
             QString name;
             QString offset;
+            uint32_t startAddress = 0;
+            uint32_t size = 4;
             bool isPointer = false;
             bool isChildOfActive = false;
-            uint32_t size = 4;
         };
 
         explicit MemoryViewerWidget(QWidget* parent = nullptr);

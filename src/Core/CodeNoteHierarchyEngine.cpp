@@ -127,7 +127,7 @@ namespace PointerFinder2::Core {
                 QString sign = rawKey.left(1);
                 bool ok;
                 qlonglong offsetVal = rawKey.mid(3).toLongLong(&ok, 16);
-                QString key = QString("%10x%2").arg(sign).arg(QString::number(offsetVal, 16).toLower());
+                QString key = QString("%10x%2").arg(sign).arg(QString("%1").arg(offsetVal, 2, 16, QChar('0')).toLower());
 
                 mergeableGroups[key].push_back(node);
             }
@@ -160,7 +160,7 @@ namespace PointerFinder2::Core {
                 QString restOfLine = contentMatch.captured(3);
                 bestContent = QString("%1%2%3")
                     .arg(signAndPrefix.toLower())
-                    .arg(QString::number(offsetVal, 16).toLower())
+                    .arg(QString("%1").arg(offsetVal, 2, 16, QChar('0')).toLower())
                     .arg(restOfLine);
             }
 

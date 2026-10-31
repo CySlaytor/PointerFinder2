@@ -737,7 +737,31 @@ namespace PointerFinder2::UI {
 
                 // Extract clean name by removing redundant size/format tag like [32-bit], [Float], etc.
                 QString rawDesc = item->text(0).trimmed();
-                static const QRegularExpression sizeTagRegex("^\\s*\\[[^\\]]+\\]\\s*");
+                static const QRegularExpression sizeTagRegex("^\\s*\\[([^\\]]+)\\]\\s*");
+                auto match = sizeTagRegex.match(rawDesc);
+
+                uint32_t varSize = 4;
+                if (match.hasMatch()) {
+                    QString tag = match.captured(1).trimmed().toLower();
+                    if (tag.startsWith("8-bit") || tag == "8bit" || tag == "byte" ||
+                        tag.startsWith("bit") || tag.contains("bitflag") ||
+                        tag == "lower4" || tag == "upper4") {
+                        varSize = 1;
+                    }
+                    else if (tag.startsWith("16-bit") || tag == "16bit" || tag == "short") {
+                        varSize = 2;
+                    }
+                    else if (tag.startsWith("24-bit") || tag == "24bit") {
+                        varSize = 3;
+                    }
+                    else if (tag.startsWith("64-bit") || tag == "64bit" || tag.contains("double")) {
+                        varSize = 8;
+                    }
+                    else if (tag.startsWith("32-bit") || tag == "32bit" || tag.contains("float") || tag.contains("pointer")) {
+                        varSize = 4;
+                    }
+                }
+
                 QString cleanName = rawDesc;
                 cleanName.remove(sizeTagRegex);
                 cleanName = cleanName.trimmed();
@@ -748,10 +772,14 @@ namespace PointerFinder2::UI {
                 info.name = cleanName;
                 info.offset = item->text(1).trimmed();
                 info.label = cleanName + " (" + info.offset + ")";
+                info.startAddress = nativeAddr;
+                info.size = varSize;
                 info.isPointer = (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive));
                 info.isChildOfActive = (activeItem && (item == activeItem || item->parent() == activeItem));
-                info.size = 4;
-                highlights[nativeAddr] = info;
+
+                for (uint32_t b = 0; b < varSize; ++b) {
+                    highlights[nativeAddr + b] = info;
+                }
             }
 
             for (int i = 0; i < item->childCount(); ++i) {
@@ -814,7 +842,7 @@ namespace PointerFinder2::UI {
         if (match.isValid) {
             QString scopeName = match.pointerNode ? match.pointerNode->text(0) + " (" + match.pointerNode->text(1) + ")" : "Root Base Pointer";
             QString sign = (match.offset < 0) ? "-" : "+";
-            QString offsetHex = QString::number(std::abs(match.offset), 16).toUpper();
+            QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
 
             m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %30x%4")
                 .arg(QString::number(m_currentViewerSelectedAddress, 16).toUpper())
@@ -849,7 +877,8 @@ namespace PointerFinder2::UI {
         newItem->setText(0, description);
         newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
         QString sign = (offset < 0) ? "-" : "+";
-        newItem->setText(1, sign + "0x" + QString::number(std::abs(offset), 16).toUpper());
+        QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
+        newItem->setText(1, sign + "0x" + offsetHex);
         newItem->setData(1, Qt::UserRole, offset);
         newItem->setData(1, Qt::UserRole + 1, "="); // Default delimiter
 
@@ -1010,7 +1039,8 @@ namespace PointerFinder2::UI {
                 auto* newItem = new QTreeWidgetItem(parentItem ? parentItem : m_structureTree->invisibleRootItem());
                 newItem->setText(0, desc);
                 newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
-                newItem->setText(1, sign + "0x" + QString::number(std::abs(offsetVal), 16).toUpper());
+                QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
+                newItem->setText(1, sign + "0x" + offsetHex);
                 newItem->setData(1, Qt::UserRole, offsetVal);
                 newItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
 
@@ -1083,7 +1113,7 @@ namespace PointerFinder2::UI {
                     QTreeWidgetItem* item = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
                     int32_t offset = item->data(1, Qt::UserRole).toInt();
                     QString sign = (offset < 0) ? "-" : "+";
-                    QString offsetHex = QString::number(std::abs(offset), 16).toLower();
+                    QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toLower();
                     QString delimiter = item->data(1, Qt::UserRole + 1).toString();
                     if (delimiter.isEmpty()) delimiter = "=";
 
