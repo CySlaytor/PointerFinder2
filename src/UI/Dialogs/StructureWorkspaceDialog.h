@@ -11,13 +11,15 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSplitter>
-#include <QTimer>
 #include <QTreeWidget>
 
 namespace PointerFinder2::UI {
@@ -45,10 +47,13 @@ namespace PointerFinder2::UI {
         void onStructureTreeSelectionChanged();
         void onRefreshRamClicked();
         void onGoToAddressClicked();
-        void onActiveStructureComboChanged(int index);
-        void onNewStructureClicked();
-        void onDeleteStructureClicked();
         void onViewModeChanged();
+
+        // RA Game Data & Dissection slots
+        void onAddressComboChanged(int index);
+        void onSaveUserTxtClicked();
+        void onRevertToServerClicked();
+        void onResetClicked();
 
         // Panel 3 & Synchronization slots
         void onToggleCodeNotePanelClicked();
@@ -63,9 +68,10 @@ namespace PointerFinder2::UI {
         // UI Controls
         QSplitter* m_mainSplitter = nullptr;
 
-        QComboBox* m_structureSelectCombo = nullptr;
-        QPushButton* m_newStructureBtn = nullptr;
-        QPushButton* m_deleteStructureBtn = nullptr;
+        QComboBox* m_addressSelectCombo = nullptr;
+        QPushButton* m_saveUserBtn = nullptr;
+        QPushButton* m_revertServerBtn = nullptr;
+        QPushButton* m_resetBtn = nullptr;
         QPushButton* m_toggleCodeNoteBtn = nullptr;
 
         // Panel 1: Structure Hierarchy
@@ -102,11 +108,24 @@ namespace PointerFinder2::UI {
         QPushButton* m_copyCodeNoteBtn = nullptr;
         QPlainTextEdit* m_codeNoteTextEdit = nullptr;
 
-        struct StructureItemData {
-            QString name;
-            QString baseAddress;
-            QString codeNoteText;
-            QString headerComment;
+        struct RaCodeNote {
+            uint32_t address = 0;
+            QString addressHex;
+            QString noteText;
+            QString title;
+            QString author;
+            bool isModified = false;
+            bool isLocalOnly = false;
+        };
+
+        struct RaGameData {
+            QString gameId;
+            QString gameTitle;
+            QString raVersionLine;
+            QString notesJsonPath;
+            QString userTxtPath;
+            std::vector<RaCodeNote> notes;
+            bool isValid = false;
         };
 
         struct ScopeMatch {
@@ -123,19 +142,27 @@ namespace PointerFinder2::UI {
             int originalIndex = 0;
         };
 
-        std::vector<StructureItemData> m_structures;
-        int m_currentStructureIndex = 0;
+        RaGameData m_gameData;
         uint32_t m_currentViewerSelectedAddress = 0;
 
         std::vector<uint8_t> m_snapshotMemory;
 
         bool m_isSyncing = false;
+        bool m_isLoadingSettings = false; // Guard to prevent premature settings overwriting during initialization
         int m_lastCodeNotePanelWidth = 330;
         QString m_headerComment;
 
         void setupLayout();
         void loadWorkspaceSettings();
         void saveWorkspaceSettings();
+
+        // RA Data Pipeline
+        QString resolveRaDataDirectory() const;
+        bool loadActiveGameData();
+        void populateAddressDropdown();
+        void selectAddressInUI(uint32_t address);
+        bool saveActiveNoteToUserTxt();
+        void updateToolbarButtonStates();
 
         std::optional<uint32_t> readMemoryDword(uint32_t address);
         void recalculateTreeAddresses();

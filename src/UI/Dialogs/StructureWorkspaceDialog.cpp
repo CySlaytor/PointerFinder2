@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "StructureWorkspaceDialog.h"
 
 #include "../../Common/EndianUtils.h"
@@ -6,6 +7,8 @@
 #include "../../Models/GlobalSettings.h"
 #include "../Styles/ThemeManager.h"
 
+#include <windows.h>
+#include <psapi.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -13,6 +16,8 @@
 #include <unordered_map>
 #include <QApplication>
 #include <QClipboard>
+#include <QDir>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -21,11 +26,57 @@
 #include <QRegularExpression>
 #include <QSettings>
 #include <QSplitter>
+#include <QStandardPaths>
+#include <QTextStream>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
 
     using namespace PointerFinder2::DataModels;
+
+    static QString unescapeUserTxt(const QString& in) {
+        QString out;
+        out.reserve(in.length());
+        for (int i = 0; i < in.length(); ++i) {
+            if (in[i] == '\\' && i + 1 < in.length()) {
+                QChar next = in[i + 1];
+                if (next == 'r') { out.append('\r'); i++; }
+                else if (next == 'n') { out.append('\n'); i++; }
+                else if (next == 't') { out.append('\t'); i++; }
+                else if (next == '"') { out.append('"'); i++; }
+                else if (next == '\\') { out.append('\\'); i++; }
+                else { out.append(next); i++; }
+            }
+            else {
+                out.append(in[i]);
+            }
+        }
+        return out;
+    }
+
+    static QString escapeUserTxt(const QString& in) {
+        QString out;
+        out.reserve(in.length() * 2);
+        for (int i = 0; i < in.length(); ++i) {
+            QChar c = in[i];
+            if (c == '\r') { out.append("\\r"); }
+            else if (c == '\n') { out.append("\\n"); }
+            else if (c == '\t') { out.append("\\t"); }
+            else if (c == '"') { out.append("\\\""); }
+            else if (c == '\\') { out.append("\\\\"); }
+            else { out.append(c); }
+        }
+        return out;
+    }
+
+    static QString extractTitleFromNote(const QString& noteText) {
+        QString trimmed = noteText.trimmed();
+        if (trimmed.isEmpty()) return "Untitled Note";
+        QString firstLine = trimmed.split(QRegularExpression("[\r\n]+")).first().trimmed();
+        if (firstLine.length() > 60) firstLine = firstLine.left(57) + "...";
+        return firstLine;
+    }
 
     StructureWorkspaceDialog::StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent)
         : QDialog(parent), m_manager(manager) {
@@ -40,6 +91,8 @@ namespace PointerFinder2::UI {
 
         if (m_manager && m_manager->isAttached()) {
             refreshMemorySnapshot();
+            loadActiveGameData();
+            populateAddressDropdown();
         }
         else {
             m_ramStatusLabel->setText("Emulator not attached.");
@@ -62,17 +115,30 @@ namespace PointerFinder2::UI {
 
         // Top Toolbar
         auto* topToolbar = new QHBoxLayout();
-        topToolbar->addWidget(new QLabel("Active Structure:", this));
+        topToolbar->addWidget(new QLabel("Dissect Address:", this));
 
-        m_structureSelectCombo = new QComboBox(this);
-        m_structureSelectCombo->setMinimumWidth(200);
-        topToolbar->addWidget(m_structureSelectCombo);
+        m_addressSelectCombo = new QComboBox(this);
+        m_addressSelectCombo->setMinimumWidth(340);
+        topToolbar->addWidget(m_addressSelectCombo);
 
-        m_newStructureBtn = new QPushButton("New Structure...", this);
-        m_deleteStructureBtn = new QPushButton("Delete", this);
-        topToolbar->addWidget(m_newStructureBtn);
-        topToolbar->addWidget(m_deleteStructureBtn);
-        topToolbar->addSpacing(20);
+        m_saveUserBtn = new QPushButton("Save to User.txt", this);
+        m_saveUserBtn->setIcon(getThemeIcon(":/icons/save.svg"));
+        m_saveUserBtn->setShortcut(QKeySequence::Save);
+        m_saveUserBtn->setToolTip("Save active note override to User.txt (Ctrl+S)");
+        topToolbar->addWidget(m_saveUserBtn);
+
+        m_revertServerBtn = new QPushButton("Revert to Server", this);
+        m_revertServerBtn->setIcon(getThemeIcon(":/icons/undo.svg"));
+        m_revertServerBtn->setToolTip("Remove local override from User.txt and restore original server note");
+        m_revertServerBtn->setEnabled(false);
+        topToolbar->addWidget(m_revertServerBtn);
+
+        m_resetBtn = new QPushButton("Reset", this);
+        m_resetBtn->setIcon(getThemeIcon(":/icons/load.svg"));
+        m_resetBtn->setToolTip("Reload Notes.json and User.txt from disk if modified externally");
+        topToolbar->addWidget(m_resetBtn);
+
+        topToolbar->addSpacing(15);
 
         m_toggleCodeNoteBtn = new QPushButton("Code Note Panel", this);
         m_toggleCodeNoteBtn->setCheckable(true);
@@ -202,9 +268,9 @@ namespace PointerFinder2::UI {
 
         m_styleCombo = new QComboBox(m_rightContainer);
         m_styleCombo->addItems({
-            "Unicode Tree (├─)",
+            "Plusses (+)",
             "Dots (.)",
-            "Plusses (+)"
+            "Unicode Tree (├─)"
         });
         fixerHeaderRow->addWidget(m_styleCombo);
 
@@ -265,13 +331,16 @@ namespace PointerFinder2::UI {
         connect(m_baseAddressEdit, &QLineEdit::textChanged, this, [this]() {
             recalculateTreeAddresses();
             syncTreeToCodeNoteText();
+            updateToolbarButtonStates();
         });
 
         connect(m_viewModeGroup, &QButtonGroup::idClicked, this, &StructureWorkspaceDialog::onViewModeChanged);
 
-        connect(m_newStructureBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onNewStructureClicked);
-        connect(m_deleteStructureBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onDeleteStructureClicked);
-        connect(m_structureSelectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onActiveStructureComboChanged);
+        // RA Data controls
+        connect(m_addressSelectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onAddressComboChanged);
+        connect(m_saveUserBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onSaveUserTxtClicked);
+        connect(m_revertServerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onRevertToServerClicked);
+        connect(m_resetBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onResetClicked);
 
         // Code note sync & panel connections
         connect(m_toggleCodeNoteBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onToggleCodeNotePanelClicked);
@@ -280,6 +349,447 @@ namespace PointerFinder2::UI {
         connect(m_indentDescCheck, &QCheckBox::checkStateChanged, this, &StructureWorkspaceDialog::onHierarchyStyleChanged);
         connect(m_fixHierarchyBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onFixHierarchyClicked);
         connect(m_copyCodeNoteBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onCopyCodeNoteClicked);
+    }
+
+    QString StructureWorkspaceDialog::resolveRaDataDirectory() const {
+        if (!m_manager || !m_manager->isAttached()) return QString();
+
+        HANDLE hProcess = static_cast<HANDLE>(m_manager->getProcessHandle());
+        if (!hProcess) return QString();
+
+        wchar_t exePathBuf[MAX_PATH] = { 0 };
+        DWORD size = MAX_PATH;
+        if (QueryFullProcessImageNameW(hProcess, 0, exePathBuf, &size) == 0) {
+            if (GetModuleFileNameExW(hProcess, NULL, exePathBuf, MAX_PATH) == 0) {
+                return QString();
+            }
+        }
+
+        QFileInfo exeInfo(QString::fromWCharArray(exePathBuf));
+        QDir exeDir = exeInfo.dir();
+
+        // 1. Direct portable directory: <exeDir>/RACache/Data
+        QDir candidate1(exeDir.filePath("RACache/Data"));
+        if (candidate1.exists()) {
+            return candidate1.absolutePath();
+        }
+
+        // 2. Parent directory: <exeDir>/../RACache/Data
+        QDir candidate2(exeDir.filePath("../RACache/Data"));
+        if (candidate2.exists()) {
+            return candidate2.absolutePath();
+        }
+
+        // 3. Inspect module list for RA_Integration.dll
+        HMODULE hMods[1024];
+        DWORD cbNeeded = 0;
+        if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
+            int count = static_cast<int>(cbNeeded / sizeof(HMODULE));
+            for (int i = 0; i < count; ++i) {
+                wchar_t modNameBuf[MAX_PATH];
+                if (GetModuleFileNameExW(hProcess, hMods[i], modNameBuf, MAX_PATH)) {
+                    QString modPath = QString::fromWCharArray(modNameBuf);
+                    if (modPath.contains("RA_Integration", Qt::CaseInsensitive)) {
+                        QDir raDir = QFileInfo(modPath).dir();
+                        QDir raCandidate(raDir.filePath("RACache/Data"));
+                        if (raCandidate.exists()) return raCandidate.absolutePath();
+                    }
+                }
+            }
+        }
+
+        // 4. Global AppData fallback: %APPDATA%/RetroAchievements/RACache/Data
+        QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir globalCandidate(QDir(appData).filePath("../RetroAchievements/RACache/Data"));
+        if (globalCandidate.exists()) {
+            return globalCandidate.absolutePath();
+        }
+
+        return QString();
+    }
+
+    bool StructureWorkspaceDialog::loadActiveGameData() {
+        QString dataDirStr = resolveRaDataDirectory();
+        if (dataDirStr.isEmpty()) return false;
+
+        QDir dataDir(dataDirStr);
+        QFileInfoList notesFiles = dataDir.entryInfoList({ "*-Notes.json" }, QDir::Files, QDir::Time);
+        if (notesFiles.isEmpty()) return false;
+
+        QFileInfo bestNotesFile = notesFiles.first();
+        QString baseName = bestNotesFile.fileName();
+        QString gameId = baseName.left(baseName.indexOf('-'));
+
+        QString userTxtFileName = gameId + "-User.txt";
+        QFileInfo userTxtFile(dataDir.filePath(userTxtFileName));
+
+        m_gameData = RaGameData();
+        m_gameData.gameId = gameId;
+        m_gameData.notesJsonPath = bestNotesFile.absoluteFilePath();
+        m_gameData.userTxtPath = userTxtFile.absoluteFilePath();
+
+        // 1. Read Notes.json (Read-Only Server baseline)
+        QFile jsonFile(m_gameData.notesJsonPath);
+        if (jsonFile.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
+            if (doc.isArray()) {
+                QJsonArray arr = doc.array();
+                for (const auto& itemVal : arr) {
+                    if (itemVal.isObject()) {
+                        QJsonObject obj = itemVal.toObject();
+                        RaCodeNote note;
+                        note.author = obj["User"].toString();
+                        note.addressHex = obj["Address"].toString();
+                        bool ok = false;
+                        note.address = note.addressHex.toUInt(&ok, 16);
+                        note.noteText = obj["Note"].toString();
+                        note.title = extractTitleFromNote(note.noteText);
+                        note.isModified = false;
+                        note.isLocalOnly = false;
+                        m_gameData.notes.push_back(note);
+                    }
+                }
+            }
+            jsonFile.close();
+        }
+
+        // 2. Read User.txt (Local overlay)
+        QFile txtFile(m_gameData.userTxtPath);
+        if (txtFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream stream(&txtFile);
+            if (!stream.atEnd()) {
+                m_gameData.raVersionLine = stream.readLine(); // Line 1: version string (verbatim, uninterpreted)
+            }
+            if (!stream.atEnd()) {
+                m_gameData.gameTitle = stream.readLine();     // Line 2: game title
+            }
+
+            while (!stream.atEnd()) {
+                QString line = stream.readLine();
+                if (line.startsWith("N0:0x", Qt::CaseInsensitive)) {
+                    int firstQuote = line.indexOf('"');
+                    int lastQuote = line.lastIndexOf('"');
+                    if (firstQuote != -1 && lastQuote > firstQuote) {
+                        QString addrPart = line.mid(3, firstQuote - 3).trimmed();
+                        if (addrPart.endsWith(':')) addrPart.chop(1);
+                        bool ok = false;
+                        uint32_t addr = addrPart.toUInt(&ok, 16);
+
+                        QString rawNoteContent = line.mid(firstQuote + 1, lastQuote - firstQuote - 1);
+                        QString unescapedNote = unescapeUserTxt(rawNoteContent);
+
+                        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+                            return n.address == addr;
+                        });
+
+                        if (it != m_gameData.notes.end()) {
+                            it->noteText = unescapedNote;
+                            it->title = extractTitleFromNote(unescapedNote);
+                            it->isModified = true;
+                        }
+                        else {
+                            RaCodeNote newNote;
+                            newNote.address = addr;
+                            newNote.addressHex = QString("0x%1").arg(addr, 8, 16, QChar('0'));
+                            newNote.noteText = unescapedNote;
+                            newNote.title = extractTitleFromNote(unescapedNote);
+                            newNote.isModified = false;
+                            newNote.isLocalOnly = true;
+                            newNote.author = "Local";
+                            m_gameData.notes.push_back(newNote);
+                        }
+                    }
+                }
+            }
+            txtFile.close();
+        }
+
+        m_gameData.isValid = true;
+        return true;
+    }
+
+    void StructureWorkspaceDialog::populateAddressDropdown() {
+        m_addressSelectCombo->blockSignals(true);
+        m_addressSelectCombo->clear();
+
+        if (!m_gameData.isValid || m_gameData.notes.empty()) {
+            m_addressSelectCombo->addItem("No active game code notes detected.");
+            m_addressSelectCombo->blockSignals(false);
+            return;
+        }
+
+        // Sort by address
+        std::sort(m_gameData.notes.begin(), m_gameData.notes.end(), [](const RaCodeNote& a, const RaCodeNote& b) {
+            return a.address < b.address;
+        });
+
+        int selectIdx = 0;
+        QString currentBase = m_baseAddressEdit->text().trimmed();
+        bool ok = false;
+        uint32_t currentAddr = currentBase.toUInt(&ok, 16);
+
+        for (size_t i = 0; i < m_gameData.notes.size(); ++i) {
+            const auto& n = m_gameData.notes[i];
+            QString tag = n.isLocalOnly ? "(Local)" : (n.isModified ? "(Modified)" : "(Server)");
+            QString itemText = QString("0x%1 - %2 %3")
+                .arg(QString::number(n.address, 16).toUpper().rightJustified(8, '0'))
+                .arg(n.title)
+                .arg(tag);
+
+            m_addressSelectCombo->addItem(itemText, n.address);
+
+            if (ok && n.address == currentAddr) {
+                selectIdx = static_cast<int>(i);
+            }
+        }
+
+        m_addressSelectCombo->setCurrentIndex(selectIdx);
+        m_addressSelectCombo->blockSignals(false);
+
+        if (m_addressSelectCombo->count() > 0 && ok && currentAddr != 0) {
+            selectAddressInUI(currentAddr);
+        }
+        else if (m_addressSelectCombo->count() > 0) {
+            selectAddressInUI(m_gameData.notes[0].address);
+        }
+    }
+
+    void StructureWorkspaceDialog::selectAddressInUI(uint32_t address) {
+        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+            return n.address == address;
+        });
+
+        if (it == m_gameData.notes.end()) return;
+
+        QString addrHex = QString::number(address, 16).toUpper().rightJustified(8, '0');
+        m_baseAddressEdit->setText(addrHex);
+
+        m_isSyncing = true;
+        m_codeNoteTextEdit->setPlainText(it->noteText);
+        m_isSyncing = false;
+
+        onFixHierarchyClicked();
+        navigateToAddress(address);
+        updateToolbarButtonStates();
+    }
+
+    void StructureWorkspaceDialog::onAddressComboChanged(int index) {
+        if (index < 0 || index >= m_addressSelectCombo->count()) return;
+        QVariant comboData = m_addressSelectCombo->itemData(index);
+        if (!comboData.isValid()) return;
+
+        uint32_t addr = comboData.toUInt();
+        selectAddressInUI(addr);
+    }
+
+    bool StructureWorkspaceDialog::saveActiveNoteToUserTxt() {
+        if (!m_gameData.isValid || m_gameData.userTxtPath.isEmpty()) return false;
+
+        QString baseText = m_baseAddressEdit->text().trimmed();
+        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
+        bool ok = false;
+        uint32_t activeAddr = baseText.toUInt(&ok, 16);
+        if (!ok || activeAddr == 0) return false;
+
+        QString currentNote = m_codeNoteTextEdit->toPlainText();
+
+        // 1. Update in-memory m_gameData
+        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+            return n.address == activeAddr;
+        });
+
+        if (it != m_gameData.notes.end()) {
+            it->noteText = currentNote;
+            it->title = extractTitleFromNote(currentNote);
+            it->isModified = !it->isLocalOnly;
+        }
+        else {
+            RaCodeNote newNote;
+            newNote.address = activeAddr;
+            newNote.addressHex = QString("0x%1").arg(activeAddr, 8, 16, QChar('0'));
+            newNote.noteText = currentNote;
+            newNote.title = extractTitleFromNote(currentNote);
+            newNote.isLocalOnly = true;
+            newNote.isModified = false;
+            newNote.author = "Local";
+            m_gameData.notes.push_back(newNote);
+        }
+
+        // 2. Read existing User.txt to refresh passthrough lines
+        QStringList existingLines;
+        QFile readFile(m_gameData.userTxtPath);
+        if (readFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&readFile);
+            while (!in.atEnd()) {
+                existingLines.append(in.readLine());
+            }
+            readFile.close();
+        }
+
+        QString vLine = !m_gameData.raVersionLine.isEmpty() ? m_gameData.raVersionLine : "1.4.2.0";
+        QString gTitle = !m_gameData.gameTitle.isEmpty() ? m_gameData.gameTitle : "Unknown Game";
+
+        if (!existingLines.isEmpty()) {
+            vLine = existingLines[0];
+            if (existingLines.size() > 1) gTitle = existingLines[1];
+        }
+
+        // Reconstruct User.txt
+        QStringList newFileLines;
+        newFileLines.append(vLine);
+        newFileLines.append(gTitle);
+
+        QString activeAddrStr = QString("0x%1").arg(activeAddr, 8, 16, QChar('0')).toLower();
+        bool wroteActiveNote = false;
+
+        for (int i = 2; i < existingLines.size(); ++i) {
+            const QString& line = existingLines[i];
+            if (line.startsWith("N0:0x", Qt::CaseInsensitive)) {
+                int firstQuote = line.indexOf('"');
+                QString addrPart = line.mid(3, firstQuote - 3).trimmed();
+                if (addrPart.endsWith(':')) addrPart.chop(1);
+                bool parseOk = false;
+                uint32_t lineAddr = addrPart.toUInt(&parseOk, 16);
+
+                if (parseOk && lineAddr == activeAddr) {
+                    QString escaped = escapeUserTxt(currentNote);
+                    newFileLines.append(QString("N0:%1:\"%2\"").arg(activeAddrStr, escaped));
+                    wroteActiveNote = true;
+                    continue;
+                }
+            }
+            newFileLines.append(line);
+        }
+
+        if (!wroteActiveNote) {
+            QString escaped = escapeUserTxt(currentNote);
+            newFileLines.append(QString("N0:%1:\"%2\"").arg(activeAddrStr, escaped));
+        }
+
+        // Write out atomically via temp file
+        QString tempPath = m_gameData.userTxtPath + ".tmp";
+        QFile writeFile(tempPath);
+        if (!writeFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            return false;
+        }
+
+        QTextStream out(&writeFile);
+        for (const QString& l : newFileLines) {
+            out << l << "\n";
+        }
+        writeFile.close();
+
+        QFile::remove(m_gameData.userTxtPath);
+        QFile::rename(tempPath, m_gameData.userTxtPath);
+
+        populateAddressDropdown();
+        updateToolbarButtonStates();
+        return true;
+    }
+
+    void StructureWorkspaceDialog::onSaveUserTxtClicked() {
+        if (saveActiveNoteToUserTxt()) {
+            QString origText = m_saveUserBtn->text();
+            m_saveUserBtn->setText("✓ Saved!");
+            m_saveUserBtn->setEnabled(false);
+            QTimer::singleShot(1500, this, [this, origText]() {
+                m_saveUserBtn->setText(origText);
+                m_saveUserBtn->setEnabled(true);
+            });
+        }
+    }
+
+    void StructureWorkspaceDialog::onRevertToServerClicked() {
+        if (!m_gameData.isValid || m_gameData.userTxtPath.isEmpty()) return;
+
+        QString baseText = m_baseAddressEdit->text().trimmed();
+        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
+        bool ok = false;
+        uint32_t activeAddr = baseText.toUInt(&ok, 16);
+        if (!ok || activeAddr == 0) return;
+
+        // Remove the N0 line from User.txt
+        QFile readFile(m_gameData.userTxtPath);
+        if (!readFile.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+
+        QStringList lines;
+        QTextStream in(&readFile);
+        while (!in.atEnd()) {
+            lines.append(in.readLine());
+        }
+        readFile.close();
+
+        QStringList remainingLines;
+        if (!lines.isEmpty()) remainingLines.append(lines[0]);
+        if (lines.size() > 1) remainingLines.append(lines[1]);
+
+        for (int i = 2; i < lines.size(); ++i) {
+            const QString& line = lines[i];
+            if (line.startsWith("N0:0x", Qt::CaseInsensitive)) {
+                int firstQuote = line.indexOf('"');
+                QString addrPart = line.mid(3, firstQuote - 3).trimmed();
+                if (addrPart.endsWith(':')) addrPart.chop(1);
+                bool parseOk = false;
+                uint32_t lineAddr = addrPart.toUInt(&parseOk, 16);
+                if (parseOk && lineAddr == activeAddr) {
+                    continue; // Skip override
+                }
+            }
+            remainingLines.append(line);
+        }
+
+        QFile writeFile(m_gameData.userTxtPath);
+        if (writeFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&writeFile);
+            for (const QString& l : remainingLines) {
+                out << l << "\n";
+            }
+            writeFile.close();
+        }
+
+        loadActiveGameData();
+        populateAddressDropdown();
+        selectAddressInUI(activeAddr);
+    }
+
+    void StructureWorkspaceDialog::onResetClicked() {
+        uint32_t currentAddr = 0;
+        QString baseText = m_baseAddressEdit->text().trimmed();
+        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
+        bool ok = false;
+        currentAddr = baseText.toUInt(&ok, 16);
+
+        loadActiveGameData();
+        populateAddressDropdown();
+        if (currentAddr != 0) {
+            selectAddressInUI(currentAddr);
+        }
+
+        QString origText = m_resetBtn->text();
+        m_resetBtn->setText("✓ Refreshed!");
+        m_resetBtn->setEnabled(false);
+        QTimer::singleShot(1500, this, [this, origText]() {
+            m_resetBtn->setText(origText);
+            m_resetBtn->setEnabled(true);
+        });
+    }
+
+    void StructureWorkspaceDialog::updateToolbarButtonStates() {
+        QString baseText = m_baseAddressEdit->text().trimmed();
+        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
+        bool ok = false;
+        uint32_t activeAddr = baseText.toUInt(&ok, 16);
+
+        bool canRevert = false;
+        if (ok && m_gameData.isValid) {
+            auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+                return n.address == activeAddr;
+            });
+            if (it != m_gameData.notes.end() && it->isModified) {
+                canRevert = true;
+            }
+        }
+        m_revertServerBtn->setEnabled(canRevert);
     }
 
     void StructureWorkspaceDialog::onViewModeChanged() {
@@ -410,7 +920,6 @@ namespace PointerFinder2::UI {
             return;
         }
 
-        // Check if node itself resolved to a pointer value
         uint32_t resolved = resolveNodeAddress(current);
         if (resolved != 0) {
             auto valOpt = readMemoryDword(resolved);
@@ -805,59 +1314,6 @@ namespace PointerFinder2::UI {
         }
     }
 
-    void StructureWorkspaceDialog::onNewStructureClicked() {
-        bool ok = false;
-        QString name = QInputDialog::getText(this, "New Structure", "Enter structure name:", QLineEdit::Normal, "New Struct", &ok);
-        if (ok && !name.trimmed().isEmpty()) {
-            StructureItemData item;
-            item.name = name.trimmed();
-            item.baseAddress = m_baseAddressEdit->text().trimmed();
-            item.headerComment = m_headerComment;
-            m_structures.push_back(item);
-            m_structureSelectCombo->addItem(item.name);
-            m_structureSelectCombo->setCurrentIndex(m_structureSelectCombo->count() - 1);
-            saveWorkspaceSettings();
-        }
-    }
-
-    void StructureWorkspaceDialog::onDeleteStructureClicked() {
-        if (m_structures.size() <= 1) {
-            m_structureTree->clear();
-            m_codeNoteTextEdit->clear();
-            m_headerComment.clear();
-            return;
-        }
-
-        int idx = m_structureSelectCombo->currentIndex();
-        if (idx >= 0 && idx < static_cast<int>(m_structures.size())) {
-            m_structures.erase(m_structures.begin() + idx);
-            m_structureSelectCombo->removeItem(idx);
-            saveWorkspaceSettings();
-        }
-    }
-
-    void StructureWorkspaceDialog::onActiveStructureComboChanged(int index) {
-        if (index < 0 || index >= static_cast<int>(m_structures.size())) return;
-
-        // Save current active structure state before switching
-        if (m_currentStructureIndex >= 0 && m_currentStructureIndex < static_cast<int>(m_structures.size()) && m_currentStructureIndex != index) {
-            m_structures[m_currentStructureIndex].baseAddress = m_baseAddressEdit->text().trimmed();
-            m_structures[m_currentStructureIndex].codeNoteText = m_codeNoteTextEdit->toPlainText();
-            m_structures[m_currentStructureIndex].headerComment = m_headerComment;
-        }
-
-        m_currentStructureIndex = index;
-        m_baseAddressEdit->setText(m_structures[index].baseAddress);
-        m_headerComment = m_structures[index].headerComment;
-
-        m_isSyncing = true;
-        m_codeNoteTextEdit->setPlainText(m_structures[index].codeNoteText);
-        m_isSyncing = false;
-
-        onFixHierarchyClicked();
-        saveWorkspaceSettings();
-    }
-
     void StructureWorkspaceDialog::onToggleCodeNotePanelClicked() {
         QList<int> sizes = m_mainSplitter->sizes();
         if (sizes.size() < 3) return;
@@ -956,7 +1412,7 @@ namespace PointerFinder2::UI {
 
                 bool hasBoxChar = false;
                 for (QChar c : prefix) {
-                    if (c == L'│' || c == L'├' || c == L'└' || c == L'┬' || c == L'─') {
+                    if (c == L'│' || c == ' ' || c == L'├' || c == L'└' || c == L'┬' || c == L'─') {
                         hasBoxChar = true;
                         break;
                     }
@@ -1272,12 +1728,6 @@ namespace PointerFinder2::UI {
         recalculateTreeAddresses();
         updateOffsetPreview();
 
-        if (m_currentStructureIndex >= 0 && m_currentStructureIndex < static_cast<int>(m_structures.size())) {
-            m_structures[m_currentStructureIndex].codeNoteText = finalResult.trimmed();
-            m_structures[m_currentStructureIndex].baseAddress = m_baseAddressEdit->text().trimmed();
-            m_structures[m_currentStructureIndex].headerComment = m_headerComment;
-        }
-
         saveWorkspaceSettings();
         m_isSyncing = false;
     }
@@ -1317,7 +1767,7 @@ namespace PointerFinder2::UI {
             };
 
         auto rootNodes = treeToNodes(nullptr);
-        QString style = m_styleCombo ? m_styleCombo->currentText() : "Unicode Tree (├─)";
+        QString style = m_styleCombo ? m_styleCombo->currentText() : "Plusses (+)";
         bool indentDesc = m_indentDescCheck ? m_indentDescCheck->isChecked() : true;
 
         StructureWorkspaceDialog* nonConstThis = const_cast<StructureWorkspaceDialog*>(this);
@@ -1337,19 +1787,17 @@ namespace PointerFinder2::UI {
             m_codeNoteTextEdit->setTextCursor(cur);
         }
 
-        if (m_currentStructureIndex >= 0 && m_currentStructureIndex < static_cast<int>(m_structures.size())) {
-            m_structures[m_currentStructureIndex].codeNoteText = newText;
-            m_structures[m_currentStructureIndex].baseAddress = m_baseAddressEdit->text().trimmed();
-            m_structures[m_currentStructureIndex].headerComment = m_headerComment;
-        }
-
         saveWorkspaceSettings();
         m_isSyncing = false;
     }
 
     void StructureWorkspaceDialog::loadWorkspaceSettings() {
-        QSettings settings;
+        m_isLoadingSettings = true;
+
+        QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+        QSettings settings(iniPath, QSettings::IniFormat);
         settings.beginGroup("DissectStructure");
+
         if (settings.contains("geometry")) {
             restoreGeometry(settings.value("geometry").toByteArray());
         }
@@ -1364,49 +1812,15 @@ namespace PointerFinder2::UI {
         }
         onViewModeChanged();
 
+        m_styleCombo->blockSignals(true);
+        m_indentDescCheck->blockSignals(true);
+
         QString style = settings.value("hierarchyStyle", "Plusses (+)").toString();
         m_styleCombo->setCurrentText(style);
         m_indentDescCheck->setChecked(settings.value("indentDescriptions", true).toBool());
 
-        int structCount = settings.value("structureCount", 0).toInt();
-        m_structures.clear();
-        m_structureSelectCombo->blockSignals(true);
-        m_structureSelectCombo->clear();
-
-        if (structCount > 0) {
-            for (int i = 0; i < structCount; ++i) {
-                StructureItemData item;
-                item.name = settings.value(QString("structure_%1_name").arg(i), QString("Structure %1").arg(i + 1)).toString();
-                item.baseAddress = settings.value(QString("structure_%1_base").arg(i), "").toString();
-                item.codeNoteText = settings.value(QString("structure_%1_text").arg(i), "").toString();
-                item.headerComment = settings.value(QString("structure_%1_header").arg(i), "").toString();
-                m_structures.push_back(item);
-                m_structureSelectCombo->addItem(item.name);
-            }
-        }
-        else {
-            StructureItemData defaultStruct;
-            defaultStruct.name = "Entity Struct";
-            defaultStruct.baseAddress = "004934dc";
-            m_structures.push_back(defaultStruct);
-            m_structureSelectCombo->addItem(defaultStruct.name);
-        }
-
-        int activeIdx = settings.value("activeStructureIndex", 0).toInt();
-        if (activeIdx < 0 || activeIdx >= static_cast<int>(m_structures.size())) {
-            activeIdx = 0;
-        }
-        m_currentStructureIndex = activeIdx;
-        m_structureSelectCombo->setCurrentIndex(activeIdx);
-        m_structureSelectCombo->blockSignals(false);
-
-        // Load active structure
-        m_baseAddressEdit->setText(m_structures[activeIdx].baseAddress);
-        m_headerComment = m_structures[activeIdx].headerComment;
-        if (!m_structures[activeIdx].codeNoteText.isEmpty()) {
-            m_codeNoteTextEdit->setPlainText(m_structures[activeIdx].codeNoteText);
-            onFixHierarchyClicked();
-        }
+        m_styleCombo->blockSignals(false);
+        m_indentDescCheck->blockSignals(false);
 
         QList<int> sizes = m_mainSplitter->sizes();
         if (sizes.size() > 2) {
@@ -1414,11 +1828,17 @@ namespace PointerFinder2::UI {
         }
 
         settings.endGroup();
+
+        m_isLoadingSettings = false;
     }
 
     void StructureWorkspaceDialog::saveWorkspaceSettings() {
-        QSettings settings;
+        if (m_isLoadingSettings) return;
+
+        QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+        QSettings settings(iniPath, QSettings::IniFormat);
         settings.beginGroup("DissectStructure");
+
         settings.setValue("geometry", saveGeometry());
         settings.setValue("splitterState", m_mainSplitter->saveState());
         settings.setValue("lastCodeNoteWidth", m_lastCodeNotePanelWidth);
@@ -1430,20 +1850,6 @@ namespace PointerFinder2::UI {
         settings.setValue("hierarchyStyle", m_styleCombo->currentText());
         settings.setValue("indentDescriptions", m_indentDescCheck->isChecked());
 
-        if (m_currentStructureIndex >= 0 && m_currentStructureIndex < static_cast<int>(m_structures.size())) {
-            m_structures[m_currentStructureIndex].baseAddress = m_baseAddressEdit->text().trimmed();
-            m_structures[m_currentStructureIndex].codeNoteText = m_codeNoteTextEdit->toPlainText();
-            m_structures[m_currentStructureIndex].headerComment = m_headerComment;
-        }
-
-        settings.setValue("structureCount", static_cast<int>(m_structures.size()));
-        settings.setValue("activeStructureIndex", m_currentStructureIndex);
-        for (size_t i = 0; i < m_structures.size(); ++i) {
-            settings.setValue(QString("structure_%1_name").arg(i), m_structures[i].name);
-            settings.setValue(QString("structure_%1_base").arg(i), m_structures[i].baseAddress);
-            settings.setValue(QString("structure_%1_text").arg(i), m_structures[i].codeNoteText);
-            settings.setValue(QString("structure_%1_header").arg(i), m_structures[i].headerComment);
-        }
         settings.endGroup();
     }
 
