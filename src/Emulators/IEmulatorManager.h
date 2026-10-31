@@ -49,6 +49,7 @@ namespace PointerFinder2::Emulators {
 
         virtual DataModels::AppSettings getDefaultSettings() const = 0;
         virtual int64_t getIndexForStateDump(uint32_t address) const = 0;
+        virtual QString getPlatformPointerTypeDescription() const = 0;
     };
 
 }

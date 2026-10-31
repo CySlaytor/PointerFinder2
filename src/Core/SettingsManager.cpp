@@ -48,6 +48,7 @@ namespace PointerFinder2::Core {
         GlobalSettings::codeNoteSuffix = ini.value("CodeNoteSuffix", GlobalSettings::codeNoteSuffix).toString();
         GlobalSettings::codeNoteAlignSuffixes = ini.value("CodeNoteAlignSuffixes", GlobalSettings::codeNoteAlignSuffixes).toBool();
         GlobalSettings::codeNoteSuffixOnLastLineOnly = ini.value("CodeNoteSuffixOnLastLineOnly", GlobalSettings::codeNoteSuffixOnLastLineOnly).toBool();
+        GlobalSettings::codeNoteAutoPopulatePointers = ini.value("CodeNoteAutoPopulatePointers", GlobalSettings::codeNoteAutoPopulatePointers).toBool();
         ini.endGroup();
     }
 
@@ -66,6 +67,7 @@ namespace PointerFinder2::Core {
         ini.setValue("CodeNoteSuffix", GlobalSettings::codeNoteSuffix);
         ini.setValue("CodeNoteAlignSuffixes", GlobalSettings::codeNoteAlignSuffixes);
         ini.setValue("CodeNoteSuffixOnLastLineOnly", GlobalSettings::codeNoteSuffixOnLastLineOnly);
+        ini.setValue("CodeNoteAutoPopulatePointers", GlobalSettings::codeNoteAutoPopulatePointers);
         ini.endGroup();
     }
 
@@ -169,6 +171,7 @@ namespace PointerFinder2::Core {
         GlobalSettings::codeNoteSuffix = ini.value("CodeNoteSuffix", GlobalSettings::codeNoteSuffix).toString();
         GlobalSettings::codeNoteAlignSuffixes = ini.value("CodeNoteAlignSuffixes", GlobalSettings::codeNoteAlignSuffixes).toBool();
         GlobalSettings::codeNoteSuffixOnLastLineOnly = ini.value("CodeNoteSuffixOnLastLineOnly", GlobalSettings::codeNoteSuffixOnLastLineOnly).toBool();
+        GlobalSettings::codeNoteAutoPopulatePointers = ini.value("CodeNoteAutoPopulatePointers", GlobalSettings::codeNoteAutoPopulatePointers).toBool();
         ini.endGroup();
 
         return settings;

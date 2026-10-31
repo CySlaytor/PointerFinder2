@@ -108,7 +108,7 @@ namespace PointerFinder2::Core {
         }
     }
 
-    QString CodeNoteHelper::buildCodeNote(const std::vector<int32_t>& offsets, const CodeNoteSettings& settings, const QString& finalMemorySize, const QString& finalDescription) {
+    QString CodeNoteHelper::buildCodeNote(const std::vector<int32_t>& offsets, const CodeNoteSettings& settings, const QString& finalMemorySize, const QString& finalDescription, const QString& pointerTypeTemplate) {
         if (offsets.empty()) return "";
 
         QStringList lines;
@@ -141,6 +141,14 @@ namespace PointerFinder2::Core {
 
             QString padding = settings.AlignSuffixes ? QString(maxLength - line.length(), ' ') : "";
             finalLines << QString("%1%2%3").arg(line).arg(padding).arg(currentSuffix);
+        }
+
+        // Auto-populate intermediate pointer levels with context-aware template if requested and left blank
+        if (settings.AutoPopulatePointers && offsets.size() > 1) {
+            QString ptrTemplate = pointerTypeTemplate.isEmpty() ? QString("[32-bit] Pointer") : pointerTypeTemplate;
+            for (size_t i = 0; i < offsets.size() - 1; ++i) {
+                finalLines[i].append(ptrTemplate);
+            }
         }
 
         if (!finalLines.empty() && (!finalMemorySize.isEmpty() || !finalDescription.isEmpty())) {

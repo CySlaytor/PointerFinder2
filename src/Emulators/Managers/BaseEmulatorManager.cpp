@@ -125,4 +125,8 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return isPotentialPointer(value);
     }
 
+    QString BaseEmulatorManager::getPlatformPointerTypeDescription() const {
+        return "[32-bit] Pointer";
+    }
+
 }

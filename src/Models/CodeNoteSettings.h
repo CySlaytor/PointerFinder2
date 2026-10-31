@@ -13,6 +13,7 @@ namespace PointerFinder2::DataModels {
         QString Suffix;
         bool AlignSuffixes = true;
         bool SuffixOnLastLineOnly = false;
+        bool AutoPopulatePointers = false;
 
         static CodeNoteSettings getFromGlobalSettings() {
             CodeNoteSettings s;
@@ -20,6 +21,7 @@ namespace PointerFinder2::DataModels {
             s.Suffix = GlobalSettings::codeNoteSuffix;
             s.AlignSuffixes = GlobalSettings::codeNoteAlignSuffixes;
             s.SuffixOnLastLineOnly = GlobalSettings::codeNoteSuffixOnLastLineOnly;
+            s.AutoPopulatePointers = GlobalSettings::codeNoteAutoPopulatePointers;
             return s;
         }
     };

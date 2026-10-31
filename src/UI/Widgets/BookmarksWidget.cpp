@@ -272,7 +272,8 @@ namespace PointerFinder2::UI::Controls {
         QAction* copyNoteAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Copy as Code Note");
         connect(copyNoteAct, &QAction::triggered, this, [=]() {
             CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
-            QString note = CodeNoteHelper::buildCodeNote(bm.path.offsets, settings);
+            QString pointerTemplate = m_currentManager ? m_currentManager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+            QString note = CodeNoteHelper::buildCodeNote(bm.path.offsets, settings, "", "", pointerTemplate);
             QApplication::clipboard()->setText(note);
             emit statusMessageRequested("Bookmark path copied as custom code note.");
             });

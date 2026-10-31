@@ -32,6 +32,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         bool areAddressesEquivalent(uint32_t addr1, uint32_t addr2) const override;
         DataModels::AppSettings getDefaultSettings() const override;
         int64_t getIndexForStateDump(uint32_t address) const override;
+        QString getPlatformPointerTypeDescription() const override;
     };
 
 }

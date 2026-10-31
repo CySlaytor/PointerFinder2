@@ -8,6 +8,7 @@ namespace PointerFinder2::DataModels {
 	QString GlobalSettings::codeNoteSuffix = " |";
 	bool GlobalSettings::codeNoteAlignSuffixes = true;
 	bool GlobalSettings::codeNoteSuffixOnLastLineOnly = false;
+	bool GlobalSettings::codeNoteAutoPopulatePointers = false;
 	bool GlobalSettings::sortByLevelFirst = true;
 	QString GlobalSettings::activeTheme = "Dark";
 

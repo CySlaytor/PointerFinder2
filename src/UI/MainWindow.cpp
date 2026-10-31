@@ -17,6 +17,7 @@
 #include "Dialogs/CodeNoteHierarchyFixerDialog.h"
 #include "Dialogs/SettingsDialog.h"
 #include "Dialogs/StateCaptureDialog.h"
+#include "Dialogs/StructureWorkspaceDialog.h"
 #include "Dialogs/UpdateDialog.h"
 #include "StaticRangeFinders/DolphinFileRangeFinderDialog.h"
 #include "StaticRangeFinders/NdsStaticRangeFinderDialog.h"
@@ -68,6 +69,9 @@ namespace PointerFinder2::UI {
         setupUI();
         setUIStateDetached();
 
+        // Install application-level event filter so pasting triggers anywhere launches converter reliably
+        qApp->installEventFilter(this);
+
         connect(&m_resultsManager, &ResultsManager::resultsChanged, this, &MainWindow::onResultsChanged);
         connect(&m_resultsManager, &ResultsManager::sortChanged, this, &MainWindow::onSortChanged);
 
@@ -102,6 +106,9 @@ namespace PointerFinder2::UI {
     }
 
     MainWindow::~MainWindow() {
+        if (qApp) {
+            qApp->removeEventFilter(this);
+        }
         m_arrayWatcher.cancel();
         m_arrayWatcher.waitForFinished();
     }
@@ -365,6 +372,11 @@ namespace PointerFinder2::UI {
         settingsAct->setProperty("iconPath", ":/icons/settings.svg");
 
         auto* toolsMenu = bar->addMenu("&Tools");
+        auto* structAct = toolsMenu->addAction(getThemeIcon(":/icons/range_finder.svg"), "Structure Workspace & Memory Viewer...", this, &MainWindow::onStructureWorkspaceClicked);
+        structAct->setProperty("iconPath", ":/icons/range_finder.svg");
+        structAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
+        structAct->setObjectName("menuStructureWorkspace");
+
         auto* rangeAct = toolsMenu->addAction(getThemeIcon(":/icons/range_finder.svg"), "Static Range Finder...", this, &MainWindow::onStaticRangeFinderClicked);
         rangeAct->setProperty("iconPath", ":/icons/range_finder.svg");
         rangeAct->setEnabled(false);
@@ -419,9 +431,14 @@ namespace PointerFinder2::UI {
     }
 
     bool MainWindow::eventFilter(QObject* obj, QEvent* event) {
-        if (obj == m_tableView && event->type() == QEvent::KeyPress) {
+        if (event->type() == QEvent::KeyPress) {
             QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
             if (keyEvent->matches(QKeySequence::Paste)) {
+                // Allow direct pasting inside the Code Note Converter dialog itself
+                if (m_codeNoteConverterDialog && (obj == m_codeNoteConverterDialog || m_codeNoteConverterDialog->isAncestorOf(qobject_cast<QWidget*>(obj)))) {
+                    return QMainWindow::eventFilter(obj, event);
+                }
+
                 QString clipboardText = QApplication::clipboard()->text().trimmed();
                 if (!clipboardText.isEmpty() && (clipboardText.contains("I:0x") || clipboardText.contains("0xH"))) {
                     onCodeNoteConverterClicked();
@@ -523,6 +540,10 @@ namespace PointerFinder2::UI {
         m_bookmarksWidget->setEmulatorManager(nullptr);
         m_arrayDetectionWidget->clear();
         m_arrayDetectionWidget->setEmulatorManager(nullptr);
+
+        if (m_structureWorkspaceDialog) {
+            m_structureWorkspaceDialog->close();
+        }
 
         setUIStateDetached();
     }
@@ -828,6 +849,18 @@ namespace PointerFinder2::UI {
     void MainWindow::onSettingsClicked() {
         SettingsDialog dialog(this);
         dialog.exec();
+    }
+
+    void MainWindow::onStructureWorkspaceClicked() {
+        if (m_structureWorkspaceDialog) {
+            m_structureWorkspaceDialog->raise();
+            m_structureWorkspaceDialog->activateWindow();
+            return;
+        }
+
+        m_structureWorkspaceDialog = new StructureWorkspaceDialog(m_currentManager.get(), this);
+        m_structureWorkspaceDialog->setAttribute(Qt::WA_DeleteOnClose);
+        m_structureWorkspaceDialog->show();
     }
 
     void MainWindow::onStaticRangeFinderClicked() {
@@ -1259,7 +1292,8 @@ namespace PointerFinder2::UI {
         const auto& results = m_resultsManager.getCurrentResults();
         if (row >= 0 && row < static_cast<int>(results.size())) {
             CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
-            QString note = CodeNoteHelper::buildCodeNote(results[row].offsets, settings);
+            QString ptrTemplate = m_currentManager ? m_currentManager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+            QString note = CodeNoteHelper::buildCodeNote(results[row].offsets, settings, "", "", ptrTemplate);
 
             QApplication::clipboard()->setText(note);
             updateStatus("Copied path as custom code note.");

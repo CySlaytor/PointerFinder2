@@ -25,6 +25,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
 
         bool isPotentialPointer(uint32_t value) const override;
         bool isValidPlatformPointer(uint32_t value) const override;
+        QString getPlatformPointerTypeDescription() const override;
 
     protected:
         uint32_t m_processId = 0;

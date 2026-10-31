@@ -228,11 +228,13 @@ namespace PointerFinder2::UI {
         if (m_lastOffsets.empty()) return;
 
         CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
+        QString pointerTemplate = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
         QString note = CodeNoteHelper::buildCodeNote(
             m_lastOffsets,
             settings,
             m_memorySizeCombo->currentText(),
-            m_descriptionEdit->text()
+            m_descriptionEdit->text(),
+            pointerTemplate
         );
         m_codeNoteOutput->setPlainText(note);
     }

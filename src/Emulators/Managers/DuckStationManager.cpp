@@ -144,4 +144,8 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
+    QString DuckStationManager::getPlatformPointerTypeDescription() const {
+        return "[24-bit] Pointer";
+    }
+
 }

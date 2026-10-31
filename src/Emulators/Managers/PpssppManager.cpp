@@ -122,6 +122,10 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
+    QString PpssppManager::getPlatformPointerTypeDescription() const {
+        return "[32-bit] Pointer";
+    }
+
     uintptr_t PpssppManager::findPspRamBaseBySize() {
         std::vector<uintptr_t> foundAddresses;
         auto regions = Core::Memory::queryMemoryRegions(m_processHandle);

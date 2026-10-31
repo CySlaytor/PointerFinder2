@@ -257,6 +257,10 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
+    QString DolphinManager::getPlatformPointerTypeDescription() const {
+        return "[32-bit BE] Pointer";
+    }
+
     std::vector<uintptr_t> DolphinManager::findCandidateAddresses(uintptr_t exactRegionSize) {
         std::vector<uintptr_t> foundAddresses;
         auto regions = Core::Memory::queryMemoryRegions(m_processHandle);

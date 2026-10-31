@@ -103,8 +103,8 @@ namespace PointerFinder2::UI {
         darkPalette.setColor(QPalette::WindowText, Qt::white);
         darkPalette.setColor(QPalette::Base, QColor(25, 25, 25));
         darkPalette.setColor(QPalette::AlternateBase, QColor(32, 32, 32));
-        darkPalette.setColor(QPalette::ToolTipBase, Qt::white);
-        darkPalette.setColor(QPalette::ToolTipText, Qt::white);
+        darkPalette.setColor(QPalette::ToolTipBase, QColor(36, 36, 36));
+        darkPalette.setColor(QPalette::ToolTipText, QColor(240, 240, 240));
         darkPalette.setColor(QPalette::Text, Qt::white);
         darkPalette.setColor(QPalette::Button, QColor(55, 55, 55));
         darkPalette.setColor(QPalette::ButtonText, Qt::white);
@@ -129,8 +129,8 @@ namespace PointerFinder2::UI {
         lightPalette.setColor(QPalette::WindowText, QColor(30, 30, 30));
         lightPalette.setColor(QPalette::Base, Qt::white);
         lightPalette.setColor(QPalette::AlternateBase, QColor(238, 238, 238));
-        lightPalette.setColor(QPalette::ToolTipBase, QColor(30, 30, 30));
-        lightPalette.setColor(QPalette::ToolTipText, Qt::white);
+        lightPalette.setColor(QPalette::ToolTipBase, QColor(250, 250, 250));
+        lightPalette.setColor(QPalette::ToolTipText, QColor(30, 30, 30));
         lightPalette.setColor(QPalette::Text, QColor(30, 30, 30));
         lightPalette.setColor(QPalette::Button, QColor(230, 230, 230));
         lightPalette.setColor(QPalette::ButtonText, QColor(30, 30, 30));
@@ -153,8 +153,12 @@ namespace PointerFinder2::UI {
         QFile file(resourcePath);
         if (file.open(QFile::ReadOnly | QFile::Text)) {
             QTextStream stream(&file);
-            app.setStyleSheet(stream.readAll());
+            QString stylesheet = stream.readAll();
             file.close();
+
+            // Enforce explicit QToolTip styling to prevent custom Windows themes (such as Rectify11) from overriding tooltip background colors
+            stylesheet.append("\nQToolTip { background-color: #242424; color: #F0F0F0; border: 1px solid #3E3E3E; padding: 4px; }\n");
+            app.setStyleSheet(stylesheet);
         }
         else {
             app.setStyleSheet("");

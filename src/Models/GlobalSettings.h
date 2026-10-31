@@ -14,6 +14,7 @@ namespace PointerFinder2::DataModels {
         static QString codeNoteSuffix;
         static bool codeNoteAlignSuffixes;
         static bool codeNoteSuffixOnLastLineOnly;
+        static bool codeNoteAutoPopulatePointers;
         static bool sortByLevelFirst;
         static QString activeTheme;
     };

@@ -153,6 +153,10 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
+    QString RALibretroGBAManager::getPlatformPointerTypeDescription() const {
+        return "[32-bit] Pointer";
+    }
+
     uintptr_t RALibretroGBAManager::findGbaRamBase() {
         std::vector<uintptr_t> foundAddresses;
         auto regions = Core::Memory::queryMemoryRegions(m_processHandle);

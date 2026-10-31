@@ -36,6 +36,7 @@ namespace PointerFinder2::UI {
         QLineEdit* m_suffixEdit = nullptr;
         QCheckBox* m_alignCheck = nullptr;
         QCheckBox* m_suffixLastLineCheck = nullptr;
+        QCheckBox* m_autoPopulatePointersCheck = nullptr;
         QPlainTextEdit* m_previewEdit = nullptr;
 
         QPushButton* m_closeButton = nullptr;

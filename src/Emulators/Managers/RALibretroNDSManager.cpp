@@ -162,6 +162,10 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
+    QString RALibretroNDSManager::getPlatformPointerTypeDescription() const {
+        return "[24-bit] Pointer";
+    }
+
     uintptr_t RALibretroNDSManager::findBaseAddressBySize(int64_t exactRegionSizeBytes) {
         std::vector<uintptr_t> foundAddresses;
         auto regions = Core::Memory::queryMemoryRegions(m_processHandle);

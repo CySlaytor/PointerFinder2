@@ -42,6 +42,7 @@ namespace PointerFinder2::UI {
         m_suffixEdit->setText(GlobalSettings::codeNoteSuffix);
         m_alignCheck->setChecked(GlobalSettings::codeNoteAlignSuffixes);
         m_suffixLastLineCheck->setChecked(GlobalSettings::codeNoteSuffixOnLastLineOnly);
+        m_autoPopulatePointersCheck->setChecked(GlobalSettings::codeNoteAutoPopulatePointers);
 
         m_isInitializing = false;
         updateCodeNotePreview();
@@ -124,11 +125,13 @@ namespace PointerFinder2::UI {
         m_suffixEdit = new QLineEdit(formattingGroup);
         m_alignCheck = new QCheckBox("Align Suffixes Vertically", formattingGroup);
         m_suffixLastLineCheck = new QCheckBox("Apply Suffix to Last Line Only", formattingGroup);
+        m_autoPopulatePointersCheck = new QCheckBox("Auto-populate intermediate pointer levels with template", formattingGroup);
 
         formLayout->addRow("Indentation Prefix:", m_prefixEdit);
         formLayout->addRow("Line Suffix:", m_suffixEdit);
         formLayout->addRow(m_alignCheck);
         formLayout->addRow(m_suffixLastLineCheck);
+        formLayout->addRow(m_autoPopulatePointersCheck);
         layout->addWidget(formattingGroup, 1);
 
         auto* previewGroup = new QGroupBox("Live Preview", tab);
@@ -149,6 +152,7 @@ namespace PointerFinder2::UI {
         connect(m_suffixEdit, &QLineEdit::textChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
         connect(m_alignCheck, &QCheckBox::checkStateChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
         connect(m_suffixLastLineCheck, &QCheckBox::checkStateChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
+        connect(m_autoPopulatePointersCheck, &QCheckBox::checkStateChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
     }
 
     void SettingsDialog::onGeneralSettingChanged() {
@@ -176,6 +180,7 @@ namespace PointerFinder2::UI {
         GlobalSettings::codeNoteSuffix = m_suffixEdit->text();
         GlobalSettings::codeNoteAlignSuffixes = m_alignCheck->isChecked();
         GlobalSettings::codeNoteSuffixOnLastLineOnly = m_suffixLastLineCheck->isChecked();
+        GlobalSettings::codeNoteAutoPopulatePointers = m_autoPopulatePointersCheck->isChecked();
 
         SettingsManager::saveGlobalSettingsOnly();
         updateCodeNotePreview();
@@ -187,9 +192,10 @@ namespace PointerFinder2::UI {
         settings.Suffix = m_suffixEdit->text();
         settings.AlignSuffixes = m_alignCheck->isChecked();
         settings.SuffixOnLastLineOnly = m_suffixLastLineCheck->isChecked();
+        settings.AutoPopulatePointers = m_autoPopulatePointersCheck->isChecked();
 
         std::vector<int32_t> dummyOffsets = { 0x4, 0x2A0, -0x1C };
-        QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Description");
+        QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Description", "[32-bit] Pointer");
         m_previewEdit->setPlainText(preview);
     }
 

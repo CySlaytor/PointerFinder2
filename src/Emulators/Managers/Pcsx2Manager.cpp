@@ -157,4 +157,8 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
+    QString Pcsx2Manager::getPlatformPointerTypeDescription() const {
+        return "[32-bit] Pointer";
+    }
+
 }
