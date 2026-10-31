@@ -14,7 +14,6 @@
 #include "Dialogs/AboutDialog.h"
 #include "Dialogs/AddressSearchDialog.h"
 #include "Dialogs/CodeNoteConverterDialog.h"
-#include "Dialogs/CodeNoteHierarchyFixerDialog.h"
 #include "Dialogs/SettingsDialog.h"
 #include "Dialogs/StateCaptureDialog.h"
 #include "Dialogs/StructureWorkspaceDialog.h"
@@ -294,6 +293,7 @@ namespace PointerFinder2::UI {
         m_viewStack->setCurrentWidget(m_emptyStateWidget);
     }
 
+    void setupBottomPanel(); // declaration for helper layout
     void MainWindow::setupBottomPanel() {
         m_bottomPanel = new QWidget(this);
         auto* bottomLayout = new QVBoxLayout(m_bottomPanel);
@@ -372,8 +372,8 @@ namespace PointerFinder2::UI {
         settingsAct->setProperty("iconPath", ":/icons/settings.svg");
 
         auto* toolsMenu = bar->addMenu("&Tools");
-        auto* structAct = toolsMenu->addAction(getThemeIcon(":/icons/range_finder.svg"), "Structure Workspace & Memory Viewer...", this, &MainWindow::onStructureWorkspaceClicked);
-        structAct->setProperty("iconPath", ":/icons/range_finder.svg");
+        auto* structAct = toolsMenu->addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Dissect Structure...", this, &MainWindow::onStructureWorkspaceClicked);
+        structAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
         structAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
         structAct->setObjectName("menuStructureWorkspace");
 
@@ -383,9 +383,6 @@ namespace PointerFinder2::UI {
 
         auto* convAct = toolsMenu->addAction(getThemeIcon(":/icons/converter.svg"), "Code Note Converter...", this, &MainWindow::onCodeNoteConverterClicked);
         convAct->setProperty("iconPath", ":/icons/converter.svg");
-
-        auto* hierAct = toolsMenu->addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Code Note Hierarchy Fixer...", this, &MainWindow::onCodeNoteHierarchyFixerClicked);
-        hierAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
 
         auto* helpMenu = bar->addMenu("&Help");
         auto* tutAct = helpMenu->addAction(getThemeIcon(":/icons/tutorial.svg"), "Video Tutorial...", this, &MainWindow::onTutorialClicked);
@@ -911,17 +908,6 @@ namespace PointerFinder2::UI {
         m_codeNoteConverterDialog->show();
     }
 
-    void MainWindow::onCodeNoteHierarchyFixerClicked() {
-        if (m_codeNoteHierarchyFixerDialog) {
-            m_codeNoteHierarchyFixerDialog->raise();
-            m_codeNoteHierarchyFixerDialog->activateWindow();
-            return;
-        }
-        m_codeNoteHierarchyFixerDialog = new CodeNoteHierarchyFixerDialog(this);
-        m_codeNoteHierarchyFixerDialog->setAttribute(Qt::WA_DeleteOnClose);
-        m_codeNoteHierarchyFixerDialog->show();
-    }
-
     void MainWindow::onTutorialClicked() {
         QDesktopServices::openUrl(QUrl("https://youtu.be/QwHTML0kRtI"));
     }
@@ -1112,7 +1098,7 @@ namespace PointerFinder2::UI {
         else {
             m_arrayDetectionWidget->clear();
             switchToScanUI(false);
-            finalizeScanStatus(results.size(), durationMs, wasCancelled);
+            finalizeScanStatus(static_cast<int>(results.size()), durationMs, wasCancelled);
         }
     }
 
@@ -1121,7 +1107,7 @@ namespace PointerFinder2::UI {
         m_arrayDetectionWidget->setResults(result.groups, result.matches);
 
         switchToScanUI(false);
-        finalizeScanStatus(m_resultsManager.getCurrentResults().size(), m_lastScanDurationMs, m_lastScanWasCancelled);
+        finalizeScanStatus(m_resultsManager.getResultsCount(), m_lastScanDurationMs, m_lastScanWasCancelled);
     }
 
     void MainWindow::finalizeScanStatus(int resultsCount, qint64 durationMs, bool wasCancelled) {
@@ -1132,7 +1118,7 @@ namespace PointerFinder2::UI {
 
         if (wasCancelled) {
             updateStatus(QString("Scan stopped. Found %1 paths and %2 array(s) in %3.")
-                .arg(resultsCount).arg(m_arrayDetectionWidget->getArrayGroups().size()).arg(durationStr));
+                .arg(resultsCount).arg(static_cast<int>(m_arrayDetectionWidget->getArrayGroups().size())).arg(durationStr));
             SoundManager::playNotify();
         }
         else {
@@ -1142,7 +1128,7 @@ namespace PointerFinder2::UI {
             }
             else {
                 updateStatus(QString("Scan complete. Found %1 paths and %2 array(s) in %3.")
-                    .arg(resultsCount).arg(m_arrayDetectionWidget->getArrayGroups().size()).arg(durationStr));
+                    .arg(resultsCount).arg(static_cast<int>(m_arrayDetectionWidget->getArrayGroups().size())).arg(durationStr));
                 SoundManager::playSuccess();
             }
         }
@@ -1266,7 +1252,7 @@ namespace PointerFinder2::UI {
             }
         }
 
-        QApplication::clipboard()->setText(addresses.join("\n"));
+        QApplication::clipboard()->setText(static_cast<int>(addresses.size()) > 0 ? addresses.join("\n") : QString());
         updateStatus(QString("Copied %1 base address(es) to clipboard.").arg(static_cast<int>(addresses.size())));
     }
 

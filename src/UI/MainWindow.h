@@ -7,7 +7,6 @@
 #include "../Emulators/IEmulatorManager.h"
 #include "../Models/PointerPath.h"
 #include "Dialogs/CodeNoteConverterDialog.h"
-#include "Dialogs/CodeNoteHierarchyFixerDialog.h"
 #include "Dialogs/EmulatorSelectionDialog.h"
 #include "Dialogs/StructureWorkspaceDialog.h"
 #include "Widgets/ArrayDetectionWidget.h"
@@ -59,7 +58,6 @@ namespace PointerFinder2::UI {
 		void onStaticRangeFinderClicked();
 		void onStructureWorkspaceClicked();
 		void onCodeNoteConverterClicked();
-		void onCodeNoteHierarchyFixerClicked();
 		void onTutorialClicked();
 		void onAboutClicked();
 		void onCheckForUpdatesClicked();
@@ -137,7 +135,6 @@ namespace PointerFinder2::UI {
 		QString m_currentSearchTerm = "";
 
 		QPointer<CodeNoteConverterDialog> m_codeNoteConverterDialog;
-		QPointer<CodeNoteHierarchyFixerDialog> m_codeNoteHierarchyFixerDialog;
 		QPointer<StructureWorkspaceDialog> m_structureWorkspaceDialog;
 		QPointer<QDialog> m_staticRangeFinderDialog;
 		QPointer<QProgressDialog> m_updateProgressDialog;

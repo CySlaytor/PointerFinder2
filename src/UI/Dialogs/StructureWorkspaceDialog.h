@@ -8,13 +8,16 @@
 #include <optional>
 #include <vector>
 #include <QButtonGroup>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSplitter>
+#include <QTimer>
 #include <QTreeWidget>
 
 namespace PointerFinder2::UI {
@@ -42,36 +45,41 @@ namespace PointerFinder2::UI {
         void onStructureTreeSelectionChanged();
         void onRefreshRamClicked();
         void onGoToAddressClicked();
-        void onNavHistoryBack();
-        void onNavHistoryForward();
-        void onExportCodeNoteClicked();
-        void onImportCodeNoteClicked();
         void onActiveStructureComboChanged(int index);
         void onNewStructureClicked();
         void onDeleteStructureClicked();
         void onViewModeChanged();
 
+        // Panel 3 & Synchronization slots
+        void onToggleCodeNotePanelClicked();
+        void onFixHierarchyClicked();
+        void onHierarchyStyleChanged();
+        void onCopyCodeNoteClicked();
+        void onSplitterMoved(int pos, int index);
+
     private:
         Emulators::IEmulatorManager* m_manager = nullptr;
 
         // UI Controls
+        QSplitter* m_mainSplitter = nullptr;
+
         QComboBox* m_structureSelectCombo = nullptr;
         QPushButton* m_newStructureBtn = nullptr;
         QPushButton* m_deleteStructureBtn = nullptr;
+        QPushButton* m_toggleCodeNoteBtn = nullptr;
 
+        // Panel 1: Structure Hierarchy
+        QWidget* m_leftContainer = nullptr;
         QTreeWidget* m_structureTree = nullptr;
         QLabel* m_offsetPreviewLabel = nullptr;
         QPushButton* m_addVariableBtn = nullptr;
         QPushButton* m_addPointerBtn = nullptr;
         QPushButton* m_followPointerBtn = nullptr;
         QPushButton* m_removeNodeBtn = nullptr;
-
-        QPushButton* m_importNoteBtn = nullptr;
-        QPushButton* m_exportNoteBtn = nullptr;
-
         QLineEdit* m_baseAddressEdit = nullptr;
-        QPushButton* m_historyBackBtn = nullptr;
-        QPushButton* m_historyForwardBtn = nullptr;
+
+        // Panel 2: Memory Viewer
+        QWidget* m_middleContainer = nullptr;
         QLineEdit* m_goToAddressEdit = nullptr;
         QPushButton* m_goToAddressBtn = nullptr;
         QPushButton* m_refreshRamBtn = nullptr;
@@ -86,9 +94,19 @@ namespace PointerFinder2::UI {
 
         Widgets::MemoryViewerWidget* m_memoryViewer = nullptr;
 
+        // Panel 3: Code Note Hierarchy Fixer
+        QWidget* m_rightContainer = nullptr;
+        QComboBox* m_styleCombo = nullptr;
+        QCheckBox* m_indentDescCheck = nullptr;
+        QPushButton* m_fixHierarchyBtn = nullptr;
+        QPushButton* m_copyCodeNoteBtn = nullptr;
+        QPlainTextEdit* m_codeNoteTextEdit = nullptr;
+
         struct StructureItemData {
             QString name;
-            uint32_t baseAddress = 0;
+            QString baseAddress;
+            QString codeNoteText;
+            QString headerComment;
         };
 
         struct ScopeMatch {
@@ -99,15 +117,21 @@ namespace PointerFinder2::UI {
             bool isValid = false;
         };
 
+        struct CodeNoteNode {
+            QString content;
+            std::vector<std::shared_ptr<CodeNoteNode>> children;
+            int originalIndex = 0;
+        };
+
         std::vector<StructureItemData> m_structures;
         int m_currentStructureIndex = 0;
         uint32_t m_currentViewerSelectedAddress = 0;
 
-        // Navigation History Stack (Cheat Engine style back/forward trail)
-        std::vector<uint32_t> m_navHistory;
-        int m_navHistoryIndex = -1;
-
         std::vector<uint8_t> m_snapshotMemory;
+
+        bool m_isSyncing = false;
+        int m_lastCodeNotePanelWidth = 330;
+        QString m_headerComment;
 
         void setupLayout();
         void loadWorkspaceSettings();
@@ -119,12 +143,26 @@ namespace PointerFinder2::UI {
         void updateOffsetPreview();
         void updateMemoryHighlights();
 
-        void navigateToAddress(uint32_t address, bool recordHistory = true);
-        void updateHistoryButtonStates();
+        void navigateToAddress(uint32_t address);
 
         ScopeMatch findBestScopeForAddress(uint32_t selectedAddr);
         void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description);
         QString suggestDefaultType(uint32_t address);
+
+        void syncTreeToCodeNoteText();
+        QString generateCodeNoteFromTree() const;
+        QIcon getThemeIcon(const QString& resourcePath) const;
+
+        // Hierarchy Fixer parsing, merging, and rebuilding helpers
+        std::vector<std::shared_ptr<CodeNoteNode>> parseLinesToTree(const QStringList& lines);
+        std::vector<std::shared_ptr<CodeNoteNode>> mergeTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes);
+        std::vector<std::shared_ptr<CodeNoteNode>> sortNodes(std::vector<std::shared_ptr<CodeNoteNode>>& nodes);
+        QString rebuildTextFromTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
+            int indentLevel,
+            const QString& style,
+            bool indentDescriptions,
+            std::vector<bool> ancestorIsLast = {});
+        void populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem = nullptr);
     };
 
 }
