@@ -23,13 +23,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 # Collect all source and header files recursively
-file(GLOB_RECURSE SOURCES 
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
     "src/*.cpp"
     "src/*.h"
 )
 
 # Collect resources so they are also visible in the IDE Solution Explorer
-file(GLOB_RECURSE RESOURCE_ICONS "resources/icons/*.svg")
+file(GLOB_RECURSE RESOURCE_ICONS CONFIGURE_DEPENDS "resources/icons/*.svg")
 set(RESOURCES 
     resources/resources.qrc
     ${RESOURCE_ICONS}

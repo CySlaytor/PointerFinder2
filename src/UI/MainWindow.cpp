@@ -4,7 +4,9 @@
 #include "../Common/EndianUtils.h"
 #include "../Core/ArrayDetector.h"
 #include "../Core/CodeNoteHelper.h"
+#include "../Core/ExportService.h"
 #include "../Core/ProcessScanner.h"
+#include "../Core/RangeFinderRegistry.h"
 #include "../Core/SessionManager.h"
 #include "../Core/SettingsManager.h"
 #include "../Core/SoundManager.h"
@@ -18,10 +20,6 @@
 #include "Dialogs/StateCaptureDialog.h"
 #include "Dialogs/StructureWorkspaceDialog.h"
 #include "Dialogs/UpdateDialog.h"
-#include "StaticRangeFinders/DolphinFileRangeFinderDialog.h"
-#include "StaticRangeFinders/NdsStaticRangeFinderDialog.h"
-#include "StaticRangeFinders/Pcsx2RamScanRangeFinderDialog.h"
-#include "StaticRangeFinders/PpssppRamScanRangeFinderDialog.h"
 #include "Styles/ThemeManager.h"
 #include "Widgets/PointerResultsHeaderView.h"
 
@@ -887,31 +885,14 @@ namespace PointerFinder2::UI {
         }
 
         if (m_activeProfile.has_value() && m_activeProfile->supportsStaticRangeFinder) {
-            QWidget* widget = nullptr;
-            auto target = m_activeProfile->target;
-
-            if (target == EmulatorTarget::PCSX2) {
-                widget = new StaticRangeFinders::Pcsx2RamScanRangeFinderDialog(m_currentManager.get(), this);
-            }
-            else if (target == EmulatorTarget::RALibretroNDS) {
-                widget = new StaticRangeFinders::NdsStaticRangeFinderDialog(m_currentManager.get(), this);
-            }
-            else if (target == EmulatorTarget::Dolphin) {
-                widget = new StaticRangeFinders::DolphinFileRangeFinderDialog(m_currentManager.get(), this);
-            }
-            else if (target == EmulatorTarget::PPSSPP) {
-                widget = new StaticRangeFinders::PpssppRamScanRangeFinderDialog(m_currentManager.get(), this);
-            }
-
-            if (widget) {
-                m_staticRangeFinderDialog = qobject_cast<QDialog*>(widget);
-                if (m_staticRangeFinderDialog) {
-                    m_staticRangeFinderDialog->setAttribute(Qt::WA_DeleteOnClose);
-                    connect(m_staticRangeFinderDialog, &QDialog::accepted, this, [this]() {
-                        m_currentSettings = SettingsManager::load(m_activeProfile->target, m_currentManager->getDefaultSettings());
-                        });
-                    m_staticRangeFinderDialog->show();
-                }
+            QDialog* dialog = RangeFinderRegistry::createDialog(m_activeProfile->target, m_currentManager.get(), this);
+            if (dialog) {
+                m_staticRangeFinderDialog = dialog;
+                m_staticRangeFinderDialog->setAttribute(Qt::WA_DeleteOnClose);
+                connect(m_staticRangeFinderDialog, &QDialog::accepted, this, [this]() {
+                    m_currentSettings = SettingsManager::load(m_activeProfile->target, m_currentManager->getDefaultSettings());
+                });
+                m_staticRangeFinderDialog->show();
             }
         }
     }
@@ -1263,16 +1244,16 @@ namespace PointerFinder2::UI {
         if (rows.empty() || !m_currentManager) return;
 
         const auto& results = m_resultsManager.getCurrentResults();
-        QStringList addresses;
+        std::vector<PointerPath> selected;
         for (const auto& idx : rows) {
             int row = idx.row();
             if (row >= 0 && row < static_cast<int>(results.size())) {
-                addresses << m_currentManager->formatDisplayAddress(results[row].baseAddress);
+                selected.push_back(results[row]);
             }
         }
 
-        QApplication::clipboard()->setText(static_cast<int>(addresses.size()) > 0 ? addresses.join("\n") : QString());
-        updateStatus(QString("Copied %1 base address(es) to clipboard.").arg(static_cast<int>(addresses.size())));
+        int count = ExportService::copyBaseAddresses(selected, m_currentManager.get());
+        updateStatus(QString("Copied %1 base address(es) to clipboard.").arg(count));
     }
 
     void MainWindow::onCopyAsRAFormat() {
@@ -1283,8 +1264,9 @@ namespace PointerFinder2::UI {
         int row = rows.first().row();
         const auto& results = m_resultsManager.getCurrentResults();
         if (row >= 0 && row < static_cast<int>(results.size())) {
-            QApplication::clipboard()->setText(results[row].toRetroAchievementsString(m_currentManager.get()));
-            updateStatus("Copied path in RetroAchievements format.");
+            if (ExportService::copyAsRetroAchievementsFormat(results[row], m_currentManager.get())) {
+                updateStatus("Copied path in RetroAchievements format.");
+            }
         }
     }
 
@@ -1296,12 +1278,9 @@ namespace PointerFinder2::UI {
         int row = rows.first().row();
         const auto& results = m_resultsManager.getCurrentResults();
         if (row >= 0 && row < static_cast<int>(results.size())) {
-            CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
-            QString ptrTemplate = m_currentManager ? m_currentManager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
-            QString note = CodeNoteHelper::buildCodeNote(results[row].offsets, settings, "", "", ptrTemplate);
-
-            QApplication::clipboard()->setText(note);
-            updateStatus("Copied path as custom code note.");
+            if (ExportService::copyAsCodeNote(results[row], m_currentManager.get())) {
+                updateStatus("Copied path as custom code note.");
+            }
         }
     }
 

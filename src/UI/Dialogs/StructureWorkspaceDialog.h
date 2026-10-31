@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../../Core/CodeNoteHierarchyEngine.h"
+#include "../../Core/RaStorageService.h"
+#include "../../Core/StructureAnalyzer.h"
 #include "../../Emulators/IEmulatorManager.h"
 #include "../Widgets/MemoryViewerWidget.h"
 
@@ -11,9 +14,6 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
@@ -52,7 +52,7 @@ namespace PointerFinder2::UI {
         // RA Game Data & Dissection slots
         void onAddressComboChanged(int index);
         void onSaveUserTxtClicked();
-        void onRevertToServerClicked();
+        void onRevertServerClicked();
         void onResetClicked();
 
         // Panel 3 & Synchronization slots
@@ -107,25 +107,9 @@ namespace PointerFinder2::UI {
         QPushButton* m_copyCodeNoteBtn = nullptr;
         QPlainTextEdit* m_codeNoteTextEdit = nullptr;
 
-        struct RaCodeNote {
-            uint32_t address = 0;
-            QString addressHex;
-            QString noteText;
-            QString title;
-            QString author;
-            bool isModified = false;
-            bool isLocalOnly = false;
-        };
-
-        struct RaGameData {
-            QString gameId;
-            QString gameTitle;
-            QString raVersionLine;
-            QString notesJsonPath;
-            QString userTxtPath;
-            std::vector<RaCodeNote> notes;
-            bool isValid = false;
-        };
+        using RaCodeNote = Core::RaCodeNote;
+        using RaGameData = Core::RaGameData;
+        using CodeNoteNode = Core::CodeNoteNode;
 
         struct ScopeMatch {
             QTreeWidgetItem* pointerNode = nullptr;
@@ -133,12 +117,6 @@ namespace PointerFinder2::UI {
             int32_t offset = 0;
             int depth = 0;
             bool isValid = false;
-        };
-
-        struct CodeNoteNode {
-            QString content;
-            std::vector<std::shared_ptr<CodeNoteNode>> children;
-            int originalIndex = 0;
         };
 
         RaGameData m_gameData;
@@ -157,7 +135,6 @@ namespace PointerFinder2::UI {
         void saveWorkspaceSettings();
 
         // RA Data Pipeline
-        QString resolveRaDataDirectory() const;
         bool loadActiveGameData();
         void populateAddressDropdown();
         void selectAddressInUI(uint32_t address);
@@ -181,15 +158,6 @@ namespace PointerFinder2::UI {
         QString generateCodeNoteFromTree() const;
         QIcon getThemeIcon(const QString& resourcePath) const;
 
-        // Hierarchy Fixer parsing, merging, and rebuilding helpers
-        std::vector<std::shared_ptr<CodeNoteNode>> parseLinesToTree(const QStringList& lines);
-        std::vector<std::shared_ptr<CodeNoteNode>> mergeTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes);
-        std::vector<std::shared_ptr<CodeNoteNode>> sortNodes(std::vector<std::shared_ptr<CodeNoteNode>>& nodes);
-        QString rebuildTextFromTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
-            int indentLevel,
-            const QString& style,
-            bool indentDescriptions,
-            std::vector<bool> ancestorIsLast = {});
         void populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem = nullptr);
     };
 

@@ -8,16 +8,12 @@
 #include "../Styles/ThemeManager.h"
 
 #include <windows.h>
-#include <psapi.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <map>
-#include <unordered_map>
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
-#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -26,57 +22,13 @@
 #include <QRegularExpression>
 #include <QSettings>
 #include <QSplitter>
-#include <QStandardPaths>
-#include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
 
     using namespace PointerFinder2::DataModels;
-
-    static QString unescapeUserTxt(const QString& in) {
-        QString out;
-        out.reserve(in.length());
-        for (int i = 0; i < in.length(); ++i) {
-            if (in[i] == '\\' && i + 1 < in.length()) {
-                QChar next = in[i + 1];
-                if (next == 'r') { out.append('\r'); i++; }
-                else if (next == 'n') { out.append('\n'); i++; }
-                else if (next == 't') { out.append('\t'); i++; }
-                else if (next == '"') { out.append('"'); i++; }
-                else if (next == '\\') { out.append('\\'); i++; }
-                else { out.append(next); i++; }
-            }
-            else {
-                out.append(in[i]);
-            }
-        }
-        return out;
-    }
-
-    static QString escapeUserTxt(const QString& in) {
-        QString out;
-        out.reserve(in.length() * 2);
-        for (int i = 0; i < in.length(); ++i) {
-            QChar c = in[i];
-            if (c == '\r') { out.append("\\r"); }
-            else if (c == '\n') { out.append("\\n"); }
-            else if (c == '\t') { out.append("\\t"); }
-            else if (c == '"') { out.append("\\\""); }
-            else if (c == '\\') { out.append("\\\\"); }
-            else { out.append(c); }
-        }
-        return out;
-    }
-
-    static QString extractTitleFromNote(const QString& noteText) {
-        QString trimmed = noteText.trimmed();
-        if (trimmed.isEmpty()) return "Untitled Note";
-        QString firstLine = trimmed.split(QRegularExpression("[\r\n]+")).first().trimmed();
-        if (firstLine.length() > 60) firstLine = firstLine.left(57) + "...";
-        return firstLine;
-    }
+    using namespace PointerFinder2::Core;
 
     StructureWorkspaceDialog::StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent)
         : QDialog(parent), m_manager(manager) {
@@ -326,7 +278,7 @@ namespace PointerFinder2::UI {
         // RA Data controls
         connect(m_addressSelectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onAddressComboChanged);
         connect(m_saveUserBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onSaveUserTxtClicked);
-        connect(m_revertServerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onRevertToServerClicked);
+        connect(m_revertServerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onRevertServerClicked);
         connect(m_resetBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onResetClicked);
 
         // Code note sync & panel connections
@@ -338,161 +290,9 @@ namespace PointerFinder2::UI {
         connect(m_copyCodeNoteBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onCopyCodeNoteClicked);
     }
 
-    QString StructureWorkspaceDialog::resolveRaDataDirectory() const {
-        if (!m_manager || !m_manager->isAttached()) return QString();
-
-        HANDLE hProcess = static_cast<HANDLE>(m_manager->getProcessHandle());
-        if (!hProcess) return QString();
-
-        wchar_t exePathBuf[MAX_PATH] = { 0 };
-        DWORD size = MAX_PATH;
-        if (QueryFullProcessImageNameW(hProcess, 0, exePathBuf, &size) == 0) {
-            if (GetModuleFileNameExW(hProcess, NULL, exePathBuf, MAX_PATH) == 0) {
-                return QString();
-            }
-        }
-
-        QFileInfo exeInfo(QString::fromWCharArray(exePathBuf));
-        QDir exeDir = exeInfo.dir();
-
-        // 1. Direct portable directory: <exeDir>/RACache/Data
-        QDir candidate1(exeDir.filePath("RACache/Data"));
-        if (candidate1.exists()) {
-            return candidate1.absolutePath();
-        }
-
-        // 2. Parent directory: <exeDir>/../RACache/Data
-        QDir candidate2(exeDir.filePath("../RACache/Data"));
-        if (candidate2.exists()) {
-            return candidate2.absolutePath();
-        }
-
-        // 3. Inspect module list for RA_Integration.dll
-        HMODULE hMods[1024];
-        DWORD cbNeeded = 0;
-        if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
-            int count = static_cast<int>(cbNeeded / sizeof(HMODULE));
-            for (int i = 0; i < count; ++i) {
-                wchar_t modNameBuf[MAX_PATH];
-                if (GetModuleFileNameExW(hProcess, hMods[i], modNameBuf, MAX_PATH)) {
-                    QString modPath = QString::fromWCharArray(modNameBuf);
-                    if (modPath.contains("RA_Integration", Qt::CaseInsensitive)) {
-                        QDir raDir = QFileInfo(modPath).dir();
-                        QDir raCandidate(raDir.filePath("RACache/Data"));
-                        if (raCandidate.exists()) return raCandidate.absolutePath();
-                    }
-                }
-            }
-        }
-
-        // 4. Global AppData fallback: %APPDATA%/RetroAchievements/RACache/Data
-        QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-        QDir globalCandidate(QDir(appData).filePath("../RetroAchievements/RACache/Data"));
-        if (globalCandidate.exists()) {
-            return globalCandidate.absolutePath();
-        }
-
-        return QString();
-    }
-
     bool StructureWorkspaceDialog::loadActiveGameData() {
-        QString dataDirStr = resolveRaDataDirectory();
-        if (dataDirStr.isEmpty()) return false;
-
-        QDir dataDir(dataDirStr);
-        QFileInfoList notesFiles = dataDir.entryInfoList({ "*-Notes.json" }, QDir::Files, QDir::Time);
-        if (notesFiles.isEmpty()) return false;
-
-        QFileInfo bestNotesFile = notesFiles.first();
-        QString baseName = bestNotesFile.fileName();
-        QString gameId = baseName.left(baseName.indexOf('-'));
-
-        QString userTxtFileName = gameId + "-User.txt";
-        QFileInfo userTxtFile(dataDir.filePath(userTxtFileName));
-
-        m_gameData = RaGameData();
-        m_gameData.gameId = gameId;
-        m_gameData.notesJsonPath = bestNotesFile.absoluteFilePath();
-        m_gameData.userTxtPath = userTxtFile.absoluteFilePath();
-
-        // 1. Read Notes.json (Read-Only Server baseline)
-        QFile jsonFile(m_gameData.notesJsonPath);
-        if (jsonFile.open(QIODevice::ReadOnly)) {
-            QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
-            if (doc.isArray()) {
-                QJsonArray arr = doc.array();
-                for (const auto& itemVal : arr) {
-                    if (itemVal.isObject()) {
-                        QJsonObject obj = itemVal.toObject();
-                        RaCodeNote note;
-                        note.author = obj["User"].toString();
-                        note.addressHex = obj["Address"].toString();
-                        bool ok = false;
-                        note.address = note.addressHex.toUInt(&ok, 16);
-                        note.noteText = obj["Note"].toString();
-                        note.title = extractTitleFromNote(note.noteText);
-                        note.isModified = false;
-                        note.isLocalOnly = false;
-                        m_gameData.notes.push_back(note);
-                    }
-                }
-            }
-            jsonFile.close();
-        }
-
-        // 2. Read User.txt (Local overlay)
-        QFile txtFile(m_gameData.userTxtPath);
-        if (txtFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream stream(&txtFile);
-            if (!stream.atEnd()) {
-                m_gameData.raVersionLine = stream.readLine(); // Line 1: version string (verbatim, uninterpreted)
-            }
-            if (!stream.atEnd()) {
-                m_gameData.gameTitle = stream.readLine();     // Line 2: game title
-            }
-
-            while (!stream.atEnd()) {
-                QString line = stream.readLine();
-                if (line.startsWith("N0:0x", Qt::CaseInsensitive)) {
-                    int firstQuote = line.indexOf('"');
-                    int lastQuote = line.lastIndexOf('"');
-                    if (firstQuote != -1 && lastQuote > firstQuote) {
-                        QString addrPart = line.mid(3, firstQuote - 3).trimmed();
-                        if (addrPart.endsWith(':')) addrPart.chop(1);
-                        bool ok = false;
-                        uint32_t addr = addrPart.toUInt(&ok, 16);
-
-                        QString rawNoteContent = line.mid(firstQuote + 1, lastQuote - firstQuote - 1);
-                        QString unescapedNote = unescapeUserTxt(rawNoteContent);
-
-                        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
-                            return n.address == addr;
-                        });
-
-                        if (it != m_gameData.notes.end()) {
-                            it->noteText = unescapedNote;
-                            it->title = extractTitleFromNote(unescapedNote);
-                            it->isModified = true;
-                        }
-                        else {
-                            RaCodeNote newNote;
-                            newNote.address = addr;
-                            newNote.addressHex = QString("0x%1").arg(addr, 8, 16, QChar('0'));
-                            newNote.noteText = unescapedNote;
-                            newNote.title = extractTitleFromNote(unescapedNote);
-                            newNote.isModified = false;
-                            newNote.isLocalOnly = true;
-                            newNote.author = "Local";
-                            m_gameData.notes.push_back(newNote);
-                        }
-                    }
-                }
-            }
-            txtFile.close();
-        }
-
-        m_gameData.isValid = true;
-        return true;
+        if (!m_manager || !m_manager->isAttached()) return false;
+        return RaStorageService::loadActiveGameData(m_manager->getProcessHandle(), m_gameData);
     }
 
     void StructureWorkspaceDialog::populateAddressDropdown() {
@@ -567,8 +367,8 @@ namespace PointerFinder2::UI {
 
         m_headerComment.clear();
         QStringList lines = text.split(QRegularExpression("[\r\n]+"));
-        auto parsedTree = parseLinesToTree(lines);
-        auto mergedTree = mergeTree(parsedTree);
+        auto parsedTree = CodeNoteHierarchyEngine::parseLinesToTree(lines, m_headerComment);
+        auto mergedTree = CodeNoteHierarchyEngine::mergeTree(parsedTree);
 
         m_structureTree->clear();
         populateTreeFromHierarchyNodes(mergedTree);
@@ -588,105 +388,16 @@ namespace PointerFinder2::UI {
     }
 
     bool StructureWorkspaceDialog::saveActiveNoteToUserTxt() {
-        if (!m_gameData.isValid || m_gameData.userTxtPath.isEmpty()) return false;
-
         uint32_t activeAddr = m_currentBaseAddress;
         if (activeAddr == 0) return false;
 
         QString currentNote = m_codeNoteTextEdit->toPlainText();
-
-        // 1. Update in-memory m_gameData
-        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
-            return n.address == activeAddr;
-        });
-
-        if (it != m_gameData.notes.end()) {
-            it->noteText = currentNote;
-            it->title = extractTitleFromNote(currentNote);
-            it->isModified = !it->isLocalOnly;
+        bool ok = RaStorageService::saveActiveNoteToUserTxt(m_gameData, activeAddr, currentNote);
+        if (ok) {
+            populateAddressDropdown();
+            updateToolbarButtonStates();
         }
-        else {
-            RaCodeNote newNote;
-            newNote.address = activeAddr;
-            newNote.addressHex = QString("0x%1").arg(activeAddr, 8, 16, QChar('0'));
-            newNote.noteText = currentNote;
-            newNote.title = extractTitleFromNote(currentNote);
-            newNote.isLocalOnly = true;
-            newNote.isModified = false;
-            newNote.author = "Local";
-            m_gameData.notes.push_back(newNote);
-        }
-
-        // 2. Read existing User.txt to refresh passthrough lines
-        QStringList existingLines;
-        QFile readFile(m_gameData.userTxtPath);
-        if (readFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&readFile);
-            while (!in.atEnd()) {
-                existingLines.append(in.readLine());
-            }
-            readFile.close();
-        }
-
-        QString vLine = !m_gameData.raVersionLine.isEmpty() ? m_gameData.raVersionLine : "1.4.2.0";
-        QString gTitle = !m_gameData.gameTitle.isEmpty() ? m_gameData.gameTitle : "Unknown Game";
-
-        if (!existingLines.isEmpty()) {
-            vLine = existingLines[0];
-            if (existingLines.size() > 1) gTitle = existingLines[1];
-        }
-
-        // Reconstruct User.txt
-        QStringList newFileLines;
-        newFileLines.append(vLine);
-        newFileLines.append(gTitle);
-
-        QString activeAddrStr = QString("0x%1").arg(activeAddr, 8, 16, QChar('0')).toLower();
-        bool wroteActiveNote = false;
-
-        for (int i = 2; i < existingLines.size(); ++i) {
-            const QString& line = existingLines[i];
-            if (line.startsWith("N0:0x", Qt::CaseInsensitive)) {
-                int firstQuote = line.indexOf('"');
-                QString addrPart = line.mid(3, firstQuote - 3).trimmed();
-                if (addrPart.endsWith(':')) addrPart.chop(1);
-                bool parseOk = false;
-                uint32_t lineAddr = addrPart.toUInt(&parseOk, 16);
-
-                if (parseOk && lineAddr == activeAddr) {
-                    QString escaped = escapeUserTxt(currentNote);
-                    newFileLines.append(QString("N0:%1:\"%2\"").arg(activeAddrStr, escaped));
-                    wroteActiveNote = true;
-                    continue;
-                }
-            }
-            newFileLines.append(line);
-        }
-
-        if (!wroteActiveNote) {
-            QString escaped = escapeUserTxt(currentNote);
-            newFileLines.append(QString("N0:%1:\"%2\"").arg(activeAddrStr, escaped));
-        }
-
-        // Write out atomically via temp file
-        QString tempPath = m_gameData.userTxtPath + ".tmp";
-        QFile writeFile(tempPath);
-        if (!writeFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            return false;
-        }
-
-        QTextStream out(&writeFile);
-        for (const QString& l : newFileLines) {
-            out << l << "\n";
-        }
-        writeFile.close();
-
-        QFile::remove(m_gameData.userTxtPath);
-        QFile::rename(tempPath, m_gameData.userTxtPath);
-
-        populateAddressDropdown();
-        updateToolbarButtonStates();
-        return true;
+        return ok;
     }
 
     void StructureWorkspaceDialog::onSaveUserTxtClicked() {
@@ -701,54 +412,15 @@ namespace PointerFinder2::UI {
         }
     }
 
-    void StructureWorkspaceDialog::onRevertToServerClicked() {
-        if (!m_gameData.isValid || m_gameData.userTxtPath.isEmpty()) return;
-
+    void StructureWorkspaceDialog::onRevertServerClicked() {
         uint32_t activeAddr = m_currentBaseAddress;
         if (activeAddr == 0) return;
 
-        // Remove the N0 line from User.txt
-        QFile readFile(m_gameData.userTxtPath);
-        if (!readFile.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-
-        QStringList lines;
-        QTextStream in(&readFile);
-        while (!in.atEnd()) {
-            lines.append(in.readLine());
+        if (RaStorageService::revertServerNote(m_gameData, activeAddr)) {
+            loadActiveGameData();
+            populateAddressDropdown();
+            selectAddressInUI(activeAddr);
         }
-        readFile.close();
-
-        QStringList remainingLines;
-        if (!lines.isEmpty()) remainingLines.append(lines[0]);
-        if (lines.size() > 1) remainingLines.append(lines[1]);
-
-        for (int i = 2; i < lines.size(); ++i) {
-            const QString& line = lines[i];
-            if (line.startsWith("N0:0x", Qt::CaseInsensitive)) {
-                int firstQuote = line.indexOf('"');
-                QString addrPart = line.mid(3, firstQuote - 3).trimmed();
-                if (addrPart.endsWith(':')) addrPart.chop(1);
-                bool parseOk = false;
-                uint32_t lineAddr = addrPart.toUInt(&parseOk, 16);
-                if (parseOk && lineAddr == activeAddr) {
-                    continue; // Skip override
-                }
-            }
-            remainingLines.append(line);
-        }
-
-        QFile writeFile(m_gameData.userTxtPath);
-        if (writeFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&writeFile);
-            for (const QString& l : remainingLines) {
-                out << l << "\n";
-            }
-            writeFile.close();
-        }
-
-        loadActiveGameData();
-        populateAddressDropdown();
-        selectAddressInUI(activeAddr);
     }
 
     void StructureWorkspaceDialog::onResetClicked() {
@@ -936,23 +608,7 @@ namespace PointerFinder2::UI {
     }
 
     std::optional<uint32_t> StructureWorkspaceDialog::readMemoryDword(uint32_t address) {
-        if (!m_manager) return std::nullopt;
-
-        auto [normAddr, wasNorm] = m_manager->normalizeAddressForRead(address);
-
-        if (!m_snapshotMemory.empty()) {
-            int64_t indexInDump = m_manager->getIndexForStateDump(normAddr);
-            if (indexInDump >= 0 && indexInDump + 3 < static_cast<int64_t>(m_snapshotMemory.size())) {
-                uint32_t val = 0;
-                std::memcpy(&val, &m_snapshotMemory[indexInDump], 4);
-                if (m_manager->getRetroAchievementsPrefix() == "G") {
-                    val = Core::swapEndian32(val);
-                }
-                return val;
-            }
-        }
-
-        return m_manager->readUInt32(normAddr);
+        return StructureAnalyzer::readMemoryDword(address, m_manager, m_snapshotMemory);
     }
 
     uint32_t StructureWorkspaceDialog::resolveNodeAddress(QTreeWidgetItem* item) {
@@ -1101,28 +757,12 @@ namespace PointerFinder2::UI {
         ScopeMatch best;
         if (!m_manager || selectedAddr == 0 || m_currentBaseAddress == 0) return best;
 
-        uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
-        if (base == 0) return best;
-
-        uint32_t initialParentBase = base;
-        auto basePtr = readMemoryDword(base);
-        if (basePtr.has_value() && m_manager->isValidPointerTarget(basePtr.value())) {
-            initialParentBase = m_manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
-        }
-
-        struct CandidateScope {
-            QTreeWidgetItem* node;
-            uint32_t targetBase;
-            int depth;
-        };
-
-        std::vector<CandidateScope> scopes;
-        scopes.push_back({ nullptr, initialParentBase, 0 });
+        std::vector<ScopeCandidate> candidateScopes;
 
         std::function<void(QTreeWidgetItem*, int)> collectScopes = [&](QTreeWidgetItem* item, int depth) {
             uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
             if (derefBase != 0) {
-                scopes.push_back({ item, derefBase, depth });
+                candidateScopes.push_back({ item, derefBase, depth });
             }
 
             for (int i = 0; i < item->childCount(); ++i) {
@@ -1134,26 +774,19 @@ namespace PointerFinder2::UI {
             collectScopes(m_structureTree->topLevelItem(i), 1);
         }
 
-        constexpr uint32_t MAX_STRUCT_SPAN = 0x10000; // 64 KB struct span
-        int maxDepthMatched = -1;
-        uint32_t smallestOffset = 0xFFFFFFFF;
+        auto match = StructureAnalyzer::findBestScopeForAddress(
+            selectedAddr,
+            m_currentBaseAddress,
+            candidateScopes,
+            m_manager,
+            m_snapshotMemory
+        );
 
-        for (const auto& scope : scopes) {
-            if (selectedAddr >= scope.targetBase) {
-                uint32_t delta = selectedAddr - scope.targetBase;
-                if (delta < MAX_STRUCT_SPAN) {
-                    if (scope.depth > maxDepthMatched || (scope.depth == maxDepthMatched && delta < smallestOffset)) {
-                        maxDepthMatched = scope.depth;
-                        smallestOffset = delta;
-                        best.pointerNode = scope.node;
-                        best.baseAddress = scope.targetBase;
-                        best.offset = static_cast<int32_t>(delta);
-                        best.depth = scope.depth;
-                        best.isValid = true;
-                    }
-                }
-            }
-        }
+        best.pointerNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
+        best.baseAddress = match.baseAddress;
+        best.offset = match.offset;
+        best.depth = match.depth;
+        best.isValid = match.isValid;
 
         return best;
     }
@@ -1182,21 +815,7 @@ namespace PointerFinder2::UI {
     }
 
     QString StructureWorkspaceDialog::suggestDefaultType(uint32_t address) {
-        auto valOpt = readMemoryDword(address);
-        if (!valOpt.has_value()) return "[32-bit] Variable";
-
-        uint32_t rawVal = valOpt.value();
-        if (rawVal != 0 && m_manager && m_manager->isValidPointerTarget(rawVal)) {
-            return m_manager->getPlatformPointerTypeDescription();
-        }
-
-        float fVal;
-        std::memcpy(&fVal, &rawVal, 4);
-        if (!std::isnan(fVal) && !std::isinf(fVal) && std::abs(fVal) >= 0.0001f && std::abs(fVal) <= 1000000.0f) {
-            return "[Float] Variable";
-        }
-
-        return "[32-bit] Variable";
+        return StructureAnalyzer::suggestDefaultType(address, m_manager, m_snapshotMemory);
     }
 
     void StructureWorkspaceDialog::insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description) {
@@ -1360,286 +979,6 @@ namespace PointerFinder2::UI {
         });
     }
 
-    std::vector<std::shared_ptr<StructureWorkspaceDialog::CodeNoteNode>>
-    StructureWorkspaceDialog::parseLinesToTree(const QStringList& lines) {
-        auto rootNodes = std::make_shared<std::vector<std::shared_ptr<CodeNoteNode>>>();
-
-        struct StackFrame {
-            int indent;
-            std::vector<std::shared_ptr<CodeNoteNode>>* parentList;
-        };
-
-        std::vector<StackFrame> stack;
-        stack.push_back({ -1, rootNodes.get() });
-        std::shared_ptr<CodeNoteNode> lastNode = nullptr;
-        int lineIndex = 0;
-        bool hasEncounteredOffset = false;
-
-        QRegularExpression offsetSearch("[\\+\\-]0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
-
-        for (const auto& line : lines) {
-            QString trimmedLine = line.trimmed();
-            if (trimmedLine.isEmpty()) {
-                if (!hasEncounteredOffset) {
-                    if (!m_headerComment.isEmpty()) m_headerComment.append("\n");
-                }
-                lineIndex++;
-                continue;
-            }
-
-            int indent = 0;
-            QString content;
-            QString untrimmedLine = line;
-
-            auto offsetMatch = offsetSearch.match(untrimmedLine);
-            bool isOffsetLine = offsetMatch.hasMatch();
-
-            if (isOffsetLine) {
-                hasEncounteredOffset = true;
-                int offsetPos = offsetMatch.capturedStart();
-                QString prefix = untrimmedLine.left(offsetPos);
-
-                bool hasBoxChar = false;
-                for (QChar c : prefix) {
-                    if (c == L'│' || c == ' ' || c == L'├' || c == L'└' || c == L'┬' || c == L'─') {
-                        hasBoxChar = true;
-                        break;
-                    }
-                }
-
-                if (hasBoxChar) {
-                    indent = (prefix.length() > 0) ? (prefix.length() - 1) : 0;
-                }
-                else {
-                    indent = prefix.length();
-                }
-
-                content = untrimmedLine.mid(offsetPos).trimmed();
-            }
-            else {
-                indent = 0;
-                content = trimmedLine;
-            }
-
-            if (indent < 0) indent = 0;
-
-            if (!hasEncounteredOffset && !isOffsetLine) {
-                if (!m_headerComment.isEmpty()) m_headerComment.append("\n");
-                m_headerComment.append(trimmedLine);
-                lineIndex++;
-                continue;
-            }
-
-            bool isAttachedNote = !isOffsetLine && (lastNode != nullptr);
-
-            if (isAttachedNote) {
-                // Strip all leading prefix dots, pipes, or spaces for clean data representation
-                QString cleanNote = trimmedLine;
-                int prefixChars = 0;
-                while (prefixChars < cleanNote.length() && (cleanNote[prefixChars] == '.' || cleanNote[prefixChars] == ' ' || cleanNote[prefixChars] == L'│')) {
-                    prefixChars++;
-                }
-                cleanNote = cleanNote.mid(prefixChars).trimmed();
-
-                if (!cleanNote.isEmpty()) {
-                    auto noteNode = std::make_shared<CodeNoteNode>();
-                    noteNode->content = cleanNote;
-                    noteNode->originalIndex = lineIndex;
-                    lastNode->children.push_back(noteNode);
-                }
-            }
-            else {
-                while (stack.back().indent >= indent) {
-                    stack.pop_back();
-                }
-
-                auto node = std::make_shared<CodeNoteNode>();
-                node->content = content;
-                node->originalIndex = lineIndex;
-
-                stack.back().parentList->push_back(node);
-                stack.push_back({ indent, &(node->children) });
-                lastNode = node;
-            }
-            lineIndex++;
-        }
-        return *rootNodes;
-    }
-
-    std::vector<std::shared_ptr<StructureWorkspaceDialog::CodeNoteNode>>
-    StructureWorkspaceDialog::mergeTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
-        std::vector<std::shared_ptr<CodeNoteNode>> finalNodes;
-        std::map<QString, std::vector<std::shared_ptr<CodeNoteNode>>> mergeableGroups;
-        std::vector<std::shared_ptr<CodeNoteNode>> nonMergeableNodes;
-
-        QRegularExpression offsetRegex("^([\\+\\-]0x[0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
-
-        for (const auto& node : nodes) {
-            auto match = offsetRegex.match(node->content);
-            if (match.hasMatch()) {
-                QString rawKey = match.captured(1);
-                QString sign = rawKey.left(1);
-                bool ok;
-                qlonglong offsetVal = rawKey.mid(3).toLongLong(&ok, 16);
-                QString key = QString("%10x%2").arg(sign).arg(QString::number(offsetVal, 16).toLower());
-
-                mergeableGroups[key].push_back(node);
-            }
-            else {
-                nonMergeableNodes.push_back(node);
-            }
-        }
-
-        QRegularExpression contentRegex("^([\\+\\-]0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
-
-        for (const auto& [key, group] : mergeableGroups) {
-            auto representative = group.front();
-            for (const auto& n : group) {
-                if (n->originalIndex < representative->originalIndex) {
-                    representative = n;
-                }
-            }
-
-            QString bestContent = representative->content;
-            for (const auto& n : group) {
-                if (n->content.length() > bestContent.length()) {
-                    bestContent = n->content;
-                }
-            }
-
-            auto contentMatch = contentRegex.match(bestContent);
-            if (contentMatch.hasMatch()) {
-                QString signAndPrefix = contentMatch.captured(1);
-                qlonglong offsetVal = contentMatch.captured(2).toLongLong(nullptr, 16);
-                QString restOfLine = contentMatch.captured(3);
-                bestContent = QString("%1%2%3")
-                    .arg(signAndPrefix.toLower())
-                    .arg(QString::number(offsetVal, 16).toLower())
-                    .arg(restOfLine);
-            }
-
-            auto newNode = std::make_shared<CodeNoteNode>();
-            newNode->content = bestContent;
-            newNode->originalIndex = representative->originalIndex;
-
-            std::vector<std::shared_ptr<CodeNoteNode>> allChildren;
-            for (const auto& n : group) {
-                allChildren.insert(allChildren.end(), n->children.begin(), n->children.end());
-            }
-
-            if (!allChildren.empty()) {
-                newNode->children = mergeTree(allChildren);
-            }
-            finalNodes.push_back(newNode);
-        }
-
-        for (auto node : nonMergeableNodes) {
-            if (!node->children.empty()) {
-                node->children = mergeTree(node->children);
-            }
-            finalNodes.push_back(node);
-        }
-
-        return sortNodes(finalNodes);
-    }
-
-    std::vector<std::shared_ptr<StructureWorkspaceDialog::CodeNoteNode>>
-    StructureWorkspaceDialog::sortNodes(std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
-        QRegularExpression offsetRegex("^[\\+\\-]0x([0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
-
-        std::sort(nodes.begin(), nodes.end(), [&](const std::shared_ptr<CodeNoteNode>& a, const std::shared_ptr<CodeNoteNode>& b) {
-            bool aIsOffset = offsetRegex.match(a->content).hasMatch();
-            bool bIsOffset = offsetRegex.match(b->content).hasMatch();
-
-            if (aIsOffset != bIsOffset) {
-                return !aIsOffset;
-            }
-
-            if (aIsOffset) {
-                qlonglong aVal = offsetRegex.match(a->content).captured(1).toLongLong(nullptr, 16);
-                qlonglong bVal = offsetRegex.match(b->content).captured(1).toLongLong(nullptr, 16);
-                return aVal < bVal;
-            }
-
-            return a->originalIndex < b->originalIndex;
-        });
-
-        return nodes;
-    }
-
-    QString StructureWorkspaceDialog::rebuildTextFromTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
-        int indentLevel,
-        const QString& style,
-        bool indentDescriptions,
-        std::vector<bool> ancestorIsLast) {
-        QString sb = "";
-
-        if (indentLevel == 0 && !m_headerComment.trimmed().isEmpty()) {
-            sb.append(m_headerComment.trimmed() + "\n\n");
-        }
-
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            const auto& node = nodes[i];
-            bool isLastChild = (i == nodes.size() - 1);
-
-            bool isPointerOffset = node->content.startsWith("+0x", Qt::CaseInsensitive) || node->content.startsWith("-0x", Qt::CaseInsensitive);
-            bool isAttachedNote = !isPointerOffset;
-
-            bool hasPointerChildren = false;
-            for (const auto& child : node->children) {
-                if (child->content.startsWith("+0x", Qt::CaseInsensitive) || child->content.startsWith("-0x", Qt::CaseInsensitive)) {
-                    hasPointerChildren = true;
-                    break;
-                }
-            }
-
-            QString prefix = "";
-
-            if (style.startsWith("Unicode Tree")) {
-                if (isAttachedNote) {
-                    if (indentDescriptions && indentLevel > 1) {
-                        for (int a = 0; a < indentLevel - 2; ++a) {
-                            prefix.append(ancestorIsLast[a] ? " " : "│");
-                        }
-                        prefix.append(ancestorIsLast[indentLevel - 2] ? "  " : "│ ");
-                    }
-                }
-                else {
-                    if (indentLevel > 0) {
-                        for (int a = 0; a < indentLevel - 1; ++a) {
-                            prefix.append(ancestorIsLast[a] ? " " : "│");
-                        }
-                        prefix.append(isLastChild ? "└" : "├");
-                        prefix.append(hasPointerChildren ? "┬" : "─");
-                    }
-                }
-            }
-            else {
-                QChar indentChar = style.startsWith("Plusses") ? '+' : '.';
-
-                if (isAttachedNote) {
-                    if (indentDescriptions) {
-                        prefix = indentLevel > 0 ? QString(indentLevel, '.') : "";
-                    }
-                }
-                else {
-                    prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
-                }
-            }
-
-            sb.append(QString("%1%2\n").arg(prefix).arg(node->content));
-
-            if (!node->children.empty()) {
-                std::vector<bool> nextAncestors = ancestorIsLast;
-                if (indentLevel > 0) {
-                    nextAncestors.push_back(isLastChild);
-                }
-                sb.append(rebuildTextFromTree(node->children, indentLevel + 1, style, indentDescriptions, nextAncestors));
-            }
-        }
-        return sb;
-    }
-
     void StructureWorkspaceDialog::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem) {
         QRegularExpression offsetRx("^([\\+\\-]0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
 
@@ -1704,9 +1043,9 @@ namespace PointerFinder2::UI {
         QString style = m_styleCombo->currentText();
         bool indentDesc = m_indentDescCheck->isChecked();
 
-        auto parsedTree = parseLinesToTree(lines);
-        auto mergedTree = mergeTree(parsedTree);
-        QString finalResult = rebuildTextFromTree(mergedTree, 0, style, indentDesc);
+        auto parsedTree = CodeNoteHierarchyEngine::parseLinesToTree(lines, m_headerComment);
+        auto mergedTree = CodeNoteHierarchyEngine::mergeTree(parsedTree);
+        QString finalResult = CodeNoteHierarchyEngine::rebuildTextFromTree(mergedTree, 0, style, indentDesc, m_headerComment);
 
         m_codeNoteTextEdit->setPlainText(finalResult.trimmed());
 
@@ -1759,8 +1098,7 @@ namespace PointerFinder2::UI {
         QString style = m_styleCombo ? m_styleCombo->currentText() : "Plusses (+)";
         bool indentDesc = m_indentDescCheck ? m_indentDescCheck->isChecked() : true;
 
-        StructureWorkspaceDialog* nonConstThis = const_cast<StructureWorkspaceDialog*>(this);
-        return nonConstThis->rebuildTextFromTree(rootNodes, 0, style, indentDesc);
+        return CodeNoteHierarchyEngine::rebuildTextFromTree(rootNodes, 0, style, indentDesc, m_headerComment);
     }
 
     void StructureWorkspaceDialog::syncTreeToCodeNoteText() {
