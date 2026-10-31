@@ -82,7 +82,6 @@ namespace PointerFinder2::UI {
         QPushButton* m_addPointerBtn = nullptr;
         QPushButton* m_followPointerBtn = nullptr;
         QPushButton* m_removeNodeBtn = nullptr;
-        QLineEdit* m_baseAddressEdit = nullptr;
 
         // Panel 2: Memory Viewer
         QWidget* m_middleContainer = nullptr;
@@ -144,6 +143,7 @@ namespace PointerFinder2::UI {
 
         RaGameData m_gameData;
         uint32_t m_currentViewerSelectedAddress = 0;
+        uint32_t m_currentBaseAddress = 0;
 
         std::vector<uint8_t> m_snapshotMemory;
 
@@ -161,6 +161,7 @@ namespace PointerFinder2::UI {
         bool loadActiveGameData();
         void populateAddressDropdown();
         void selectAddressInUI(uint32_t address);
+        void populateTreeFromCodeNote(const QString& noteText);
         bool saveActiveNoteToUserTxt();
         void updateToolbarButtonStates();
 

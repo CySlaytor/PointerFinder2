@@ -11,7 +11,7 @@ namespace PointerFinder2::Core {
         {' ', "16-bit"}, {'H', "8-bit"}, {'X', "32-bit"}, {'W', "24-bit"},
         {'M', "Bit0"}, {'N', "Bit1"}, {'O', "Bit2"}, {'P', "Bit3"},
         {'Q', "Bit4"}, {'R', "Bit5"}, {'S', "Bit6"}, {'T', "Bit7"},
-        {'L', "Lower4"}, {'U', "Upper4"}, {'K', "BitCount"},
+        {'K', "BitCount"},
         {'G', "32-bit BE"}, {'I', "16-bit BE"}, {'J', "24-bit BE"}
     };
 
@@ -114,7 +114,7 @@ namespace PointerFinder2::Core {
         QStringList lines;
         for (size_t i = 0; i < offsets.size(); ++i) {
             int32_t offset = offsets[i];
-            QString prefix = (i == 0) ? "" : QString(i, settings.Prefix.isEmpty() ? '.' : settings.Prefix.at(0));
+            QString prefix = (i == 0) ? "" : QString(i, settings.Prefix.isEmpty() ? '+' : settings.Prefix.at(0));
             QString sign = (offset < 0) ? "-" : "+";
             QString offsetHex = QString::number(std::abs(offset), 16).toUpper();
 

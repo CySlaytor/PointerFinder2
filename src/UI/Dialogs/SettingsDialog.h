@@ -22,6 +22,7 @@ namespace PointerFinder2::UI {
         void onResetAllClicked();
         void onGeneralSettingChanged();
         void onCodeNoteSettingChanged();
+        void onCodeNoteHelpClicked();
 
     private:
         QTabWidget* m_tabWidget = nullptr;
@@ -38,6 +39,7 @@ namespace PointerFinder2::UI {
         QCheckBox* m_suffixLastLineCheck = nullptr;
         QCheckBox* m_autoPopulatePointersCheck = nullptr;
         QPlainTextEdit* m_previewEdit = nullptr;
+        QPushButton* m_codeNoteHelpBtn = nullptr;
 
         QPushButton* m_closeButton = nullptr;
         bool m_isInitializing = true;

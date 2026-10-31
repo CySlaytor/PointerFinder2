@@ -18,6 +18,10 @@ namespace PointerFinder2::UI {
         clearCache();
         app.setStyle(QStyleFactory::create("Fusion"));
 
+        // Ensure clean, responsive tooltips across themes without sliding or asymmetric transitions
+        app.setEffectEnabled(Qt::UI_AnimateTooltip, false);
+        app.setEffectEnabled(Qt::UI_FadeTooltip, false);
+
         if (themeName.compare("Light", Qt::CaseInsensitive) == 0) {
             applyLightPalette(app);
             loadStylesheet(app, ":/styles/light_theme.qss");
@@ -157,7 +161,7 @@ namespace PointerFinder2::UI {
             file.close();
 
             // Enforce explicit QToolTip styling to prevent custom Windows themes (such as Rectify11) from overriding tooltip background colors
-            stylesheet.append("\nQToolTip { background-color: #242424; color: #F0F0F0; border: 1px solid #3E3E3E; padding: 4px; }\n");
+            stylesheet.append("\nQToolTip { background-color: #242424; color: #F0F0F0; border: 1px solid #3E3E3E; border-radius: 4px; padding: 3px 6px; font-size: 11px; }\n");
             app.setStyleSheet(stylesheet);
         }
         else {

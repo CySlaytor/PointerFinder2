@@ -25,6 +25,7 @@
 #include "Styles/ThemeManager.h"
 #include "Widgets/PointerResultsHeaderView.h"
 
+#include <windows.h>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -428,6 +429,24 @@ namespace PointerFinder2::UI {
     }
 
     bool MainWindow::eventFilter(QObject* obj, QEvent* event) {
+#ifdef Q_OS_WIN
+        // Hardware-accelerated symmetric fade-in and fade-out for all application tooltips
+        if (obj && obj->isWidgetType()) {
+            auto* w = static_cast<QWidget*>(obj);
+            if ((w->windowFlags() & Qt::WindowType_Mask) == Qt::ToolTip) {
+                HWND hwnd = reinterpret_cast<HWND>(w->winId());
+                if (hwnd) {
+                    if (event->type() == QEvent::Show) {
+                        AnimateWindow(hwnd, 120, AW_BLEND);
+                    }
+                    else if (event->type() == QEvent::Hide && IsWindowVisible(hwnd)) {
+                        AnimateWindow(hwnd, 120, AW_BLEND | AW_HIDE);
+                    }
+                }
+            }
+        }
+#endif
+
         if (event->type() == QEvent::KeyPress) {
             QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
             if (keyEvent->matches(QKeySequence::Paste)) {

@@ -166,7 +166,7 @@ namespace PointerFinder2::UI {
 
         m_rangeGroup = new QGroupBox(QString("Static Base Address Range (%1, Hex)").arg(getPlatformString()), this);
         m_rangeGroup->setFixedHeight(52);
-        m_rangeGroup->setToolTip("<html><div style='width: 500px;'>Defines the memory range boundaries where the base pointer of the path must reside. Only pointers located inside this static block will be shown.</div></html>");
+        m_rangeGroup->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Defines the memory range boundaries where the base pointer of the path must reside. Only pointers located inside this static block will be shown.</td></tr></table></body>");
 
         auto* rangeLayout = new QHBoxLayout(m_rangeGroup);
         rangeLayout->setContentsMargins(6, 12, 6, 6);
@@ -189,36 +189,36 @@ namespace PointerFinder2::UI {
 
         m_maxLevelSpin = new CustomSpinBox(this, 5);
         m_maxLevelSpin->setRange(1, 50);
-        m_maxLevelSpin->setToolTip("<html><div style='width: 500px;'>The maximum depth (number of pointer jumps) to search. Deeper levels scan deeper but increase complexity exponentially.</div></html>");
+        m_maxLevelSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>The maximum depth (number of pointer jumps) to search. Deeper levels scan deeper but increase complexity exponentially.</td></tr></table></body>");
 
         m_candidatesPerLevelSpin = new CustomSpinBox(this, 5);
         m_candidatesPerLevelSpin->setRange(1, 1000);
-        m_candidatesPerLevelSpin->setToolTip("<html><div style='width: 500px;'>Limits how many parent candidates are evaluated at each level. Low values (e.g., 3 to 7) dramatically speed up scans and favor logically sound paths.</div></html>");
+        m_candidatesPerLevelSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Limits how many parent candidates are evaluated at each level. Low values (e.g., 3 to 7) dramatically speed up scans and favor logically sound paths.</td></tr></table></body>");
 
         m_maxCandidatesSpin = new ThousandsSpinBox(this, 1000000);
         m_maxCandidatesSpin->setRange(1, 100000000);
         m_maxCandidatesSpin->setSingleStep(100000);
-        m_maxCandidatesSpin->setToolTip("<html><div style='width: 500px;'>Clamps the maximum number of intermediate nodes generated during BFS search to protect RAM resources.</div></html>");
+        m_maxCandidatesSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Clamps the maximum number of intermediate nodes generated during BFS search to protect RAM resources.</td></tr></table></body>");
 
         m_maxOffsetSpin = new HexSpinBox(this, 0x1000);
         m_maxOffsetSpin->setRange(0, 0x7FFFFFFF);
         m_maxOffsetSpin->setSingleStep(1);
-        m_maxOffsetSpin->setToolTip("<html><div style='width: 500px;'>The maximum distance allowed between pointer addresses. Match this with system limits (e.g., FFF for 4KB boundaries).</div></html>");
+        m_maxOffsetSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>The maximum distance allowed between pointer addresses. Match this with system limits (e.g., FFF for 4KB boundaries).</td></tr></table></body>");
 
         m_useLastOffsetHintCheck = new QCheckBox("Last Offset Hint (Hex)", this);
-        m_useLastOffsetHintCheck->setToolTip("<html><div style='width: 500px;'>Accelerates the search by forcing the first jump (Level 1) to use this exact offset value.</div></html>");
+        m_useLastOffsetHintCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Accelerates the search by forcing the first jump (Level 1) to use this exact offset value.</td></tr></table></body>");
 
         m_lastOffsetHintSpin = new HexSpinBox(this, 0x1000);
         m_lastOffsetHintSpin->setRange(0, 0x7FFFFFFF);
         m_lastOffsetHintSpin->setSingleStep(1);
-        m_lastOffsetHintSpin->setToolTip("<html><div style='width: 500px;'>Accelerates the search by forcing the first jump (Level 1) to use this exact offset value.</div></html>");
+        m_lastOffsetHintSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Accelerates the search by forcing the first jump (Level 1) to use this exact offset value.</td></tr></table></body>");
 
         m_detectArraysCheck = new QCheckBox("Detect Array Lists (Hex)", this);
-        m_detectArraysCheck->setToolTip("<html><div style='width: 500px;'><b>Experimental:</b> Post-processes the static base addresses to check if they belong to contiguous structures or array sets. Excessively high ranges can cause instability.</div></html>");
+        m_detectArraysCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'><b>Experimental:</b> Post-processes the static base addresses to check if they belong to contiguous structures or array sets. Excessively high ranges can cause instability.</td></tr></table></body>");
 
         m_arrayRangeSpin = new HexSpinBox(this, 0x80);
         m_arrayRangeSpin->setRange(4, 0xFFFF);
-        m_arrayRangeSpin->setToolTip("<html><div style='width: 500px;'><b>Experimental:</b> Post-processes the static base addresses to check if they belong to contiguous structures or array sets. Excessively high ranges can cause instability.</div></html>");
+        m_arrayRangeSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'><b>Experimental:</b> Post-processes the static base addresses to check if they belong to contiguous structures or array sets. Excessively high ranges can cause instability.</td></tr></table></body>");
 
         paramGrid->addWidget(new QLabel("Max Level", this), 0, 0);
         paramGrid->addWidget(new QLabel("Candidates per Level", this), 0, 1);
@@ -244,19 +244,19 @@ namespace PointerFinder2::UI {
         optionsLayout->setSpacing(3);
 
         m_stopOnFirstCheck = new QCheckBox("Stop when first path found", this);
-        m_stopOnFirstCheck->setToolTip("<html><div style='width: 500px;'>Stops search threads immediately once a single complete pointer chain matching all captured states is resolved.</div></html>");
+        m_stopOnFirstCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Stops search threads immediately once a single complete pointer chain matching all captured states is resolved.</td></tr></table></body>");
 
         m_findAllLevelsCheck = new QCheckBox("Find all path levels (slower)", this);
-        m_findAllLevelsCheck->setToolTip("<html><div style='width: 500px;'>Forces the search to scan deeper levels even if a complete static path was already found at an earlier level.</div></html>");
+        m_findAllLevelsCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Forces the search to scan deeper levels even if a complete static path was already found at an earlier level.</td></tr></table></body>");
 
         m_fastScanModeCheck = new QCheckBox("Fast Mode (Aggressive Pruning)", this);
-        m_fastScanModeCheck->setToolTip("<html><div style='width: 500px;'><b>Recommended:</b> Keeps track of visited nodes to prevent cyclic loops and redundant branch processing, preventing application memory exhaustion.</div></html>");
+        m_fastScanModeCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'><b>Recommended:</b> Keeps track of visited nodes to prevent cyclic loops and redundant branch processing, preventing application memory exhaustion.</td></tr></table></body>");
 
         m_printPartialPathsCheck = new QCheckBox("Output partial/broken paths", this);
-        m_printPartialPathsCheck->setToolTip("<html><div style='width: 500px;'>Outputs paths that broke during search. Shows the exact offset step where the target connection became invalid.</div></html>");
+        m_printPartialPathsCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Outputs paths that broke during search. Shows the exact offset step where the target connection became invalid.</td></tr></table></body>");
 
         m_dynamicStaticDetectionCheck = new QCheckBox("Multi-Step Explore (Dynamic Base Detection)", this);
-        m_dynamicStaticDetectionCheck->setToolTip("<html><div style='width: 500px;'><b>Experimental:</b> Disables the strict static range requirement. Instead, the search monitors each chain and terminates once a stable, consistent base address is resolved across all scans. Recommended for GBA.</div></html>");
+        m_dynamicStaticDetectionCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'><b>Experimental:</b> Disables the strict static range requirement. Instead, the search monitors each chain and terminates once a stable, consistent base address is resolved across all scans. Recommended for GBA.</td></tr></table></body>");
 
         optionsLayout->addWidget(m_stopOnFirstCheck);
         optionsLayout->addWidget(m_findAllLevelsCheck);

@@ -157,13 +157,6 @@ namespace PointerFinder2::UI {
         leftLayout->setContentsMargins(0, 0, 0, 0);
         leftLayout->setSpacing(6);
 
-        auto* baseAddrRow = new QHBoxLayout();
-        baseAddrRow->addWidget(new QLabel("Structure Base (Hex):", m_leftContainer));
-        m_baseAddressEdit = new QLineEdit(m_leftContainer);
-        m_baseAddressEdit->setPlaceholderText("e.g. 004934dc");
-        baseAddrRow->addWidget(m_baseAddressEdit);
-        leftLayout->addLayout(baseAddrRow);
-
         m_structureTree = new QTreeWidget(m_leftContainer);
         m_structureTree->setColumnCount(4);
         m_structureTree->setHeaderLabels({ "Description / Name", "Offset", "Resolved RAM", "Pointer Val" });
@@ -327,12 +320,6 @@ namespace PointerFinder2::UI {
         connect(m_refreshRamBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onRefreshRamClicked);
         connect(m_goToAddressBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onGoToAddressClicked);
         connect(m_goToAddressEdit, &QLineEdit::returnPressed, this, &StructureWorkspaceDialog::onGoToAddressClicked);
-
-        connect(m_baseAddressEdit, &QLineEdit::textChanged, this, [this]() {
-            recalculateTreeAddresses();
-            syncTreeToCodeNoteText();
-            updateToolbarButtonStates();
-        });
 
         connect(m_viewModeGroup, &QButtonGroup::idClicked, this, &StructureWorkspaceDialog::onViewModeChanged);
 
@@ -524,9 +511,6 @@ namespace PointerFinder2::UI {
         });
 
         int selectIdx = 0;
-        QString currentBase = m_baseAddressEdit->text().trimmed();
-        bool ok = false;
-        uint32_t currentAddr = currentBase.toUInt(&ok, 16);
 
         for (size_t i = 0; i < m_gameData.notes.size(); ++i) {
             const auto& n = m_gameData.notes[i];
@@ -538,7 +522,7 @@ namespace PointerFinder2::UI {
 
             m_addressSelectCombo->addItem(itemText, n.address);
 
-            if (ok && n.address == currentAddr) {
+            if (m_currentBaseAddress != 0 && n.address == m_currentBaseAddress) {
                 selectIdx = static_cast<int>(i);
             }
         }
@@ -546,8 +530,8 @@ namespace PointerFinder2::UI {
         m_addressSelectCombo->setCurrentIndex(selectIdx);
         m_addressSelectCombo->blockSignals(false);
 
-        if (m_addressSelectCombo->count() > 0 && ok && currentAddr != 0) {
-            selectAddressInUI(currentAddr);
+        if (m_addressSelectCombo->count() > 0 && m_currentBaseAddress != 0) {
+            selectAddressInUI(m_currentBaseAddress);
         }
         else if (m_addressSelectCombo->count() > 0) {
             selectAddressInUI(m_gameData.notes[0].address);
@@ -561,16 +545,37 @@ namespace PointerFinder2::UI {
 
         if (it == m_gameData.notes.end()) return;
 
-        QString addrHex = QString::number(address, 16).toUpper().rightJustified(8, '0');
-        m_baseAddressEdit->setText(addrHex);
+        m_currentBaseAddress = address;
 
         m_isSyncing = true;
         m_codeNoteTextEdit->setPlainText(it->noteText);
         m_isSyncing = false;
 
-        onFixHierarchyClicked();
+        // Populate tree non-destructively without altering or rewriting original user note text
+        populateTreeFromCodeNote(it->noteText);
         navigateToAddress(address);
         updateToolbarButtonStates();
+    }
+
+    void StructureWorkspaceDialog::populateTreeFromCodeNote(const QString& noteText) {
+        QString text = noteText.trimmed();
+        if (text.isEmpty()) {
+            m_structureTree->clear();
+            m_headerComment.clear();
+            return;
+        }
+
+        m_headerComment.clear();
+        QStringList lines = text.split(QRegularExpression("[\r\n]+"));
+        auto parsedTree = parseLinesToTree(lines);
+        auto mergedTree = mergeTree(parsedTree);
+
+        m_structureTree->clear();
+        populateTreeFromHierarchyNodes(mergedTree);
+
+        m_structureTree->expandAll();
+        recalculateTreeAddresses();
+        updateOffsetPreview();
     }
 
     void StructureWorkspaceDialog::onAddressComboChanged(int index) {
@@ -585,11 +590,8 @@ namespace PointerFinder2::UI {
     bool StructureWorkspaceDialog::saveActiveNoteToUserTxt() {
         if (!m_gameData.isValid || m_gameData.userTxtPath.isEmpty()) return false;
 
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
-        bool ok = false;
-        uint32_t activeAddr = baseText.toUInt(&ok, 16);
-        if (!ok || activeAddr == 0) return false;
+        uint32_t activeAddr = m_currentBaseAddress;
+        if (activeAddr == 0) return false;
 
         QString currentNote = m_codeNoteTextEdit->toPlainText();
 
@@ -702,11 +704,8 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onRevertToServerClicked() {
         if (!m_gameData.isValid || m_gameData.userTxtPath.isEmpty()) return;
 
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
-        bool ok = false;
-        uint32_t activeAddr = baseText.toUInt(&ok, 16);
-        if (!ok || activeAddr == 0) return;
+        uint32_t activeAddr = m_currentBaseAddress;
+        if (activeAddr == 0) return;
 
         // Remove the N0 line from User.txt
         QFile readFile(m_gameData.userTxtPath);
@@ -753,11 +752,7 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onResetClicked() {
-        uint32_t currentAddr = 0;
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
-        bool ok = false;
-        currentAddr = baseText.toUInt(&ok, 16);
+        uint32_t currentAddr = m_currentBaseAddress;
 
         loadActiveGameData();
         populateAddressDropdown();
@@ -775,13 +770,10 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::updateToolbarButtonStates() {
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        if (baseText.startsWith("0x", Qt::CaseInsensitive)) baseText = baseText.mid(2);
-        bool ok = false;
-        uint32_t activeAddr = baseText.toUInt(&ok, 16);
+        uint32_t activeAddr = m_currentBaseAddress;
 
         bool canRevert = false;
-        if (ok && m_gameData.isValid) {
+        if (activeAddr != 0 && m_gameData.isValid) {
             auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
                 return n.address == activeAddr;
             });
@@ -964,10 +956,9 @@ namespace PointerFinder2::UI {
     }
 
     uint32_t StructureWorkspaceDialog::resolveNodeAddress(QTreeWidgetItem* item) {
-        if (!item || !m_manager) return 0;
+        if (!item || !m_manager || m_currentBaseAddress == 0) return 0;
 
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        uint32_t base = m_manager->unnormalizeAddress(baseText);
+        uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
         if (base == 0) return 0;
 
         uint32_t currentAddress = base;
@@ -1003,10 +994,9 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::recalculateTreeAddresses() {
-        if (!m_memoryViewer->hasData() || !m_manager) return;
+        if (!m_memoryViewer->hasData() || !m_manager || m_currentBaseAddress == 0) return;
 
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        uint32_t base = m_manager->unnormalizeAddress(baseText);
+        uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
 
         uint32_t initialParentBase = base;
         bool initialValid = (base != 0);
@@ -1109,10 +1099,9 @@ namespace PointerFinder2::UI {
 
     StructureWorkspaceDialog::ScopeMatch StructureWorkspaceDialog::findBestScopeForAddress(uint32_t selectedAddr) {
         ScopeMatch best;
-        if (!m_manager || selectedAddr == 0) return best;
+        if (!m_manager || selectedAddr == 0 || m_currentBaseAddress == 0) return best;
 
-        QString baseText = m_baseAddressEdit->text().trimmed();
-        uint32_t base = m_manager->unnormalizeAddress(baseText);
+        uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
         if (base == 0) return best;
 
         uint32_t initialParentBase = base;

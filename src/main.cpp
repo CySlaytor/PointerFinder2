@@ -13,6 +13,10 @@
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
 
+    // Disable downward sliding animation and asymmetric effects for clean, responsive tooltips
+    app.setEffectEnabled(Qt::UI_AnimateTooltip, false);
+    app.setEffectEnabled(Qt::UI_FadeTooltip, false);
+
     qRegisterMetaType<std::vector<PointerFinder2::DataModels::PointerPath>>();
     qRegisterMetaType<PointerFinder2::DataModels::ScanProgressReport>();
 

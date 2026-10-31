@@ -27,7 +27,7 @@ namespace PointerFinder2::UI {
         : QDialog(parent) {
         setWindowTitle("Settings");
         setModal(true);
-        resize(480, 350);
+        resize(500, 360);
 
         setupLayout();
 
@@ -117,7 +117,21 @@ namespace PointerFinder2::UI {
     // with a live-rendering note simulator showing changes as you type.
     void SettingsDialog::setupCodeNotesTab() {
         auto* tab = new QWidget(this);
-        auto* layout = new QHBoxLayout(tab);
+        auto* tabLayout = new QVBoxLayout(tab);
+
+        // Header row with QA standards help button
+        auto* headerRow = new QHBoxLayout();
+        auto* noteHeaderDesc = new QLabel("Configure code note indirection levels and formatting standards:", tab);
+        m_codeNoteHelpBtn = new QPushButton("?", tab);
+        m_codeNoteHelpBtn->setFixedSize(22, 22);
+        m_codeNoteHelpBtn->setToolTip("Why standard indentation matters (QA & Code Review standards)");
+
+        headerRow->addWidget(noteHeaderDesc);
+        headerRow->addStretch();
+        headerRow->addWidget(m_codeNoteHelpBtn);
+        tabLayout->addLayout(headerRow);
+
+        auto* contentLayout = new QHBoxLayout();
 
         auto* formattingGroup = new QGroupBox("Formatting Options", tab);
         auto* formLayout = new QFormLayout(formattingGroup);
@@ -125,34 +139,112 @@ namespace PointerFinder2::UI {
         m_suffixEdit = new QLineEdit(formattingGroup);
         m_alignCheck = new QCheckBox("Align Suffixes Vertically", formattingGroup);
         m_suffixLastLineCheck = new QCheckBox("Apply Suffix to Last Line Only", formattingGroup);
-        m_autoPopulatePointersCheck = new QCheckBox("Auto-populate intermediate pointer levels with template", formattingGroup);
+        m_autoPopulatePointersCheck = new QCheckBox("Auto-populate intermediate\npointer levels with template", formattingGroup);
 
         formLayout->addRow("Indentation Prefix:", m_prefixEdit);
         formLayout->addRow("Line Suffix:", m_suffixEdit);
         formLayout->addRow(m_alignCheck);
         formLayout->addRow(m_suffixLastLineCheck);
         formLayout->addRow(m_autoPopulatePointersCheck);
-        layout->addWidget(formattingGroup, 1);
+        contentLayout->addWidget(formattingGroup, 3);
 
         auto* previewGroup = new QGroupBox("Live Preview", tab);
         auto* previewLayout = new QVBoxLayout(previewGroup);
         m_previewEdit = new QPlainTextEdit(previewGroup);
         m_previewEdit->setReadOnly(true);
+        m_previewEdit->setMinimumWidth(210);
 
         QFont monoFont("Consolas", 9);
         monoFont.setStyleHint(QFont::Monospace);
         m_previewEdit->setFont(monoFont);
 
         previewLayout->addWidget(m_previewEdit);
-        layout->addWidget(previewGroup, 1);
+        contentLayout->addWidget(previewGroup, 2);
 
+        tabLayout->addLayout(contentLayout, 1);
         m_tabWidget->addTab(tab, "Code Notes");
 
+        connect(m_codeNoteHelpBtn, &QPushButton::clicked, this, &SettingsDialog::onCodeNoteHelpClicked);
         connect(m_prefixEdit, &QLineEdit::textChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
         connect(m_suffixEdit, &QLineEdit::textChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
         connect(m_alignCheck, &QCheckBox::checkStateChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
         connect(m_suffixLastLineCheck, &QCheckBox::checkStateChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
         connect(m_autoPopulatePointersCheck, &QCheckBox::checkStateChanged, this, &SettingsDialog::onCodeNoteSettingChanged);
+    }
+
+    void SettingsDialog::onCodeNoteHelpClicked() {
+        QDialog helpDialog(this);
+        helpDialog.setWindowTitle("Recommended Code Note Structure");
+        helpDialog.resize(620, 600);
+
+        auto* layout = new QVBoxLayout(&helpDialog);
+        layout->setSpacing(8);
+
+        auto* titleLabel = new QLabel("<b>Why Hierarchical Indentation Matters</b>", &helpDialog);
+        titleLabel->setStyleSheet("font-size: 13px;");
+        layout->addWidget(titleLabel);
+
+        auto* descLabel = new QLabel(
+            "RetroAchievements QA and Code Review (CR) teams strongly encourage adopting standardized "
+            "hierarchical code note formatting for all new sets and updates:<br>"
+            "<ul>"
+            "<li><b>Older Sets of Inactive Developers:</b> Many legacy achievement sets were created years ago by "
+            "developers who have long since become inactive, long before modern code note conventions were established. "
+            "When these older sets require maintenance, logic upgrades, or bug fixes, current developers and reviewers "
+            "must spend considerable time reverse-engineering flat, unformatted lists of offsets. Following this structure "
+            "ensures sets remain transparent and maintainable by anyone in the future.</li>"
+            "<li><b>Pointers (<code>+</code>) vs. Enums (<code>.</code>):</b> While dots were previously used for indirection, "
+            "using plusses (<code>+</code>) exclusively for pointer jumps and dots (<code>.</code>) exclusively for value "
+            "enumerations provides an immediate visual distinction between structural memory offsets and variable states.</li>"
+            "<li><b>Leveling Up Enums:</b> Dots are used to level up enumerations directly under their respective variable "
+            "at the current pointer level (e.g., <code>...0x00=Idle</code> directly beneath <code>++0x28</code>), making complex "
+            "structures intuitive to read.</li>"
+            "<li><b>Explicit Pointer Annotations:</b> It is recommended to use <code>=</code> followed by <code>[32-bit] Pointer</code> "
+            "or <code>[24-bit] Pointer</code> depending on the platform architecture.</li>"
+            "<li><b>Why Pipelines (<code>|</code>) Were Reallocated:</b> Using <code>|</code> as a pointer delimiter has been retired. "
+            "Pipelines are now reserved exclusively to document <b>Array structures</b> and indexed element offsets "
+            "(e.g., <code>+++|0x00</code>).</li>"
+            "</ul>",
+            &helpDialog
+        );
+        descLabel->setWordWrap(true);
+        layout->addWidget(descLabel);
+
+        layout->addWidget(new QLabel("<b>Exemplary Recommended Structure:</b>", &helpDialog));
+
+        auto* exampleEdit = new QPlainTextEdit(&helpDialog);
+        exampleEdit->setReadOnly(true);
+        exampleEdit->setMinimumHeight(240);
+        QFont monoFont("Consolas", 9);
+        monoFont.setStyleHint(QFont::Monospace);
+        exampleEdit->setFont(monoFont);
+        exampleEdit->setPlainText(
+            "[32-bit] Pointer to PlayerObject\n\n"
+            "+0x0=[32-bit] Pointer to PlayerData\n"
+            "++0x14=[32-bit] Pointer to Coordinates\n"
+            "+++0x0=[Float] Position X\n"
+            "+++0x4=[Float] Position Y\n"
+            "+++0x8=[Float] Position Z\n"
+            "++0x28=[32-bit] Player State\n"
+            "...0x00=Idle\n"
+            "...0x01=Running\n"
+            "...0x02=Jumping\n"
+            "...0xFF=Dead\n"
+            "++0x30=[16-bit] Health\n"
+            "++0x40=[30x16 bytes] Pointer to PlayerInventory Array\n"
+            "+++|0x00=[32-bit] Weapon ID\n"
+            "....0x00=Pistol\n"
+            "....0x01=SMG\n"
+            "....0x02=Sniper Rifle"
+        );
+        layout->addWidget(exampleEdit, 1);
+
+        auto* closeBtn = new QPushButton("Close", &helpDialog);
+        closeBtn->setObjectName("closeButton");
+        connect(closeBtn, &QPushButton::clicked, &helpDialog, &QDialog::accept);
+        layout->addWidget(closeBtn, 0, Qt::AlignRight);
+
+        helpDialog.exec();
     }
 
     void SettingsDialog::onGeneralSettingChanged() {
@@ -194,7 +286,7 @@ namespace PointerFinder2::UI {
         settings.SuffixOnLastLineOnly = m_suffixLastLineCheck->isChecked();
         settings.AutoPopulatePointers = m_autoPopulatePointersCheck->isChecked();
 
-        std::vector<int32_t> dummyOffsets = { 0x4, 0x2A0, -0x1C };
+        std::vector<int32_t> dummyOffsets = { 0x4, 0x2A0, 0x1C };
         QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Description", "[32-bit] Pointer");
         m_previewEdit->setPlainText(preview);
     }
