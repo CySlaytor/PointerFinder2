@@ -41,7 +41,9 @@ namespace PointerFinder2::Core {
             uint32_t rootBaseAddress,
             const std::vector<ScopeCandidate>& scopes,
             Emulators::IEmulatorManager* manager,
-            const std::vector<uint8_t>& snapshotMemory
+            const std::vector<uint8_t>& snapshotMemory,
+            bool rootIsArray = false,
+            uint32_t rootArraySize = 0
         );
 
         static QString suggestDefaultType(

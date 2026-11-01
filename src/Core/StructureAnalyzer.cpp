@@ -36,7 +36,9 @@ namespace PointerFinder2::Core {
         uint32_t rootBaseAddress,
         const std::vector<ScopeCandidate>& scopes,
         Emulators::IEmulatorManager* manager,
-        const std::vector<uint8_t>& snapshotMemory
+        const std::vector<uint8_t>& snapshotMemory,
+        bool rootIsArray,
+        uint32_t rootArraySize
     ) {
         ScopeMatch best;
         if (!manager || selectedAddr == 0 || rootBaseAddress == 0) return best;
@@ -45,13 +47,18 @@ namespace PointerFinder2::Core {
         if (base == 0) return best;
 
         uint32_t initialParentBase = base;
-        auto basePtr = readMemoryDword(base, manager, snapshotMemory);
-        if (basePtr.has_value() && manager->isValidPointerTarget(basePtr.value())) {
-            initialParentBase = manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+
+        // When the root address itself is declared as a static array, do not dereference
+        // the address as a pointer. The array elements reside directly starting at 'base'.
+        if (!rootIsArray) {
+            auto basePtr = readMemoryDword(base, manager, snapshotMemory);
+            if (basePtr.has_value() && manager->isValidPointerTarget(basePtr.value())) {
+                initialParentBase = manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+            }
         }
 
         std::vector<ScopeCandidate> allScopes;
-        allScopes.push_back({ nullptr, initialParentBase, 0, false, 0 });
+        allScopes.push_back({ nullptr, initialParentBase, 0, rootIsArray, rootArraySize });
         allScopes.insert(allScopes.end(), scopes.begin(), scopes.end());
 
         constexpr uint32_t MAX_STRUCT_SPAN = 0x10000; // 64 KB struct span

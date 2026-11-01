@@ -413,4 +413,24 @@ namespace PointerFinder2::Core {
         return true;
     }
 
+    bool RaStorageService::deleteLocalNote(RaGameData& gameData, uint32_t activeAddr) {
+        if (!gameData.isValid || activeAddr == 0) return false;
+
+        // 1. Remove note from in-memory collection
+        auto it = std::find_if(gameData.notes.begin(), gameData.notes.end(), [&](const RaCodeNote& n) {
+            return n.address == activeAddr;
+        });
+
+        if (it != gameData.notes.end()) {
+            gameData.notes.erase(it);
+        }
+
+        // 2. Erase override line from User.txt if present
+        if (!gameData.userTxtPath.isEmpty() && QFile::exists(gameData.userTxtPath)) {
+            revertServerNote(gameData, activeAddr);
+        }
+
+        return true;
+    }
+
 }

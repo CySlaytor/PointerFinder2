@@ -5,6 +5,7 @@
 #include "../../Core/StructureAnalyzer.h"
 #include "../../Emulators/IEmulatorManager.h"
 #include "../Widgets/MemoryViewerWidget.h"
+#include "NewAddressDialog.h"
 
 #include <cstdint>
 #include <memory>
@@ -93,6 +94,7 @@ namespace PointerFinder2::UI {
         void onAddPointerClicked();
         void onFollowPointerClicked();
         void onRemoveNodeClicked();
+        void onRemoveDocumentationAtAddress(uint32_t address);
         void onStructureTreeItemChanged(QTreeWidgetItem* item, int column);
         void onStructureTreeSelectionChanged();
         void onRefreshRamClicked();
@@ -100,6 +102,8 @@ namespace PointerFinder2::UI {
         void onViewModeChanged();
 
         // RA Game Data & Dissection slots
+        void onNewAddressClicked();
+        void onDeleteAddressClicked();
         void onAddressComboChanged(int index);
         void onAddressSearchTextChanged(const QString& text);
         void onSaveUserTxtClicked();
@@ -124,6 +128,8 @@ namespace PointerFinder2::UI {
         QStandardItemModel* m_addressSourceModel = nullptr;
         AddressFilterProxyModel* m_addressProxyModel = nullptr;
         QLineEdit* m_addressSearchEdit = nullptr;
+        QPushButton* m_newAddressBtn = nullptr;
+        QPushButton* m_deleteAddressBtn = nullptr;
         QPushButton* m_saveUserBtn = nullptr;
         QPushButton* m_revertServerBtn = nullptr;
         QPushButton* m_resetBtn = nullptr;
@@ -208,6 +214,7 @@ namespace PointerFinder2::UI {
 
         void navigateToAddress(uint32_t address);
 
+        bool isRootArray(uint32_t* outSize = nullptr) const;
         ScopeMatch findBestScopeForAddress(uint32_t selectedAddr);
         void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description, bool isArrayElement = false);
         QString suggestDefaultType(uint32_t address);

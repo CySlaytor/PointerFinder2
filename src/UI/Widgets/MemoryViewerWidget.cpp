@@ -8,6 +8,7 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QToolTip>
 
@@ -185,6 +186,10 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::clearDefinedArrays() {
         m_definedArrays.clear();
         viewport()->update();
+    }
+
+    bool MemoryViewerWidget::isAddressDocumented(uint32_t address) const {
+        return m_highlights.find(address) != m_highlights.end();
     }
 
     void MemoryViewerWidget::clearRangeSelection() {
@@ -463,6 +468,7 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::mouseMoveEvent(QMouseEvent* event) {
         if (!m_memoryData.empty()) {
             uint32_t addr = addressAtPosition(event->pos());
+            m_hoverAddress = addr;
             if (addr != 0) {
                 auto it = m_highlights.find(addr);
 
@@ -497,24 +503,31 @@ namespace PointerFinder2::UI::Widgets {
                     QString arrayTag = "";
                     if (activeArray != nullptr) {
                         uint32_t offsetInArray = addr - activeArray->startAddress;
-                        arrayTag = QString("<span style='color: #D2A8FF;'>[Array: %1 (%2 bytes), Offset: +0x%3]</span>")
-                            .arg(activeArray->name.isEmpty() ? "Array" : activeArray->name)
-                            .arg(activeArray->size)
-                            .arg(QString::number(offsetInArray, 16).toUpper());
+
+                        // Clean redundant duplicate size tags from array name (e.g. "[80 bytes] Pointer to Array")
+                        QString cleanArrName = activeArray->name;
+                        cleanArrName.remove(QRegularExpression(R"(\[\d+\s*bytes\]\s*)", QRegularExpression::CaseInsensitiveOption));
+                        cleanArrName = cleanArrName.trimmed();
+
+                        if (cleanArrName.isEmpty() || cleanArrName.compare("Array", Qt::CaseInsensitive) == 0 ||
+                            cleanArrName.compare("Pointer to Array", Qt::CaseInsensitive) == 0) {
+                            arrayTag = QString("<span style='color: #D2A8FF;'>[Array: (%1 bytes), Offset: +0x%2]</span>")
+                                .arg(activeArray->size)
+                                .arg(QString::number(offsetInArray, 16).toUpper());
+                        }
+                        else {
+                            arrayTag = QString("<span style='color: #D2A8FF;'>[Array: %1 (%2 bytes), Offset: +0x%3]</span>")
+                                .arg(cleanArrName)
+                                .arg(activeArray->size)
+                                .arg(QString::number(offsetInArray, 16).toUpper());
+                        }
                     }
 
-                    QString combinedStatus = line3;
-                    if (!combinedStatus.isEmpty() && !arrayTag.isEmpty()) {
-                        combinedStatus += " &bull; " + arrayTag;
-                    }
-                    else if (!arrayTag.isEmpty()) {
-                        combinedStatus = arrayTag;
-                    }
-
-                    QString tip = QString("<div style='margin:0; padding:0; line-height:115%;'>%1%2%3</div>")
+                    QString tip = QString("<div style='margin:0; padding:0; line-height:120%;'>%1%2%3%4</div>")
                         .arg(line1)
                         .arg(line2.isEmpty() ? "" : "<br>" + line2)
-                        .arg(combinedStatus.isEmpty() ? "" : "<br>" + combinedStatus);
+                        .arg(line3.isEmpty() ? "" : "<br>" + line3)
+                        .arg(arrayTag.isEmpty() ? "" : "<br>" + arrayTag);
 
                     QToolTip::showText(event->globalPosition().toPoint(), tip, viewport());
                 }
@@ -530,6 +543,7 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     void MemoryViewerWidget::leaveEvent(QEvent* event) {
+        m_hoverAddress = 0;
         QToolTip::hideText();
         QAbstractScrollArea::leaveEvent(event);
     }
@@ -561,6 +575,14 @@ namespace PointerFinder2::UI::Widgets {
             event->accept();
             emit followPointerTriggered();
             return;
+        }
+        if (event->key() == Qt::Key_X || event->key() == Qt::Key_Delete) {
+            uint32_t targetAddr = (m_hoverAddress != 0) ? m_hoverAddress : m_selectedAddress;
+            if (targetAddr != 0) {
+                event->accept();
+                emit removeDocumentationTriggered(targetAddr);
+                return;
+            }
         }
         if (event->key() == Qt::Key_Backspace || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Left)) {
             event->accept();

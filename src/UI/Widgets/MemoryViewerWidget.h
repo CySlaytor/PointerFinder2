@@ -68,6 +68,8 @@ namespace PointerFinder2::UI::Widgets {
         void navigateForward();
 
         uint32_t getSelectedAddress() const { return m_selectedAddress; }
+        uint32_t getHoverAddress() const { return m_hoverAddress; }
+        bool isAddressDocumented(uint32_t address) const;
         void setSelectedAddress(uint32_t address);
         void goToAddress(uint32_t address);
 
@@ -89,6 +91,7 @@ namespace PointerFinder2::UI::Widgets {
         void addVariableTriggered();
         void addPointerTriggered();
         void followPointerTriggered();
+        void removeDocumentationTriggered(uint32_t address);
 
     protected:
         void paintEvent(QPaintEvent* event) override;
@@ -110,6 +113,7 @@ namespace PointerFinder2::UI::Widgets {
         std::vector<DefinedArrayInfo> m_definedArrays;
 
         uint32_t m_selectedAddress = 0;
+        uint32_t m_hoverAddress = 0;
         bool m_hasSelection = false;
 
         // Shift+Click range selection state

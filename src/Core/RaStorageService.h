@@ -36,6 +36,7 @@ namespace PointerFinder2::Core {
         static bool loadActiveGameData(PlatformHandle processHandle, RaGameData& outData);
         static bool saveActiveNoteToUserTxt(RaGameData& gameData, uint32_t activeAddr, const QString& currentNote);
         static bool revertServerNote(RaGameData& gameData, uint32_t activeAddr);
+        static bool deleteLocalNote(RaGameData& gameData, uint32_t activeAddr);
 
         static QString extractTitleFromNote(const QString& noteText);
         static QString unescapeUserTxt(const QString& in);

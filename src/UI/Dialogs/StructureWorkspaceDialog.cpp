@@ -128,6 +128,24 @@ namespace PointerFinder2::UI {
         m_addressSearchEdit->setFixedHeight(26);
         topToolbar->addWidget(m_addressSearchEdit);
 
+        m_newAddressBtn = new QPushButton("New Address...", this);
+        m_newAddressBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
+        m_newAddressBtn->setToolTip("Create a new structure or array at a manual address (Ctrl+N)");
+        m_newAddressBtn->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_N));
+        m_newAddressBtn->setFixedHeight(26);
+        m_newAddressBtn->setAutoDefault(false);
+        m_newAddressBtn->setDefault(false);
+        topToolbar->addWidget(m_newAddressBtn);
+
+        m_deleteAddressBtn = new QPushButton("Remove Address", this);
+        m_deleteAddressBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
+        m_deleteAddressBtn->setToolTip("Delete this manually created address from the list and User.txt");
+        m_deleteAddressBtn->setEnabled(false);
+        m_deleteAddressBtn->setFixedHeight(26);
+        m_deleteAddressBtn->setAutoDefault(false);
+        m_deleteAddressBtn->setDefault(false);
+        topToolbar->addWidget(m_deleteAddressBtn);
+
         m_saveUserBtn = new QPushButton("Save to User.txt", this);
         m_saveUserBtn->setIcon(getThemeIcon(":/icons/save.svg"));
         m_saveUserBtn->setShortcut(QKeySequence::Save);
@@ -397,6 +415,7 @@ namespace PointerFinder2::UI {
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addVariableTriggered, this, &StructureWorkspaceDialog::onAddVariableClicked);
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addPointerTriggered, this, &StructureWorkspaceDialog::onAddPointerClicked);
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::followPointerTriggered, this, &StructureWorkspaceDialog::onFollowPointerClicked);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::removeDocumentationTriggered, this, &StructureWorkspaceDialog::onRemoveDocumentationAtAddress);
 
         connect(m_addVariableBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onAddVariableClicked);
         connect(m_addPointerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onAddPointerClicked);
@@ -412,6 +431,8 @@ namespace PointerFinder2::UI {
         connect(m_viewModeGroup, &QButtonGroup::idClicked, this, &StructureWorkspaceDialog::onViewModeChanged);
 
         // RA Data controls
+        connect(m_newAddressBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onNewAddressClicked);
+        connect(m_deleteAddressBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onDeleteAddressClicked);
         connect(m_addressSelectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onAddressComboChanged);
         connect(m_addressSearchEdit, &QLineEdit::textChanged, this, &StructureWorkspaceDialog::onAddressSearchTextChanged);
         connect(m_saveUserBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onSaveUserTxtClicked);
@@ -488,6 +509,89 @@ namespace PointerFinder2::UI {
             if (comboVal.isValid()) {
                 selectAddressInUI(comboVal.toUInt());
             }
+        }
+    }
+
+    void StructureWorkspaceDialog::onNewAddressClicked() {
+        uint32_t defaultAddr = (m_currentViewerSelectedAddress != 0) ? m_currentViewerSelectedAddress : m_currentBaseAddress;
+        NewAddressDialog dialog(m_manager, defaultAddr, this);
+
+        if (dialog.exec() == QDialog::Accepted) {
+            uint32_t address = dialog.getAddress();
+            if (address == 0) return;
+
+            QString initialNote = dialog.getInitialCodeNote();
+
+            // Check if address already exists in code notes
+            auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+                return n.address == address;
+            });
+
+            if (it != m_gameData.notes.end()) {
+                auto reply = QMessageBox::question(
+                    this,
+                    "Address Exists",
+                    QString("A code note for address 0x%1 already exists (%2).\n\nWould you like to switch to it?")
+                        .arg(QString::number(address, 16).toUpper().rightJustified(8, '0'), it->title),
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::Yes
+                );
+                if (reply == QMessageBox::Yes) {
+                    selectAddressInUI(address);
+                }
+                return;
+            }
+
+            RaCodeNote newNote;
+            newNote.address = address;
+            newNote.addressHex = QString("0x%1").arg(address, 8, 16, QChar('0')).toUpper();
+            newNote.noteText = initialNote;
+            newNote.title = RaStorageService::extractTitleFromNote(initialNote);
+            newNote.author = "Local";
+            newNote.isModified = false;
+            newNote.isLocalOnly = true;
+
+            m_gameData.notes.push_back(newNote);
+
+            populateAddressDropdown();
+            selectAddressInUI(address);
+        }
+    }
+
+    void StructureWorkspaceDialog::onDeleteAddressClicked() {
+        uint32_t activeAddr = m_currentBaseAddress;
+        if (activeAddr == 0) return;
+
+        QString addrStr = m_manager ? m_manager->formatDisplayAddress(activeAddr) : QString::number(activeAddr, 16).toUpper();
+
+        auto reply = QMessageBox::question(
+            this,
+            "Remove Address",
+            QString("Are you sure you want to remove address 0x%1 from the address list and User.txt?").arg(addrStr),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+
+        if (reply != QMessageBox::Yes) return;
+
+        RaStorageService::deleteLocalNote(m_gameData, activeAddr);
+
+        m_currentBaseAddress = 0;
+        populateAddressDropdown();
+
+        if (m_addressSelectCombo->count() > 0) {
+            QVariant val = m_addressSelectCombo->currentData();
+            if (val.isValid()) {
+                selectAddressInUI(val.toUInt());
+            }
+        }
+        else {
+            m_structureTree->blockSignals(true);
+            m_structureTree->clear();
+            m_structureTree->blockSignals(false);
+            m_codeNoteTextEdit->clear();
+            m_offsetPreviewLabel->setText("Select an address in Memory Viewer to calculate relative offset.");
+            updateToolbarButtonStates();
         }
     }
 
@@ -629,15 +733,23 @@ namespace PointerFinder2::UI {
         uint32_t activeAddr = m_currentBaseAddress;
 
         bool canRevert = false;
+        bool canDelete = false;
+
         if (activeAddr != 0 && m_gameData.isValid) {
             auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
                 return n.address == activeAddr;
             });
-            if (it != m_gameData.notes.end() && it->isModified) {
-                canRevert = true;
+            if (it != m_gameData.notes.end()) {
+                if (it->isModified) {
+                    canRevert = true;
+                }
+                if (it->isLocalOnly) {
+                    canDelete = true;
+                }
             }
         }
         m_revertServerBtn->setEnabled(canRevert);
+        m_deleteAddressBtn->setEnabled(canDelete);
     }
 
     void StructureWorkspaceDialog::onViewModeChanged() {
@@ -746,6 +858,41 @@ namespace PointerFinder2::UI {
         followPtrAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
         followPtrAct->setEnabled(isPointer);
 
+        if (m_memoryViewer->isAddressDocumented(address)) {
+            menu.addSeparator();
+            auto* removeDocAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove Documentation (X / Del)", this, [this, address]() {
+                onRemoveDocumentationAtAddress(address);
+            });
+            removeDocAct->setProperty("iconPath", ":/icons/delete.svg");
+        }
+
+        menu.addSeparator();
+
+        QString displayAddrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString("%1").arg(address, 8, 16, QChar('0')).toUpper();
+
+        auto* newAddrAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), QString("Create New Structure at 0x%1...").arg(displayAddrStr), this, [this, address]() {
+            NewAddressDialog dialog(m_manager, address, this);
+            if (dialog.exec() == QDialog::Accepted) {
+                uint32_t newAddr = dialog.getAddress();
+                if (newAddr == 0) return;
+                QString initialNote = dialog.getInitialCodeNote();
+
+                RaCodeNote newNote;
+                newNote.address = newAddr;
+                newNote.addressHex = QString("0x%1").arg(newAddr, 8, 16, QChar('0')).toUpper();
+                newNote.noteText = initialNote;
+                newNote.title = RaStorageService::extractTitleFromNote(initialNote);
+                newNote.author = "Local";
+                newNote.isModified = false;
+                newNote.isLocalOnly = true;
+
+                m_gameData.notes.push_back(newNote);
+                populateAddressDropdown();
+                selectAddressInUI(newAddr);
+            }
+        });
+        newAddrAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
+
         menu.addSeparator();
 
         auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, [this, address]() {
@@ -760,6 +907,35 @@ namespace PointerFinder2::UI {
         copyValAct->setProperty("iconPath", ":/icons/copy_ra.svg");
 
         menu.exec(globalPos);
+    }
+
+    void StructureWorkspaceDialog::onRemoveDocumentationAtAddress(uint32_t address) {
+        if (!m_manager || address == 0) return;
+
+        QTreeWidgetItem* targetItem = nullptr;
+        std::function<void(QTreeWidgetItem*)> findItem = [&](QTreeWidgetItem* item) {
+            if (targetItem) return;
+            uint32_t res = resolveNodeAddress(item);
+            if (res == address) {
+                targetItem = item;
+                return;
+            }
+            for (int i = 0; i < item->childCount(); ++i) {
+                findItem(item->child(i));
+            }
+        };
+
+        for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
+            findItem(m_structureTree->topLevelItem(i));
+        }
+
+        if (targetItem) {
+            delete targetItem;
+            recalculateTreeAddresses();
+            updateOffsetPreview();
+            syncTreeToCodeNoteText();
+            updateMemoryHighlights();
+        }
     }
 
     void StructureWorkspaceDialog::onDefineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount) {
@@ -801,17 +977,52 @@ namespace PointerFinder2::UI {
             targetNode->setText(0, arrayFormatText);
             targetNode->setData(0, Qt::UserRole + 5, byteCount); // Array size in bytes
             targetNode->setData(0, Qt::UserRole + 6, true);      // Array scope flag
+            m_memoryViewer->clearRangeSelection();
+            recalculateTreeAddresses();
+            syncTreeToCodeNoteText();
         }
         else {
-            // If defined at the base of the dissected structure itself
-            QString arrayFormatText = QString("[%1 bytes] Array").arg(byteCount);
             auto match = findBestScopeForAddress(startAddress);
-            insertNodeInScope(match.pointerNode, match.offset, arrayFormatText);
-        }
+            if (match.isValid) {
+                // If defined at the base of the dissected structure itself
+                QString arrayFormatText = QString("[%1 bytes] Array").arg(byteCount);
+                insertNodeInScope(match.pointerNode, match.offset, arrayFormatText, match.isArrayScope);
+                m_memoryViewer->clearRangeSelection();
+                recalculateTreeAddresses();
+                syncTreeToCodeNoteText();
+            }
+            else {
+                // If range is outside known scopes, offer to create a new Root Array Structure at this address
+                QString displayAddrStr = m_manager ? m_manager->formatDisplayAddress(startAddress) : QString::number(startAddress, 16).toUpper();
+                auto reply = QMessageBox::question(
+                    this,
+                    "Create Array Structure",
+                    QString("Selected range is outside known structure scopes.\n\nWould you like to create a new Root Array Structure at 0x%1 (%2 bytes)?")
+                        .arg(displayAddrStr)
+                        .arg(byteCount),
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::Yes
+                );
 
-        m_memoryViewer->clearRangeSelection();
-        recalculateTreeAddresses();
-        syncTreeToCodeNoteText();
+                if (reply == QMessageBox::Yes) {
+                    uint32_t normalizedAddr = m_manager ? m_manager->unnormalizeAddress(displayAddrStr) : startAddress;
+                    QString initialNote = QString("[%1 bytes] Array").arg(byteCount);
+
+                    RaCodeNote newNote;
+                    newNote.address = normalizedAddr;
+                    newNote.addressHex = QString("0x%1").arg(normalizedAddr, 8, 16, QChar('0')).toUpper();
+                    newNote.noteText = initialNote;
+                    newNote.title = RaStorageService::extractTitleFromNote(initialNote);
+                    newNote.author = "Local";
+                    newNote.isModified = false;
+                    newNote.isLocalOnly = true;
+
+                    m_gameData.notes.push_back(newNote);
+                    populateAddressDropdown();
+                    selectAddressInUI(normalizedAddr);
+                }
+            }
+        }
     }
 
     // Double-clicking a tree item: Column 0 edits; Columns 1-3 follow pointer to destination
@@ -894,9 +1105,15 @@ namespace PointerFinder2::UI {
         if (base == 0) return 0;
 
         uint32_t currentAddress = base;
-        auto basePtr = readMemoryDword(base);
-        if (basePtr.has_value() && m_manager->isValidPointerTarget(basePtr.value())) {
-            currentAddress = m_manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+
+        uint32_t rootArrSize = 0;
+        bool rootArr = isRootArray(&rootArrSize);
+
+        if (!rootArr) {
+            auto basePtr = readMemoryDword(base);
+            if (basePtr.has_value() && m_manager->isValidPointerTarget(basePtr.value())) {
+                currentAddress = m_manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+            }
         }
 
         std::vector<QTreeWidgetItem*> lineage;
@@ -933,9 +1150,14 @@ namespace PointerFinder2::UI {
         uint32_t initialParentBase = base;
         bool initialValid = (base != 0);
 
-        auto basePtr = readMemoryDword(base);
-        if (basePtr.has_value() && m_manager->isValidPointerTarget(basePtr.value())) {
-            initialParentBase = m_manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+        uint32_t rootArrSize = 0;
+        bool rootArr = isRootArray(&rootArrSize);
+
+        if (!rootArr) {
+            auto basePtr = readMemoryDword(base);
+            if (basePtr.has_value() && m_manager->isValidPointerTarget(basePtr.value())) {
+                initialParentBase = m_manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+            }
         }
 
         std::function<void(QTreeWidgetItem*, uint32_t, bool)> updateNode = [&](QTreeWidgetItem* node, uint32_t parentBase, bool parentValid) {
@@ -1006,6 +1228,20 @@ namespace PointerFinder2::UI {
         std::vector<Widgets::MemoryViewerWidget::DefinedArrayInfo> definedArrays;
         QTreeWidgetItem* activeItem = m_structureTree->currentItem();
 
+        // Add root array highlight to Memory Viewer if the dissected note declares an array
+        uint32_t rootArrSize = 0;
+        if (isRootArray(&rootArrSize) && rootArrSize > 0 && m_currentBaseAddress != 0) {
+            uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
+            if (base != 0) {
+                Widgets::MemoryViewerWidget::DefinedArrayInfo arrInfo;
+                arrInfo.name = m_headerComment.isEmpty() ? QString("[%1 bytes] Array").arg(rootArrSize) : m_headerComment.trimmed();
+                arrInfo.startAddress = base;
+                arrInfo.size = rootArrSize;
+                arrInfo.endAddress = base + rootArrSize - 1;
+                definedArrays.push_back(arrInfo);
+            }
+        }
+
         std::function<void(QTreeWidgetItem*)> gatherHighlights = [&](QTreeWidgetItem* item) {
             uint32_t resolved = resolveNodeAddress(item);
             if (resolved != 0) {
@@ -1061,13 +1297,18 @@ namespace PointerFinder2::UI {
 
             // Identify defined array boundaries across the hierarchy
             QString desc = item->text(0).trimmed();
-            static const QRegularExpression arrayTagRx("\\[(\\d+)\\s*bytes\\]", QRegularExpression::CaseInsensitiveOption);
+            static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
             auto arrayMatch = arrayTagRx.match(desc);
 
             bool isArray = item->data(0, Qt::UserRole + 6).toBool() || arrayMatch.hasMatch();
             uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
             if (arraySize == 0 && arrayMatch.hasMatch()) {
-                arraySize = arrayMatch.captured(1).toUInt();
+                if (!arrayMatch.captured(1).isEmpty() && !arrayMatch.captured(2).isEmpty()) {
+                    arraySize = arrayMatch.captured(1).toUInt() * arrayMatch.captured(2).toUInt();
+                }
+                else if (!arrayMatch.captured(3).isEmpty()) {
+                    arraySize = arrayMatch.captured(3).toUInt();
+                }
             }
 
             if (isArray && arraySize > 0) {
@@ -1099,22 +1340,53 @@ namespace PointerFinder2::UI {
         m_memoryViewer->setDefinedArrays(definedArrays);
     }
 
+    bool StructureWorkspaceDialog::isRootArray(uint32_t* outSize) const {
+        QString header = m_headerComment.trimmed();
+        if (header.isEmpty() && m_codeNoteTextEdit) {
+            QString firstLine = m_codeNoteTextEdit->toPlainText().split('\n').value(0).trimmed();
+            header = firstLine;
+        }
+
+        static const QRegularExpression arrayRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
+        auto match = arrayRx.match(header);
+        if (match.hasMatch()) {
+            if (outSize) {
+                if (!match.captured(1).isEmpty() && !match.captured(2).isEmpty()) {
+                    *outSize = match.captured(1).toUInt() * match.captured(2).toUInt();
+                }
+                else if (!match.captured(3).isEmpty()) {
+                    *outSize = match.captured(3).toUInt();
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
     StructureWorkspaceDialog::ScopeMatch StructureWorkspaceDialog::findBestScopeForAddress(uint32_t selectedAddr) {
         ScopeMatch best;
         if (!m_manager || selectedAddr == 0 || m_currentBaseAddress == 0) return best;
+
+        uint32_t rootArrSize = 0;
+        bool rootArr = isRootArray(&rootArrSize);
 
         std::vector<ScopeCandidate> candidateScopes;
 
         std::function<void(QTreeWidgetItem*, int)> collectScopes = [&](QTreeWidgetItem* item, int depth) {
             uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
             QString desc = item->text(0).trimmed();
-            static const QRegularExpression arrayTagRx("\\[(\\d+)\\s*bytes\\]", QRegularExpression::CaseInsensitiveOption);
+            static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
             auto match = arrayTagRx.match(desc);
 
             bool isArray = item->data(0, Qt::UserRole + 6).toBool() || match.hasMatch();
             uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
             if (arraySize == 0 && match.hasMatch()) {
-                arraySize = match.captured(1).toUInt();
+                if (!match.captured(1).isEmpty() && !match.captured(2).isEmpty()) {
+                    arraySize = match.captured(1).toUInt() * match.captured(2).toUInt();
+                }
+                else if (!match.captured(3).isEmpty()) {
+                    arraySize = match.captured(3).toUInt();
+                }
             }
 
             if (derefBase != 0) {
@@ -1141,7 +1413,9 @@ namespace PointerFinder2::UI {
             m_currentBaseAddress,
             candidateScopes,
             m_manager,
-            m_snapshotMemory
+            m_snapshotMemory,
+            rootArr,
+            rootArrSize
         );
 
         best.pointerNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
@@ -1162,7 +1436,17 @@ namespace PointerFinder2::UI {
 
         auto match = findBestScopeForAddress(m_currentViewerSelectedAddress);
         if (match.isValid) {
-            QString scopeName = match.pointerNode ? match.pointerNode->text(0) + " (" + match.pointerNode->text(1) + ")" : "Root Base Pointer";
+            QString scopeName;
+            if (match.pointerNode) {
+                scopeName = match.pointerNode->text(0) + " (" + match.pointerNode->text(1) + ")";
+            }
+            else if (match.isArrayScope) {
+                scopeName = m_headerComment.isEmpty() ? "Root Array" : m_headerComment.trimmed();
+            }
+            else {
+                scopeName = "Root Base Pointer";
+            }
+
             QString sign = (match.offset < 0) ? "-" : "+";
             QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
 
@@ -1202,10 +1486,15 @@ namespace PointerFinder2::UI {
         QString sign = (offset < 0) ? "-" : "";
         QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
 
+        bool parentIsArrayElem = parentScope && parentScope->data(1, Qt::UserRole + 3).toBool();
+
         // Standardized array offset display (|0x.. without redundant '+')
         QString displayOffset;
         if (isArrayElement) {
             displayOffset = "|" + sign + "0x" + offsetHex;
+        }
+        else if (parentIsArrayElem) {
+            displayOffset = "|+" + sign + "0x" + offsetHex;
         }
         else {
             displayOffset = (offset < 0 ? "-0x" : "+0x") + offsetHex;
@@ -1503,9 +1792,14 @@ namespace PointerFinder2::UI {
                     if (delimiter.isEmpty()) delimiter = "=";
 
                     bool isArrayElem = item->data(1, Qt::UserRole + 3).toBool();
+                    bool parentIsArrayElem = parent && parent->data(1, Qt::UserRole + 3).toBool();
+
                     QString offsetStr;
                     if (isArrayElem) {
                         offsetStr = "|" + (offset < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
+                    }
+                    else if (parentIsArrayElem) {
+                        offsetStr = "|+" + (offset < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
                     }
                     else {
                         offsetStr = (offset < 0 ? QString("-") : QString("+")) + "0x" + offsetHex;

@@ -22,7 +22,7 @@ namespace PointerFinder2::Core {
         bool hasEncounteredOffset = false;
 
         // Support standard offset jumps as well as array element offsets with pipe symbol
-        QRegularExpression offsetSearch("(?:\\|)?[\\+\\-]0x[0-9a-fA-F]+|\\|0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetSearch("(?:\\|[\\+\\-])?0x[0-9a-fA-F]+|[\\+\\-]0x[0-9a-fA-F]+|\\|0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& line : lines) {
             QString trimmedLine = line.trimmed();
@@ -287,9 +287,9 @@ namespace PointerFinder2::Core {
                     }
                 }
                 else {
-                    // Array element offsets (|0x..) align to the child indirection level matching parent depth
+                    // Array element offsets (|0x..) align directly at root without plusses, or to child depth
                     if (node->content.startsWith('|')) {
-                        prefix = QString(indentLevel + 1, indentChar);
+                        prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
                     }
                     else {
                         prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
