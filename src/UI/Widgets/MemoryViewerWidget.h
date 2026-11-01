@@ -61,6 +61,12 @@ namespace PointerFinder2::UI::Widgets {
         uint32_t getRangeSpan() const { return m_rangeSpan; }
         void clearRangeSelection();
 
+        // Pointer navigation history (up to 50 steps)
+        bool canNavigateBack() const;
+        bool canNavigateForward() const;
+        void navigateBack();
+        void navigateForward();
+
         uint32_t getSelectedAddress() const { return m_selectedAddress; }
         void setSelectedAddress(uint32_t address);
         void goToAddress(uint32_t address);
@@ -77,6 +83,12 @@ namespace PointerFinder2::UI::Widgets {
         void contextMenuRequested(uint32_t address, const QPoint& globalPos);
         void rangeSelected(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
         void defineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
+        void navigationHistoryChanged(bool canBack, bool canForward);
+
+        // Keyboard actions scoped to Memory Viewer
+        void addVariableTriggered();
+        void addPointerTriggered();
+        void followPointerTriggered();
 
     protected:
         void paintEvent(QPaintEvent* event) override;
@@ -106,6 +118,12 @@ namespace PointerFinder2::UI::Widgets {
         uint32_t m_rangeStart = 0;
         uint32_t m_rangeEnd = 0;
         uint32_t m_rangeSpan = 0;
+
+        // Navigation history state
+        static constexpr size_t MAX_NAV_HISTORY = 50;
+        std::vector<uint32_t> m_navHistory;
+        int m_navHistoryIndex = -1;
+        bool m_isNavigatingHistory = false;
 
         // Floating action bar for array definition
         QWidget* m_rangeBannerWidget = nullptr;

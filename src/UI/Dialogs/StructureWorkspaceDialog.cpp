@@ -133,6 +133,8 @@ namespace PointerFinder2::UI {
         m_saveUserBtn->setShortcut(QKeySequence::Save);
         m_saveUserBtn->setToolTip("Save active note override to User.txt (Ctrl+S)");
         m_saveUserBtn->setFixedHeight(26);
+        m_saveUserBtn->setAutoDefault(false);
+        m_saveUserBtn->setDefault(false);
         topToolbar->addWidget(m_saveUserBtn);
 
         m_revertServerBtn = new QPushButton("Revert to Server", this);
@@ -140,12 +142,16 @@ namespace PointerFinder2::UI {
         m_revertServerBtn->setToolTip("Remove local override from User.txt and restore original server note");
         m_revertServerBtn->setEnabled(false);
         m_revertServerBtn->setFixedHeight(26);
+        m_revertServerBtn->setAutoDefault(false);
+        m_revertServerBtn->setDefault(false);
         topToolbar->addWidget(m_revertServerBtn);
 
         m_resetBtn = new QPushButton("Reset", this);
         m_resetBtn->setIcon(getThemeIcon(":/icons/load.svg"));
         m_resetBtn->setToolTip("Reload Notes.json and User.txt from disk if modified externally");
         m_resetBtn->setFixedHeight(26);
+        m_resetBtn->setAutoDefault(false);
+        m_resetBtn->setDefault(false);
         topToolbar->addWidget(m_resetBtn);
 
         m_toggleCodeNoteBtn = new QPushButton("Code Note Panel", this);
@@ -153,6 +159,8 @@ namespace PointerFinder2::UI {
         m_toggleCodeNoteBtn->setChecked(true);
         m_toggleCodeNoteBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
         m_toggleCodeNoteBtn->setFixedHeight(26);
+        m_toggleCodeNoteBtn->setAutoDefault(false);
+        m_toggleCodeNoteBtn->setDefault(false);
         topToolbar->addWidget(m_toggleCodeNoteBtn);
 
         topToolbar->addStretch();
@@ -193,21 +201,32 @@ namespace PointerFinder2::UI {
         auto* treeButtonsRow = new QHBoxLayout();
         treeButtonsRow->setSpacing(6);
 
-        m_addVariableBtn = new QPushButton("Add Variable (Enter)", m_leftContainer);
+        m_addVariableBtn = new QPushButton("Add Variable (V / Enter)", m_leftContainer);
+        m_addVariableBtn->setToolTip("Add variable at selected address (Shortcut: V or Enter)");
         m_addVariableBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
         m_addVariableBtn->setFixedHeight(26);
+        m_addVariableBtn->setAutoDefault(false);
+        m_addVariableBtn->setDefault(false);
 
-        m_addPointerBtn = new QPushButton("Add as Pointer", m_leftContainer);
+        m_addPointerBtn = new QPushButton("Add as Pointer (P)", m_leftContainer);
+        m_addPointerBtn->setToolTip("Add pointer at selected address (Shortcut: P)");
         m_addPointerBtn->setIcon(getThemeIcon(":/icons/attach.svg"));
         m_addPointerBtn->setFixedHeight(26);
+        m_addPointerBtn->setAutoDefault(false);
+        m_addPointerBtn->setDefault(false);
 
-        m_followPointerBtn = new QPushButton("Follow Pointer ->", m_leftContainer);
+        m_followPointerBtn = new QPushButton("Follow Pointer -> (F)", m_leftContainer);
+        m_followPointerBtn->setToolTip("Follow pointer value to destination address (Shortcut: F or Double-click)");
         m_followPointerBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
         m_followPointerBtn->setFixedHeight(26);
+        m_followPointerBtn->setAutoDefault(false);
+        m_followPointerBtn->setDefault(false);
 
         m_removeNodeBtn = new QPushButton("Remove", m_leftContainer);
         m_removeNodeBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
         m_removeNodeBtn->setFixedHeight(26);
+        m_removeNodeBtn->setAutoDefault(false);
+        m_removeNodeBtn->setDefault(false);
 
         treeButtonsRow->addWidget(m_addVariableBtn, 1);
         treeButtonsRow->addWidget(m_addPointerBtn, 1);
@@ -251,8 +270,32 @@ namespace PointerFinder2::UI {
 
         // Memory Controls Bar (positioned at bottom)
         auto* viewerBottomRow = new QHBoxLayout();
+        viewerBottomRow->setSpacing(6);
+
+        m_navBackBtn = new QPushButton(this);
+        m_navBackBtn->setIcon(getThemeIcon(":/icons/undo.svg"));
+        m_navBackBtn->setToolTip("Navigate Back (Backspace / Alt+Left)");
+        m_navBackBtn->setFixedHeight(26);
+        m_navBackBtn->setFixedWidth(28);
+        m_navBackBtn->setEnabled(false);
+        m_navBackBtn->setAutoDefault(false);
+        m_navBackBtn->setDefault(false);
+        viewerBottomRow->addWidget(m_navBackBtn);
+
+        m_navForwardBtn = new QPushButton(this);
+        m_navForwardBtn->setIcon(getThemeIcon(":/icons/redo.svg"));
+        m_navForwardBtn->setToolTip("Navigate Forward (Alt+Right)");
+        m_navForwardBtn->setFixedHeight(26);
+        m_navForwardBtn->setFixedWidth(28);
+        m_navForwardBtn->setEnabled(false);
+        m_navForwardBtn->setAutoDefault(false);
+        m_navForwardBtn->setDefault(false);
+        viewerBottomRow->addWidget(m_navForwardBtn);
+
         m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
         m_refreshRamBtn->setFixedHeight(26);
+        m_refreshRamBtn->setAutoDefault(false);
+        m_refreshRamBtn->setDefault(false);
         viewerBottomRow->addWidget(m_refreshRamBtn);
 
         m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
@@ -265,6 +308,8 @@ namespace PointerFinder2::UI {
         m_goToAddressEdit->setFixedHeight(26);
         m_goToAddressBtn = new QPushButton("Go", m_middleContainer);
         m_goToAddressBtn->setFixedHeight(26);
+        m_goToAddressBtn->setAutoDefault(false);
+        m_goToAddressBtn->setDefault(false);
         viewerBottomRow->addWidget(m_goToAddressEdit);
         viewerBottomRow->addWidget(m_goToAddressBtn);
 
@@ -305,6 +350,8 @@ namespace PointerFinder2::UI {
         m_fixHierarchyBtn = new QPushButton("Fix Hierarchy", m_rightContainer);
         m_fixHierarchyBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
         m_fixHierarchyBtn->setFixedHeight(26);
+        m_fixHierarchyBtn->setAutoDefault(false);
+        m_fixHierarchyBtn->setDefault(false);
         fixerBottomRow->addWidget(m_fixHierarchyBtn);
 
         fixerBottomRow->addStretch();
@@ -312,6 +359,8 @@ namespace PointerFinder2::UI {
         m_copyCodeNoteBtn = new QPushButton("Copy", m_rightContainer);
         m_copyCodeNoteBtn->setIcon(getThemeIcon(":/icons/copy.svg"));
         m_copyCodeNoteBtn->setFixedHeight(26);
+        m_copyCodeNoteBtn->setAutoDefault(false);
+        m_copyCodeNoteBtn->setDefault(false);
         fixerBottomRow->addWidget(m_copyCodeNoteBtn);
 
         rightLayout->addLayout(fixerBottomRow);
@@ -335,6 +384,19 @@ namespace PointerFinder2::UI {
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::defineArrayRequested, this, &StructureWorkspaceDialog::onDefineArrayRequested);
         connect(m_structureTree, &QTreeWidget::itemDoubleClicked, this, &StructureWorkspaceDialog::onStructureTreeItemDoubleClicked);
         connect(m_structureTree, &QTreeWidget::customContextMenuRequested, this, &StructureWorkspaceDialog::onStructureTreeCustomContextMenu);
+
+        // Connect navigation history controls
+        connect(m_navBackBtn, &QPushButton::clicked, m_memoryViewer, &Widgets::MemoryViewerWidget::navigateBack);
+        connect(m_navForwardBtn, &QPushButton::clicked, m_memoryViewer, &Widgets::MemoryViewerWidget::navigateForward);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::navigationHistoryChanged, this, [this](bool canBack, bool canForward) {
+            m_navBackBtn->setEnabled(canBack);
+            m_navForwardBtn->setEnabled(canForward);
+        });
+
+        // Connect focus-scoped memory viewer shortcut signals
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addVariableTriggered, this, &StructureWorkspaceDialog::onAddVariableClicked);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addPointerTriggered, this, &StructureWorkspaceDialog::onAddPointerClicked);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::followPointerTriggered, this, &StructureWorkspaceDialog::onFollowPointerClicked);
 
         connect(m_addVariableBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onAddVariableClicked);
         connect(m_addPointerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onAddPointerClicked);
@@ -422,9 +484,9 @@ namespace PointerFinder2::UI {
             selectAddressInUI(m_currentBaseAddress);
         }
         else if (m_addressSelectCombo->count() > 0) {
-            QVariant data = m_addressSelectCombo->currentData();
-            if (data.isValid()) {
-                selectAddressInUI(data.toUInt());
+            QVariant comboVal = m_addressSelectCombo->currentData();
+            if (comboVal.isValid()) {
+                selectAddressInUI(comboVal.toUInt());
             }
         }
     }
@@ -447,9 +509,9 @@ namespace PointerFinder2::UI {
             }
             if (!currentStillVisible) {
                 m_addressSelectCombo->setCurrentIndex(0);
-                QVariant data = m_addressSelectCombo->currentData();
-                if (data.isValid()) {
-                    selectAddressInUI(data.toUInt());
+                QVariant matchedVal = m_addressSelectCombo->currentData();
+                if (matchedVal.isValid()) {
+                    selectAddressInUI(matchedVal.toUInt());
                 }
             }
         }
@@ -666,16 +728,16 @@ namespace PointerFinder2::UI {
 
         QMenu menu(this);
 
-        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable", this, &StructureWorkspaceDialog::onAddVariableClicked);
+        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable (V / Enter)", this, &StructureWorkspaceDialog::onAddVariableClicked);
         addVarAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
 
-        auto* addPtrAct = menu.addAction(getThemeIcon(":/icons/attach.svg"), "Add as Pointer", this, &StructureWorkspaceDialog::onAddPointerClicked);
+        auto* addPtrAct = menu.addAction(getThemeIcon(":/icons/attach.svg"), "Add as Pointer (P)", this, &StructureWorkspaceDialog::onAddPointerClicked);
         addPtrAct->setProperty("iconPath", ":/icons/attach.svg");
 
         uint32_t dwordVal = m_memoryViewer->readDwordAt(address);
         bool isPointer = (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal));
 
-        auto* followPtrAct = menu.addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Follow Pointer", this, [this, dwordVal]() {
+        auto* followPtrAct = menu.addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Follow Pointer -> (F)", this, [this, dwordVal]() {
             if (m_manager) {
                 uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
                 navigateToAddress(nativeTarget);
@@ -733,7 +795,7 @@ namespace PointerFinder2::UI {
         }
 
         if (targetNode) {
-            // Standardized array formatting: ++0x78=[176 bytes] Pointer to Array
+            // Standardized array formatting: ++0x78=[128 bytes] Pointer to Array
             QString arrayFormatText = QString("[%1 bytes] Pointer to Array").arg(byteCount);
 
             targetNode->setText(0, arrayFormatText);
@@ -1104,7 +1166,7 @@ namespace PointerFinder2::UI {
             QString sign = (match.offset < 0) ? "-" : "+";
             QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
 
-            QString prefix = match.isArrayScope ? "|+" : sign;
+            QString prefix = match.isArrayScope ? "|" : sign;
             m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %30x%4")
                 .arg(QString::number(m_currentViewerSelectedAddress, 16).toUpper())
                 .arg(scopeName)
@@ -1137,10 +1199,18 @@ namespace PointerFinder2::UI {
         auto* newItem = new QTreeWidgetItem();
         newItem->setText(0, description);
         newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
-        QString sign = (offset < 0) ? "-" : "+";
+        QString sign = (offset < 0) ? "-" : "";
         QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
 
-        QString displayOffset = (isArrayElement ? "|+" : sign) + "0x" + offsetHex;
+        // Standardized array offset display (|0x.. without redundant '+')
+        QString displayOffset;
+        if (isArrayElement) {
+            displayOffset = "|" + sign + "0x" + offsetHex;
+        }
+        else {
+            displayOffset = (offset < 0 ? "-0x" : "+0x") + offsetHex;
+        }
+
         newItem->setText(1, displayOffset);
         newItem->setData(1, Qt::UserRole, offset);
         newItem->setData(1, Qt::UserRole + 1, "="); // Default delimiter
@@ -1304,7 +1374,7 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem) {
-        QRegularExpression offsetRx("^(\\|?[\\+\\-]0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
+        QRegularExpression offsetRx("^(\\|?[\\+\\-]?0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
 
         for (const auto& node : nodes) {
             auto match = offsetRx.match(node->content.trimmed());
@@ -1318,9 +1388,14 @@ namespace PointerFinder2::UI {
                     rawOffset = rawOffset.mid(1);
                 }
 
-                QString sign = rawOffset.left(1);
+                QString sign = rawOffset.startsWith('-') ? "-" : (rawOffset.startsWith('+') ? "+" : "");
+                QString hexPart = (rawOffset.startsWith('-') || rawOffset.startsWith('+')) ? rawOffset.mid(1) : rawOffset;
+                if (hexPart.startsWith("0x", Qt::CaseInsensitive)) {
+                    hexPart = hexPart.mid(2);
+                }
+
                 bool ok = false;
-                int32_t offsetVal = rawOffset.mid(3).toInt(&ok, 16);
+                int32_t offsetVal = hexPart.toInt(&ok, 16);
                 if (sign == "-") offsetVal = -offsetVal;
 
                 auto* newItem = new QTreeWidgetItem(parentItem ? parentItem : m_structureTree->invisibleRootItem());
@@ -1328,7 +1403,14 @@ namespace PointerFinder2::UI {
                 newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
                 QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
 
-                QString displayOffset = (isArrayElem ? "|+" : sign) + "0x" + offsetHex;
+                QString displayOffset;
+                if (isArrayElem) {
+                    displayOffset = "|" + (offsetVal < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
+                }
+                else {
+                    displayOffset = (offsetVal < 0 ? "-0x" : "+0x") + offsetHex;
+                }
+
                 newItem->setText(1, displayOffset);
                 newItem->setData(1, Qt::UserRole, offsetVal);
                 newItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
@@ -1338,6 +1420,7 @@ namespace PointerFinder2::UI {
                 for (const auto& child : node->children) {
                     bool isChildOffset = child->content.startsWith("+0x", Qt::CaseInsensitive) || 
                                          child->content.startsWith("-0x", Qt::CaseInsensitive) ||
+                                         child->content.startsWith("|0x", Qt::CaseInsensitive) ||
                                          child->content.startsWith("|+0x", Qt::CaseInsensitive) ||
                                          child->content.startsWith("|-0x", Qt::CaseInsensitive);
                     if (!isChildOffset) {
@@ -1353,6 +1436,7 @@ namespace PointerFinder2::UI {
                 for (const auto& child : node->children) {
                     bool isChildOffset = child->content.startsWith("+0x", Qt::CaseInsensitive) || 
                                          child->content.startsWith("-0x", Qt::CaseInsensitive) ||
+                                         child->content.startsWith("|0x", Qt::CaseInsensitive) ||
                                          child->content.startsWith("|+0x", Qt::CaseInsensitive) ||
                                          child->content.startsWith("|-0x", Qt::CaseInsensitive);
                     if (isChildOffset) {
@@ -1414,16 +1498,21 @@ namespace PointerFinder2::UI {
                 for (int i = 0; i < count; ++i) {
                     QTreeWidgetItem* item = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
                     int32_t offset = item->data(1, Qt::UserRole).toInt();
-                    QString sign = (offset < 0) ? "-" : "+";
                     QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toLower();
                     QString delimiter = item->data(1, Qt::UserRole + 1).toString();
                     if (delimiter.isEmpty()) delimiter = "=";
 
                     bool isArrayElem = item->data(1, Qt::UserRole + 3).toBool();
-                    QString pipePrefix = isArrayElem ? "|" : "";
+                    QString offsetStr;
+                    if (isArrayElem) {
+                        offsetStr = "|" + (offset < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
+                    }
+                    else {
+                        offsetStr = (offset < 0 ? QString("-") : QString("+")) + "0x" + offsetHex;
+                    }
 
                     auto node = std::make_shared<CodeNoteNode>();
-                    node->content = pipePrefix + sign + "0x" + offsetHex + delimiter + item->text(0);
+                    node->content = offsetStr + delimiter + item->text(0);
 
                     QStringList valueNotes = item->data(0, Qt::UserRole + 2).toStringList();
                     for (const auto& vNote : valueNotes) {

@@ -22,7 +22,7 @@ namespace PointerFinder2::Core {
         bool hasEncounteredOffset = false;
 
         // Support standard offset jumps as well as array element offsets with pipe symbol
-        QRegularExpression offsetSearch("(?:\\|)?[\\+\\-]0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetSearch("(?:\\|)?[\\+\\-]0x[0-9a-fA-F]+|\\|0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& line : lines) {
             QString trimmedLine = line.trimmed();
@@ -119,7 +119,7 @@ namespace PointerFinder2::Core {
         std::map<QString, std::vector<std::shared_ptr<CodeNoteNode>>> mergeableGroups;
         std::vector<std::shared_ptr<CodeNoteNode>> nonMergeableNodes;
 
-        QRegularExpression offsetRegex("^(\\|?[\\+\\-]0x[0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetRegex("^(\\|?[\\+\\-]?0x[0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& node : nodes) {
             auto match = offsetRegex.match(node->content);
@@ -127,9 +127,13 @@ namespace PointerFinder2::Core {
                 QString rawKey = match.captured(1);
                 QString pipePrefix = rawKey.startsWith('|') ? "|" : "";
                 QString offsetPart = rawKey.startsWith('|') ? rawKey.mid(1) : rawKey;
-                QString sign = offsetPart.left(1);
+                QString sign = offsetPart.startsWith('-') ? "-" : (offsetPart.startsWith('+') ? "+" : "");
+                QString hexPart = offsetPart.startsWith('-') || offsetPart.startsWith('+') ? offsetPart.mid(1) : offsetPart;
+                if (hexPart.startsWith("0x", Qt::CaseInsensitive)) {
+                    hexPart = hexPart.mid(2);
+                }
                 bool ok;
-                qlonglong offsetVal = offsetPart.mid(3).toLongLong(&ok, 16);
+                qlonglong offsetVal = hexPart.toLongLong(&ok, 16);
                 QString key = QString("%1%20x%3").arg(pipePrefix).arg(sign).arg(QString("%1").arg(offsetVal, 2, 16, QChar('0')).toLower());
 
                 mergeableGroups[key].push_back(node);
@@ -139,7 +143,7 @@ namespace PointerFinder2::Core {
             }
         }
 
-        QRegularExpression contentRegex("^(\\|?[\\+\\-]0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression contentRegex("^(\\|?[\\+\\-]?0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& [key, group] : mergeableGroups) {
             auto representative = group.front();
@@ -194,7 +198,7 @@ namespace PointerFinder2::Core {
 
     std::vector<std::shared_ptr<CodeNoteNode>>
     CodeNoteHierarchyEngine::sortNodes(std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
-        QRegularExpression offsetRegex("^\\|?[\\+\\-]0x([0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetRegex("^\\|?[\\+\\-]?0x([0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
 
         std::sort(nodes.begin(), nodes.end(), [&](const std::shared_ptr<CodeNoteNode>& a, const std::shared_ptr<CodeNoteNode>& b) {
             bool aIsOffset = offsetRegex.match(a->content).hasMatch();
@@ -236,6 +240,7 @@ namespace PointerFinder2::Core {
 
             bool isPointerOffset = node->content.startsWith("+0x", Qt::CaseInsensitive) || 
                                    node->content.startsWith("-0x", Qt::CaseInsensitive) ||
+                                   node->content.startsWith("|0x", Qt::CaseInsensitive) ||
                                    node->content.startsWith("|+0x", Qt::CaseInsensitive) ||
                                    node->content.startsWith("|-0x", Qt::CaseInsensitive);
             bool isAttachedNote = !isPointerOffset;
@@ -244,6 +249,7 @@ namespace PointerFinder2::Core {
             for (const auto& child : node->children) {
                 if (child->content.startsWith("+0x", Qt::CaseInsensitive) || 
                     child->content.startsWith("-0x", Qt::CaseInsensitive) ||
+                    child->content.startsWith("|0x", Qt::CaseInsensitive) ||
                     child->content.startsWith("|+0x", Qt::CaseInsensitive) ||
                     child->content.startsWith("|-0x", Qt::CaseInsensitive)) {
                     hasPointerChildren = true;
@@ -281,7 +287,13 @@ namespace PointerFinder2::Core {
                     }
                 }
                 else {
-                    prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
+                    // Array element offsets (|0x..) align to the child indirection level matching parent depth
+                    if (node->content.startsWith('|')) {
+                        prefix = QString(indentLevel + 1, indentChar);
+                    }
+                    else {
+                        prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
+                    }
                 }
             }
 

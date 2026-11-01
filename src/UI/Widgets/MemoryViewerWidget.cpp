@@ -135,6 +135,10 @@ namespace PointerFinder2::UI::Widgets {
         }
 
         clearRangeSelection();
+        m_navHistory.clear();
+        m_navHistoryIndex = -1;
+        emit navigationHistoryChanged(false, false);
+
         updateMetrics();
         updateScrollBars();
         viewport()->update();
@@ -146,6 +150,9 @@ namespace PointerFinder2::UI::Widgets {
         m_definedArrays.clear();
         m_hasSelection = false;
         clearRangeSelection();
+        m_navHistory.clear();
+        m_navHistoryIndex = -1;
+        emit navigationHistoryChanged(false, false);
         updateScrollBars();
         viewport()->update();
     }
@@ -217,6 +224,34 @@ namespace PointerFinder2::UI::Widgets {
         m_rangeBannerWidget->raise();
     }
 
+    bool MemoryViewerWidget::canNavigateBack() const {
+        return m_navHistoryIndex > 0;
+    }
+
+    bool MemoryViewerWidget::canNavigateForward() const {
+        return m_navHistoryIndex >= 0 && (m_navHistoryIndex + 1 < static_cast<int>(m_navHistory.size()));
+    }
+
+    void MemoryViewerWidget::navigateBack() {
+        if (canNavigateBack()) {
+            m_isNavigatingHistory = true;
+            --m_navHistoryIndex;
+            goToAddress(m_navHistory[m_navHistoryIndex]);
+            m_isNavigatingHistory = false;
+            emit navigationHistoryChanged(canNavigateBack(), canNavigateForward());
+        }
+    }
+
+    void MemoryViewerWidget::navigateForward() {
+        if (canNavigateForward()) {
+            m_isNavigatingHistory = true;
+            ++m_navHistoryIndex;
+            goToAddress(m_navHistory[m_navHistoryIndex]);
+            m_isNavigatingHistory = false;
+            emit navigationHistoryChanged(canNavigateBack(), canNavigateForward());
+        }
+    }
+
     uint32_t MemoryViewerWidget::readDwordAt(uint32_t address) const {
         if (address < m_memoryBaseAddress) return 0;
         size_t offset = address - m_memoryBaseAddress;
@@ -281,6 +316,22 @@ namespace PointerFinder2::UI::Widgets {
         verticalScrollBar()->setValue(centeredRow);
         m_selectedAddress = address;
         m_hasSelection = true;
+
+        // Maintain browser-style navigation history (up to 50 steps)
+        if (!m_isNavigatingHistory && address != 0) {
+            if (m_navHistoryIndex < 0 || m_navHistory[m_navHistoryIndex] != address) {
+                if (m_navHistoryIndex >= 0 && m_navHistoryIndex + 1 < static_cast<int>(m_navHistory.size())) {
+                    m_navHistory.erase(m_navHistory.begin() + (m_navHistoryIndex + 1), m_navHistory.end());
+                }
+                m_navHistory.push_back(address);
+                if (m_navHistory.size() > MAX_NAV_HISTORY) {
+                    m_navHistory.erase(m_navHistory.begin());
+                }
+                m_navHistoryIndex = static_cast<int>(m_navHistory.size()) - 1;
+                emit navigationHistoryChanged(canNavigateBack(), canNavigateForward());
+            }
+        }
+
         viewport()->update();
     }
 
@@ -491,6 +542,34 @@ namespace PointerFinder2::UI::Widgets {
 
         if (event->key() == Qt::Key_Escape && m_hasRangeSelection) {
             clearRangeSelection();
+            event->accept();
+            return;
+        }
+
+        // Handle scoped shortcuts strictly within the Memory Viewer boundary
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_V) {
+            event->accept();
+            emit addVariableTriggered();
+            return;
+        }
+        if (event->key() == Qt::Key_P) {
+            event->accept();
+            emit addPointerTriggered();
+            return;
+        }
+        if (event->key() == Qt::Key_F) {
+            event->accept();
+            emit followPointerTriggered();
+            return;
+        }
+        if (event->key() == Qt::Key_Backspace || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Left)) {
+            event->accept();
+            navigateBack();
+            return;
+        }
+        if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Right) {
+            event->accept();
+            navigateForward();
             return;
         }
 
@@ -501,30 +580,35 @@ namespace PointerFinder2::UI::Widgets {
             if (m_selectedAddress >= m_memoryBaseAddress + 16) {
                 setSelectedAddress(m_selectedAddress - 16);
             }
+            event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Down) {
             if (m_selectedAddress + 16 < maxAddr) {
                 setSelectedAddress(m_selectedAddress + 16);
             }
+            event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Left) {
             if (m_selectedAddress >= m_memoryBaseAddress + step) {
                 setSelectedAddress(m_selectedAddress - step);
             }
+            event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Right) {
             if (m_selectedAddress + step < maxAddr) {
                 setSelectedAddress(m_selectedAddress + step);
             }
+            event->accept();
             return;
         }
         else if (event->matches(QKeySequence::Copy)) {
             if (m_hasSelection) {
                 QApplication::clipboard()->setText(QString("%1").arg(m_selectedAddress, 8, 16, QChar('0')).toUpper());
             }
+            event->accept();
             return;
         }
 

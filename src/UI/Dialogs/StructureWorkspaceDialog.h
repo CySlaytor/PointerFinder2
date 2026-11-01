@@ -35,7 +35,12 @@ namespace PointerFinder2::UI {
 
         void setSearchFilter(const QString& filter) {
             m_filterWords = filter.trimmed().split(' ', Qt::SkipEmptyParts);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+            beginFilterChange();
+            endFilterChange();
+#else
             invalidateFilter();
+#endif
         }
 
     protected:
@@ -135,6 +140,8 @@ namespace PointerFinder2::UI {
 
         // Panel 2: Memory Viewer
         QWidget* m_middleContainer = nullptr;
+        QPushButton* m_navBackBtn = nullptr;
+        QPushButton* m_navForwardBtn = nullptr;
         QLineEdit* m_goToAddressEdit = nullptr;
         QPushButton* m_goToAddressBtn = nullptr;
         QPushButton* m_refreshRamBtn = nullptr;
