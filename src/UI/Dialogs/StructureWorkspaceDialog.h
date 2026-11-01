@@ -81,6 +81,7 @@ namespace PointerFinder2::UI {
         void onAddressSelectedInViewer(uint32_t address);
         void onAddressDoubleClickedInViewer(uint32_t address);
         void onMemoryViewerContextMenu(uint32_t address, const QPoint& globalPos);
+        void onDefineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
         void onStructureTreeItemDoubleClicked(QTreeWidgetItem* item, int column);
         void onStructureTreeCustomContextMenu(const QPoint& pos);
         void onAddVariableClicked();
@@ -166,6 +167,7 @@ namespace PointerFinder2::UI {
             int32_t offset = 0;
             int depth = 0;
             bool isValid = false;
+            bool isArrayScope = false;
         };
 
         RaGameData m_gameData;
@@ -200,7 +202,7 @@ namespace PointerFinder2::UI {
         void navigateToAddress(uint32_t address);
 
         ScopeMatch findBestScopeForAddress(uint32_t selectedAddr);
-        void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description);
+        void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description, bool isArrayElement = false);
         QString suggestDefaultType(uint32_t address);
 
         void syncTreeToCodeNoteText();

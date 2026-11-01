@@ -332,6 +332,7 @@ namespace PointerFinder2::UI {
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addressSelected, this, &StructureWorkspaceDialog::onAddressSelectedInViewer);
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addressDoubleClicked, this, &StructureWorkspaceDialog::onAddressDoubleClickedInViewer);
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::contextMenuRequested, this, &StructureWorkspaceDialog::onMemoryViewerContextMenu);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::defineArrayRequested, this, &StructureWorkspaceDialog::onDefineArrayRequested);
         connect(m_structureTree, &QTreeWidget::itemDoubleClicked, this, &StructureWorkspaceDialog::onStructureTreeItemDoubleClicked);
         connect(m_structureTree, &QTreeWidget::customContextMenuRequested, this, &StructureWorkspaceDialog::onStructureTreeCustomContextMenu);
 
@@ -699,6 +700,58 @@ namespace PointerFinder2::UI {
         menu.exec(globalPos);
     }
 
+    void StructureWorkspaceDialog::onDefineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount) {
+        Q_UNUSED(endAddress);
+        if (byteCount == 0) return;
+
+        // Locate the pointer node whose dereferenced target address matches the start of the array range
+        QTreeWidgetItem* targetNode = nullptr;
+
+        std::function<void(QTreeWidgetItem*)> findTargetNode = [&](QTreeWidgetItem* item) {
+            if (targetNode) return;
+            uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
+            if (derefBase == startAddress) {
+                targetNode = item;
+                return;
+            }
+            for (int i = 0; i < item->childCount(); ++i) {
+                findTargetNode(item->child(i));
+            }
+        };
+
+        if (m_structureTree->currentItem()) {
+            uint32_t curDeref = m_structureTree->currentItem()->data(0, Qt::UserRole + 4).toUInt();
+            if (curDeref == startAddress) {
+                targetNode = m_structureTree->currentItem();
+            }
+        }
+
+        if (!targetNode) {
+            for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
+                findTargetNode(m_structureTree->topLevelItem(i));
+            }
+        }
+
+        if (targetNode) {
+            // Standardized array formatting: ++0x78=[176 bytes] Pointer to Array
+            QString arrayFormatText = QString("[%1 bytes] Pointer to Array").arg(byteCount);
+
+            targetNode->setText(0, arrayFormatText);
+            targetNode->setData(0, Qt::UserRole + 5, byteCount); // Array size in bytes
+            targetNode->setData(0, Qt::UserRole + 6, true);      // Array scope flag
+        }
+        else {
+            // If defined at the base of the dissected structure itself
+            QString arrayFormatText = QString("[%1 bytes] Array").arg(byteCount);
+            auto match = findBestScopeForAddress(startAddress);
+            insertNodeInScope(match.pointerNode, match.offset, arrayFormatText);
+        }
+
+        m_memoryViewer->clearRangeSelection();
+        recalculateTreeAddresses();
+        syncTreeToCodeNoteText();
+    }
+
     // Double-clicking a tree item: Column 0 edits; Columns 1-3 follow pointer to destination
     void StructureWorkspaceDialog::onStructureTreeItemDoubleClicked(QTreeWidgetItem* item, int column) {
         if (!item) return;
@@ -888,6 +941,7 @@ namespace PointerFinder2::UI {
         if (!m_manager) return;
 
         std::unordered_map<uint32_t, Widgets::MemoryViewerWidget::HighlightInfo> highlights;
+        std::vector<Widgets::MemoryViewerWidget::DefinedArrayInfo> definedArrays;
         QTreeWidgetItem* activeItem = m_structureTree->currentItem();
 
         std::function<void(QTreeWidgetItem*)> gatherHighlights = [&](QTreeWidgetItem* item) {
@@ -943,6 +997,33 @@ namespace PointerFinder2::UI {
                 }
             }
 
+            // Identify defined array boundaries across the hierarchy
+            QString desc = item->text(0).trimmed();
+            static const QRegularExpression arrayTagRx("\\[(\\d+)\\s*bytes\\]", QRegularExpression::CaseInsensitiveOption);
+            auto arrayMatch = arrayTagRx.match(desc);
+
+            bool isArray = item->data(0, Qt::UserRole + 6).toBool() || arrayMatch.hasMatch();
+            uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
+            if (arraySize == 0 && arrayMatch.hasMatch()) {
+                arraySize = arrayMatch.captured(1).toUInt();
+            }
+
+            if (isArray && arraySize > 0) {
+                uint32_t targetBase = item->data(0, Qt::UserRole + 4).toUInt();
+                if (targetBase == 0) {
+                    targetBase = resolved;
+                }
+
+                if (targetBase != 0) {
+                    Widgets::MemoryViewerWidget::DefinedArrayInfo arrInfo;
+                    arrInfo.name = desc;
+                    arrInfo.startAddress = targetBase;
+                    arrInfo.size = arraySize;
+                    arrInfo.endAddress = targetBase + arraySize - 1;
+                    definedArrays.push_back(arrInfo);
+                }
+            }
+
             for (int i = 0; i < item->childCount(); ++i) {
                 gatherHighlights(item->child(i));
             }
@@ -953,6 +1034,7 @@ namespace PointerFinder2::UI {
         }
 
         m_memoryViewer->setHighlightedAddresses(highlights);
+        m_memoryViewer->setDefinedArrays(definedArrays);
     }
 
     StructureWorkspaceDialog::ScopeMatch StructureWorkspaceDialog::findBestScopeForAddress(uint32_t selectedAddr) {
@@ -963,8 +1045,24 @@ namespace PointerFinder2::UI {
 
         std::function<void(QTreeWidgetItem*, int)> collectScopes = [&](QTreeWidgetItem* item, int depth) {
             uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
+            QString desc = item->text(0).trimmed();
+            static const QRegularExpression arrayTagRx("\\[(\\d+)\\s*bytes\\]", QRegularExpression::CaseInsensitiveOption);
+            auto match = arrayTagRx.match(desc);
+
+            bool isArray = item->data(0, Qt::UserRole + 6).toBool() || match.hasMatch();
+            uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
+            if (arraySize == 0 && match.hasMatch()) {
+                arraySize = match.captured(1).toUInt();
+            }
+
             if (derefBase != 0) {
-                candidateScopes.push_back({ item, derefBase, depth });
+                candidateScopes.push_back({ item, derefBase, depth, isArray, arraySize });
+            }
+            else if (isArray && arraySize > 0) {
+                uint32_t nodeAddr = resolveNodeAddress(item);
+                if (nodeAddr != 0) {
+                    candidateScopes.push_back({ item, nodeAddr, depth, true, arraySize });
+                }
             }
 
             for (int i = 0; i < item->childCount(); ++i) {
@@ -989,6 +1087,7 @@ namespace PointerFinder2::UI {
         best.offset = match.offset;
         best.depth = match.depth;
         best.isValid = match.isValid;
+        best.isArrayScope = match.isArrayScope;
 
         return best;
     }
@@ -1005,10 +1104,11 @@ namespace PointerFinder2::UI {
             QString sign = (match.offset < 0) ? "-" : "+";
             QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
 
-            m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %3%4")
+            QString prefix = match.isArrayScope ? "|+" : sign;
+            m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %30x%4")
                 .arg(QString::number(m_currentViewerSelectedAddress, 16).toUpper())
                 .arg(scopeName)
-                .arg(sign).arg("0x" + offsetHex));
+                .arg(prefix, offsetHex));
         }
         else {
             m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Out of range of known structure scopes.")
@@ -1020,7 +1120,7 @@ namespace PointerFinder2::UI {
         return StructureAnalyzer::suggestDefaultType(address, m_manager, m_snapshotMemory);
     }
 
-    void StructureWorkspaceDialog::insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description) {
+    void StructureWorkspaceDialog::insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description, bool isArrayElement) {
         QTreeWidget* tree = m_structureTree;
         int childCount = parentScope ? parentScope->childCount() : tree->topLevelItemCount();
 
@@ -1039,9 +1139,12 @@ namespace PointerFinder2::UI {
         newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
         QString sign = (offset < 0) ? "-" : "+";
         QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
-        newItem->setText(1, sign + "0x" + offsetHex);
+
+        QString displayOffset = (isArrayElement ? "|+" : sign) + "0x" + offsetHex;
+        newItem->setText(1, displayOffset);
         newItem->setData(1, Qt::UserRole, offset);
         newItem->setData(1, Qt::UserRole + 1, "="); // Default delimiter
+        newItem->setData(1, Qt::UserRole + 3, isArrayElement);
 
         if (parentScope) {
             parentScope->insertChild(insertIndex, newItem);
@@ -1077,7 +1180,7 @@ namespace PointerFinder2::UI {
         QString desc = QInputDialog::getText(this, "Add Variable", "Variable description:", QLineEdit::Normal, defaultDesc, &ok);
         if (!ok || desc.trimmed().isEmpty()) return;
 
-        insertNodeInScope(match.pointerNode, match.offset, desc.trimmed());
+        insertNodeInScope(match.pointerNode, match.offset, desc.trimmed(), match.isArrayScope);
         recalculateTreeAddresses();
         syncTreeToCodeNoteText();
     }
@@ -1099,7 +1202,7 @@ namespace PointerFinder2::UI {
         QString ptrDesc = QInputDialog::getText(this, "Add as Pointer", "Pointer description:", QLineEdit::Normal, defaultPtrDesc, &ok);
         if (!ok || ptrDesc.trimmed().isEmpty()) return;
 
-        insertNodeInScope(match.pointerNode, match.offset, ptrDesc.trimmed());
+        insertNodeInScope(match.pointerNode, match.offset, ptrDesc.trimmed(), match.isArrayScope);
         recalculateTreeAddresses();
         syncTreeToCodeNoteText();
 
@@ -1124,14 +1227,16 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onStructureTreeItemChanged(QTreeWidgetItem* item, int column) {
         if (column == 1) {
             QString txt = item->text(1).trimmed();
-            QRegularExpression rx("^([\\+\\-]?)0x([0-9a-fA-F]+)");
+            QRegularExpression rx("^(\\|?[\\+\\-]?)0x([0-9a-fA-F]+)");
             auto match = rx.match(txt);
             if (match.hasMatch()) {
-                QString sign = match.captured(1);
+                QString prefix = match.captured(1);
+                bool isArrayElem = prefix.contains('|');
                 bool ok = false;
                 int32_t val = match.captured(2).toInt(&ok, 16);
-                if (sign == "-") val = -val;
+                if (prefix.contains('-')) val = -val;
                 item->setData(1, Qt::UserRole, val);
+                item->setData(1, Qt::UserRole + 3, isArrayElem);
                 recalculateTreeAddresses();
                 syncTreeToCodeNoteText();
             }
@@ -1199,7 +1304,7 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem) {
-        QRegularExpression offsetRx("^([\\+\\-]0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
+        QRegularExpression offsetRx("^(\\|?[\\+\\-]0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
 
         for (const auto& node : nodes) {
             auto match = offsetRx.match(node->content.trimmed());
@@ -1207,6 +1312,11 @@ namespace PointerFinder2::UI {
                 QString rawOffset = match.captured(1);
                 QString delimiter = match.captured(2);
                 QString desc = match.captured(3).trimmed();
+
+                bool isArrayElem = rawOffset.startsWith('|');
+                if (isArrayElem) {
+                    rawOffset = rawOffset.mid(1);
+                }
 
                 QString sign = rawOffset.left(1);
                 bool ok = false;
@@ -1217,13 +1327,20 @@ namespace PointerFinder2::UI {
                 newItem->setText(0, desc);
                 newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
                 QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
-                newItem->setText(1, sign + "0x" + offsetHex);
+
+                QString displayOffset = (isArrayElem ? "|+" : sign) + "0x" + offsetHex;
+                newItem->setText(1, displayOffset);
                 newItem->setData(1, Qt::UserRole, offsetVal);
                 newItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
+                newItem->setData(1, Qt::UserRole + 3, isArrayElem);
 
                 QStringList notes;
                 for (const auto& child : node->children) {
-                    if (!child->content.startsWith("+0x", Qt::CaseInsensitive) && !child->content.startsWith("-0x", Qt::CaseInsensitive)) {
+                    bool isChildOffset = child->content.startsWith("+0x", Qt::CaseInsensitive) || 
+                                         child->content.startsWith("-0x", Qt::CaseInsensitive) ||
+                                         child->content.startsWith("|+0x", Qt::CaseInsensitive) ||
+                                         child->content.startsWith("|-0x", Qt::CaseInsensitive);
+                    if (!isChildOffset) {
                         notes.append(child->content);
                     }
                 }
@@ -1234,7 +1351,11 @@ namespace PointerFinder2::UI {
 
                 std::vector<std::shared_ptr<CodeNoteNode>> pointerChildren;
                 for (const auto& child : node->children) {
-                    if (child->content.startsWith("+0x", Qt::CaseInsensitive) || child->content.startsWith("-0x", Qt::CaseInsensitive)) {
+                    bool isChildOffset = child->content.startsWith("+0x", Qt::CaseInsensitive) || 
+                                         child->content.startsWith("-0x", Qt::CaseInsensitive) ||
+                                         child->content.startsWith("|+0x", Qt::CaseInsensitive) ||
+                                         child->content.startsWith("|-0x", Qt::CaseInsensitive);
+                    if (isChildOffset) {
                         pointerChildren.push_back(child);
                     }
                 }
@@ -1298,8 +1419,11 @@ namespace PointerFinder2::UI {
                     QString delimiter = item->data(1, Qt::UserRole + 1).toString();
                     if (delimiter.isEmpty()) delimiter = "=";
 
+                    bool isArrayElem = item->data(1, Qt::UserRole + 3).toBool();
+                    QString pipePrefix = isArrayElem ? "|" : "";
+
                     auto node = std::make_shared<CodeNoteNode>();
-                    node->content = sign + "0x" + offsetHex + delimiter + item->text(0);
+                    node->content = pipePrefix + sign + "0x" + offsetHex + delimiter + item->text(0);
 
                     QStringList valueNotes = item->data(0, Qt::UserRole + 2).toStringList();
                     for (const auto& vNote : valueNotes) {

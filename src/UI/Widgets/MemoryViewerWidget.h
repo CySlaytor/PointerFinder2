@@ -5,6 +5,7 @@
 #include <vector>
 #include <QAbstractScrollArea>
 #include <QFont>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 
@@ -32,6 +33,13 @@ namespace PointerFinder2::UI::Widgets {
             bool isChildOfActive = false;
         };
 
+        struct DefinedArrayInfo {
+            QString name;
+            uint32_t startAddress = 0;
+            uint32_t endAddress = 0;
+            uint32_t size = 0;
+        };
+
         explicit MemoryViewerWidget(QWidget* parent = nullptr);
         ~MemoryViewerWidget() override;
 
@@ -43,6 +51,15 @@ namespace PointerFinder2::UI::Widgets {
 
         void setHighlightedAddresses(const std::unordered_map<uint32_t, HighlightInfo>& highlights);
         void clearHighlights();
+
+        void setDefinedArrays(const std::vector<DefinedArrayInfo>& arrays);
+        void clearDefinedArrays();
+
+        bool hasRangeSelection() const { return m_hasRangeSelection; }
+        uint32_t getRangeStart() const { return m_rangeStart; }
+        uint32_t getRangeEnd() const { return m_rangeEnd; }
+        uint32_t getRangeSpan() const { return m_rangeSpan; }
+        void clearRangeSelection();
 
         uint32_t getSelectedAddress() const { return m_selectedAddress; }
         void setSelectedAddress(uint32_t address);
@@ -58,6 +75,8 @@ namespace PointerFinder2::UI::Widgets {
         void addressSelected(uint32_t address);
         void addressDoubleClicked(uint32_t address);
         void contextMenuRequested(uint32_t address, const QPoint& globalPos);
+        void rangeSelected(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
+        void defineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
 
     protected:
         void paintEvent(QPaintEvent* event) override;
@@ -76,9 +95,23 @@ namespace PointerFinder2::UI::Widgets {
         ViewMode m_viewMode = ViewMode::Mode32Bit;
 
         std::unordered_map<uint32_t, HighlightInfo> m_highlights;
+        std::vector<DefinedArrayInfo> m_definedArrays;
 
         uint32_t m_selectedAddress = 0;
         bool m_hasSelection = false;
+
+        // Shift+Click range selection state
+        bool m_hasRangeSelection = false;
+        uint32_t m_rangeAnchor = 0;
+        uint32_t m_rangeStart = 0;
+        uint32_t m_rangeEnd = 0;
+        uint32_t m_rangeSpan = 0;
+
+        // Floating action bar for array definition
+        QWidget* m_rangeBannerWidget = nullptr;
+        QLabel* m_rangeBannerLabel = nullptr;
+        QPushButton* m_defineArrayBtn = nullptr;
+        QPushButton* m_closeBannerBtn = nullptr;
 
         QFont m_monoFont;
         int m_charWidth = 8;
@@ -93,6 +126,7 @@ namespace PointerFinder2::UI::Widgets {
 
         void updateMetrics();
         void updateScrollBars();
+        void updateRangeBanner();
         int64_t totalRows() const;
         uint32_t addressAtPosition(const QPoint& pos) const;
     };

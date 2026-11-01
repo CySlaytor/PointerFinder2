@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
+#include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -24,6 +25,69 @@ namespace PointerFinder2::UI::Widgets {
 
         updateMetrics();
         updateScrollBars();
+
+        // Setup floating action banner for array definitions
+        m_rangeBannerWidget = new QWidget(viewport());
+        m_rangeBannerWidget->setObjectName("rangeBannerWidget");
+        m_rangeBannerWidget->setStyleSheet(
+            "#rangeBannerWidget {"
+            "    background-color: #21162E;"
+            "    border: 1px solid #A371F7;"
+            "    border-radius: 5px;"
+            "    padding: 3px 6px;"
+            "}"
+            "QLabel {"
+            "    color: #E2D9F3;"
+            "    font-weight: bold;"
+            "    font-size: 11px;"
+            "}"
+            "QPushButton#defineArrayBtn {"
+            "    background-color: #7928CA;"
+            "    color: #ffffff;"
+            "    border: 1px solid #A371F7;"
+            "    border-radius: 3px;"
+            "    font-weight: bold;"
+            "    font-size: 11px;"
+            "    padding: 2px 10px;"
+            "}"
+            "QPushButton#defineArrayBtn:hover {"
+            "    background-color: #8A3FFC;"
+            "}"
+            "QPushButton#closeBannerBtn {"
+            "    background: transparent;"
+            "    color: #b0a0cc;"
+            "    border: none;"
+            "    font-weight: bold;"
+            "    font-size: 12px;"
+            "    padding: 0 4px;"
+            "}"
+            "QPushButton#closeBannerBtn:hover {"
+            "    color: #ffffff;"
+            "}"
+        );
+
+        auto* bannerLayout = new QHBoxLayout(m_rangeBannerWidget);
+        bannerLayout->setContentsMargins(6, 2, 6, 2);
+        bannerLayout->setSpacing(8);
+
+        m_rangeBannerLabel = new QLabel(m_rangeBannerWidget);
+        m_defineArrayBtn = new QPushButton("Define Array", m_rangeBannerWidget);
+        m_defineArrayBtn->setObjectName("defineArrayBtn");
+        m_closeBannerBtn = new QPushButton("✕", m_rangeBannerWidget);
+        m_closeBannerBtn->setObjectName("closeBannerBtn");
+
+        bannerLayout->addWidget(m_rangeBannerLabel);
+        bannerLayout->addWidget(m_defineArrayBtn);
+        bannerLayout->addWidget(m_closeBannerBtn);
+
+        connect(m_defineArrayBtn, &QPushButton::clicked, this, [this]() {
+            if (m_hasRangeSelection) {
+                emit defineArrayRequested(m_rangeStart, m_rangeEnd, m_rangeSpan);
+            }
+        });
+        connect(m_closeBannerBtn, &QPushButton::clicked, this, &MemoryViewerWidget::clearRangeSelection);
+
+        m_rangeBannerWidget->hide();
     }
 
     MemoryViewerWidget::~MemoryViewerWidget() = default;
@@ -70,6 +134,7 @@ namespace PointerFinder2::UI::Widgets {
             m_selectedAddress = m_memoryBaseAddress;
         }
 
+        clearRangeSelection();
         updateMetrics();
         updateScrollBars();
         viewport()->update();
@@ -78,7 +143,9 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::clearMemory() {
         m_memoryData.clear();
         m_highlights.clear();
+        m_definedArrays.clear();
         m_hasSelection = false;
+        clearRangeSelection();
         updateScrollBars();
         viewport()->update();
     }
@@ -88,6 +155,7 @@ namespace PointerFinder2::UI::Widgets {
             m_viewMode = mode;
             updateMetrics();
             updateScrollBars();
+            updateRangeBanner();
             viewport()->update();
         }
     }
@@ -100,6 +168,53 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::clearHighlights() {
         m_highlights.clear();
         viewport()->update();
+    }
+
+    void MemoryViewerWidget::setDefinedArrays(const std::vector<DefinedArrayInfo>& arrays) {
+        m_definedArrays = arrays;
+        viewport()->update();
+    }
+
+    void MemoryViewerWidget::clearDefinedArrays() {
+        m_definedArrays.clear();
+        viewport()->update();
+    }
+
+    void MemoryViewerWidget::clearRangeSelection() {
+        if (m_hasRangeSelection) {
+            m_hasRangeSelection = false;
+            m_rangeStart = 0;
+            m_rangeEnd = 0;
+            m_rangeSpan = 0;
+            if (m_rangeBannerWidget) {
+                m_rangeBannerWidget->hide();
+            }
+            viewport()->update();
+        }
+    }
+
+    void MemoryViewerWidget::updateRangeBanner() {
+        if (!m_hasRangeSelection || m_rangeSpan <= 4) {
+            if (m_rangeBannerWidget) m_rangeBannerWidget->hide();
+            return;
+        }
+
+        QString text = QString("Selected: 0x%1 - 0x%2 (%3 bytes / 0x%4)")
+            .arg(QString("%1").arg(m_rangeStart, 8, 16, QChar('0')).toUpper())
+            .arg(QString("%1").arg(m_rangeEnd, 8, 16, QChar('0')).toUpper())
+            .arg(m_rangeSpan)
+            .arg(QString::number(m_rangeSpan, 16).toUpper());
+
+        m_rangeBannerLabel->setText(text);
+        m_rangeBannerWidget->adjustSize();
+
+        int w = m_rangeBannerWidget->width();
+        int h = m_rangeBannerWidget->height();
+        int x = std::max(10, (viewport()->width() - w) / 2);
+        int y = viewport()->height() - h - 10;
+        m_rangeBannerWidget->setGeometry(x, y, w, h);
+        m_rangeBannerWidget->show();
+        m_rangeBannerWidget->raise();
     }
 
     uint32_t MemoryViewerWidget::readDwordAt(uint32_t address) const {
@@ -138,6 +253,7 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::resizeEvent(QResizeEvent* event) {
         QAbstractScrollArea::resizeEvent(event);
         updateScrollBars();
+        updateRangeBanner();
     }
 
     void MemoryViewerWidget::setSelectedAddress(uint32_t address) {
@@ -231,10 +347,36 @@ namespace PointerFinder2::UI::Widgets {
         if (event->button() == Qt::LeftButton && !m_memoryData.empty()) {
             uint32_t addr = addressAtPosition(event->pos());
             if (addr >= m_memoryBaseAddress && addr < m_memoryBaseAddress + m_memoryData.size()) {
-                m_selectedAddress = addr;
-                m_hasSelection = true;
-                emit addressSelected(m_selectedAddress);
-                viewport()->update();
+                if (event->modifiers() & Qt::ShiftModifier) {
+                    // Handle Shift+Click contiguous range selection
+                    if (m_rangeAnchor == 0) {
+                        m_rangeAnchor = (m_selectedAddress != 0) ? m_selectedAddress : addr;
+                    }
+
+                    uint32_t cellBytes = (m_viewMode == ViewMode::Mode8Bit) ? 1 : ((m_viewMode == ViewMode::Mode16Bit) ? 2 : 4);
+                    uint32_t low = std::min(m_rangeAnchor, addr);
+                    uint32_t high = std::max(m_rangeAnchor, addr) + (cellBytes - 1);
+
+                    m_rangeStart = low;
+                    m_rangeEnd = high;
+                    m_rangeSpan = (high - low) + 1;
+                    m_hasRangeSelection = (m_rangeSpan > cellBytes);
+
+                    m_selectedAddress = addr;
+                    m_hasSelection = true;
+                    updateRangeBanner();
+                    emit addressSelected(m_selectedAddress);
+                    emit rangeSelected(m_rangeStart, m_rangeEnd, m_rangeSpan);
+                    viewport()->update();
+                }
+                else {
+                    clearRangeSelection();
+                    m_rangeAnchor = addr;
+                    m_selectedAddress = addr;
+                    m_hasSelection = true;
+                    emit addressSelected(m_selectedAddress);
+                    viewport()->update();
+                }
             }
         }
         QAbstractScrollArea::mousePressEvent(event);
@@ -273,24 +415,55 @@ namespace PointerFinder2::UI::Widgets {
             if (addr != 0) {
                 auto it = m_highlights.find(addr);
 
-                if (it != m_highlights.end()) {
-                    uint32_t baseDisplayAddr = (it->second.startAddress != 0) ? it->second.startAddress : addr;
+                // Check defined array membership for multi-tier tooltip context
+                const DefinedArrayInfo* activeArray = nullptr;
+                for (const auto& arr : m_definedArrays) {
+                    if (addr >= arr.startAddress && addr <= arr.endAddress) {
+                        activeArray = &arr;
+                        break;
+                    }
+                }
+
+                if (it != m_highlights.end() || activeArray != nullptr) {
+                    uint32_t baseDisplayAddr = (it != m_highlights.end() && it->second.startAddress != 0) ? it->second.startAddress : addr;
                     QString addrHex = "0x" + QString("%1").arg(baseDisplayAddr, 8, 16, QChar('0')).toUpper();
 
-                    QString line1 = it->second.offset.isEmpty()
-                        ? QString("<b>%1</b>").arg(addrHex)
-                        : QString("<b>%1</b> (%2)").arg(addrHex, it->second.offset);
+                    QString line1 = (it != m_highlights.end() && !it->second.offset.isEmpty())
+                        ? QString("<b>%1</b> (%2)").arg(addrHex, it->second.offset)
+                        : QString("<b>%1</b>").arg(addrHex);
 
-                    QString line2 = it->second.name.isEmpty() ? it->second.label : it->second.name;
+                    QString line2 = (it != m_highlights.end())
+                        ? (it->second.name.isEmpty() ? it->second.label : it->second.name)
+                        : "";
 
-                    QString line3 = it->second.isPointer
-                        ? "<span style='color: #FF7B72;'>[Pointer Target]</span>"
-                        : "<span style='color: #79C0FF;'>[Documented Variable]</span>";
+                    QString line3 = "";
+                    if (it != m_highlights.end()) {
+                        line3 = it->second.isPointer
+                            ? "<span style='color: #FF7B72;'>[Pointer Target]</span>"
+                            : "<span style='color: #79C0FF;'>[Documented Variable]</span>";
+                    }
 
-                    QString tip = QString("<div style='margin:0; padding:0; line-height:115%;'>%1<br>%2<br>%3</div>")
+                    QString arrayTag = "";
+                    if (activeArray != nullptr) {
+                        uint32_t offsetInArray = addr - activeArray->startAddress;
+                        arrayTag = QString("<span style='color: #D2A8FF;'>[Array: %1 (%2 bytes), Offset: +0x%3]</span>")
+                            .arg(activeArray->name.isEmpty() ? "Array" : activeArray->name)
+                            .arg(activeArray->size)
+                            .arg(QString::number(offsetInArray, 16).toUpper());
+                    }
+
+                    QString combinedStatus = line3;
+                    if (!combinedStatus.isEmpty() && !arrayTag.isEmpty()) {
+                        combinedStatus += " &bull; " + arrayTag;
+                    }
+                    else if (!arrayTag.isEmpty()) {
+                        combinedStatus = arrayTag;
+                    }
+
+                    QString tip = QString("<div style='margin:0; padding:0; line-height:115%;'>%1%2%3</div>")
                         .arg(line1)
-                        .arg(line2)
-                        .arg(line3);
+                        .arg(line2.isEmpty() ? "" : "<br>" + line2)
+                        .arg(combinedStatus.isEmpty() ? "" : "<br>" + combinedStatus);
 
                     QToolTip::showText(event->globalPosition().toPoint(), tip, viewport());
                 }
@@ -313,6 +486,11 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::keyPressEvent(QKeyEvent* event) {
         if (m_memoryData.empty()) {
             QAbstractScrollArea::keyPressEvent(event);
+            return;
+        }
+
+        if (event->key() == Qt::Key_Escape && m_hasRangeSelection) {
+            clearRangeSelection();
             return;
         }
 
@@ -416,6 +594,11 @@ namespace PointerFinder2::UI::Widgets {
         const QColor variableColor = QColor(121, 192, 255);   // Cyan/Blue
         const QColor activeContextBg = QColor(22, 48, 72, 160);
 
+        // Array styling colors
+        const QColor arrayBgColor = QColor(121, 40, 202, 75);       // Translucent purple background
+        const QColor arrayBorderColor = QColor(163, 113, 247, 180);  // Lavender border
+        const QColor rangeSelectBgColor = QColor(138, 75, 175, 120); // Active Shift+Click range highlight
+
         for (int64_t r = startRow; r < endRow; ++r) {
             int y = m_headerHeight + static_cast<int>((r - startRow) * m_lineHeight);
             uint32_t rowAddress = m_memoryBaseAddress + static_cast<uint32_t>(r * 16);
@@ -438,10 +621,25 @@ namespace PointerFinder2::UI::Widgets {
                         uint8_t byteVal = m_memoryData[bo];
                         auto it = m_highlights.find(currAddr);
 
+                        // Tier 1: Array range background
+                        for (const auto& arr : m_definedArrays) {
+                            if (currAddr >= arr.startAddress && currAddr <= arr.endAddress) {
+                                painter.fillRect(QRect(bx - 1, y, byteWidth + 2, m_lineHeight), arrayBgColor);
+                                break;
+                            }
+                        }
+
+                        // Active Shift+Click Range Selection highlight
+                        if (m_hasRangeSelection && currAddr >= m_rangeStart && currAddr <= m_rangeEnd) {
+                            painter.fillRect(QRect(bx - 1, y, byteWidth + 2, m_lineHeight), rangeSelectBgColor);
+                        }
+
+                        // Tier 2: Active struct / child context background
                         if (it != m_highlights.end() && it->second.isChildOfActive) {
                             painter.fillRect(QRect(bx - 1, y, byteWidth + 2, m_lineHeight), activeContextBg);
                         }
 
+                        // Tier 4: Cursor focus box
                         if (m_hasSelection && currAddr == m_selectedAddress) {
                             QRect selRect(bx - 2, y, byteWidth + 4, m_lineHeight);
                             painter.fillRect(selRect, selectionBgColor);
@@ -449,6 +647,7 @@ namespace PointerFinder2::UI::Widgets {
                             painter.drawRect(selRect);
                         }
 
+                        // Tier 3: Foreground text
                         if (it != m_highlights.end()) {
                             painter.setPen(it->second.isPointer ? pointerColor : variableColor);
                         }
@@ -470,6 +669,19 @@ namespace PointerFinder2::UI::Widgets {
                     int wx = m_hexColX + i * (wordWidth + wordSpacing);
 
                     if (dataOffset + (i * 2) + 1 < m_memoryData.size()) {
+                        // Tier 1: Array background
+                        for (const auto& arr : m_definedArrays) {
+                            if ((wordAddr + 1 >= arr.startAddress) && (wordAddr <= arr.endAddress)) {
+                                painter.fillRect(QRect(wx - 1, y, wordWidth + 2, m_lineHeight), arrayBgColor);
+                                break;
+                            }
+                        }
+
+                        // Active Shift+Click Range highlight
+                        if (m_hasRangeSelection && (wordAddr + 1 >= m_rangeStart) && (wordAddr <= m_rangeEnd)) {
+                            painter.fillRect(QRect(wx - 1, y, wordWidth + 2, m_lineHeight), rangeSelectBgColor);
+                        }
+
                         auto it0 = m_highlights.find(wordAddr);
                         auto it1 = m_highlights.find(wordAddr + 1);
                         bool childActive = (it0 != m_highlights.end() && it0->second.isChildOfActive) ||
@@ -513,6 +725,19 @@ namespace PointerFinder2::UI::Widgets {
                     int dx = m_hexColX + i * (dwordWidth + dwordSpacing);
 
                     if (dataOffset + (i * 4) + 3 < m_memoryData.size()) {
+                        // Tier 1: Array background
+                        for (const auto& arr : m_definedArrays) {
+                            if ((dwordAddr + 3 >= arr.startAddress) && (dwordAddr <= arr.endAddress)) {
+                                painter.fillRect(QRect(dx - 1, y, dwordWidth + 2, m_lineHeight), arrayBgColor);
+                                break;
+                            }
+                        }
+
+                        // Active Shift+Click Range highlight
+                        if (m_hasRangeSelection && (dwordAddr + 3 >= m_rangeStart) && (dwordAddr <= m_rangeEnd)) {
+                            painter.fillRect(QRect(dx - 1, y, dwordWidth + 2, m_lineHeight), rangeSelectBgColor);
+                        }
+
                         bool childActive = false;
                         for (uint32_t k = 0; k < 4; ++k) {
                             auto itK = m_highlights.find(dwordAddr + k);
@@ -560,6 +785,18 @@ namespace PointerFinder2::UI::Widgets {
                 if (byteOffset < m_memoryData.size()) {
                     uint8_t byteVal = m_memoryData[byteOffset];
                     QChar asciiCh = (byteVal >= 32 && byteVal <= 126) ? QChar(byteVal) : QChar('.');
+
+                    // Array background highlight for ASCII column
+                    for (const auto& arr : m_definedArrays) {
+                        if (currByteAddr >= arr.startAddress && currByteAddr <= arr.endAddress) {
+                            painter.fillRect(QRect(ax, y, m_charWidth, m_lineHeight), arrayBgColor);
+                            break;
+                        }
+                    }
+
+                    if (m_hasRangeSelection && currByteAddr >= m_rangeStart && currByteAddr <= m_rangeEnd) {
+                        painter.fillRect(QRect(ax, y, m_charWidth, m_lineHeight), rangeSelectBgColor);
+                    }
 
                     auto it = m_highlights.find(currByteAddr);
                     if (it != m_highlights.end()) {

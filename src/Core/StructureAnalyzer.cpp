@@ -51,7 +51,7 @@ namespace PointerFinder2::Core {
         }
 
         std::vector<ScopeCandidate> allScopes;
-        allScopes.push_back({ nullptr, initialParentBase, 0 });
+        allScopes.push_back({ nullptr, initialParentBase, 0, false, 0 });
         allScopes.insert(allScopes.end(), scopes.begin(), scopes.end());
 
         constexpr uint32_t MAX_STRUCT_SPAN = 0x10000; // 64 KB struct span
@@ -59,7 +59,23 @@ namespace PointerFinder2::Core {
         uint32_t smallestOffset = 0xFFFFFFFF;
 
         for (const auto& scope : allScopes) {
-            if (selectedAddr >= scope.targetBase) {
+            if (scope.isArrayScope && scope.arraySize > 0) {
+                // Address falls strictly within defined array boundaries
+                if (selectedAddr >= scope.targetBase && selectedAddr < scope.targetBase + scope.arraySize) {
+                    uint32_t delta = selectedAddr - scope.targetBase;
+                    if (scope.depth >= maxDepthMatched) {
+                        maxDepthMatched = scope.depth;
+                        smallestOffset = delta;
+                        best.scopeIdentifier = scope.identifier;
+                        best.baseAddress = scope.targetBase;
+                        best.offset = static_cast<int32_t>(delta);
+                        best.depth = scope.depth;
+                        best.isValid = true;
+                        best.isArrayScope = true;
+                    }
+                }
+            }
+            else if (selectedAddr >= scope.targetBase) {
                 uint32_t delta = selectedAddr - scope.targetBase;
                 if (delta < MAX_STRUCT_SPAN) {
                     if (scope.depth > maxDepthMatched || (scope.depth == maxDepthMatched && delta < smallestOffset)) {
@@ -70,6 +86,7 @@ namespace PointerFinder2::Core {
                         best.offset = static_cast<int32_t>(delta);
                         best.depth = scope.depth;
                         best.isValid = true;
+                        best.isArrayScope = false;
                     }
                 }
             }

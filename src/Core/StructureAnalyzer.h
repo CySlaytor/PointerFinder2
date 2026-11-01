@@ -13,6 +13,8 @@ namespace PointerFinder2::Core {
         void* identifier = nullptr;
         uint32_t targetBase = 0;
         int depth = 0;
+        bool isArrayScope = false;
+        uint32_t arraySize = 0;
     };
 
     struct ScopeMatch {
@@ -21,6 +23,7 @@ namespace PointerFinder2::Core {
         int32_t offset = 0;
         int depth = 0;
         bool isValid = false;
+        bool isArrayScope = false;
     };
 
     // Service providing memory dereferencing, parent pointer scope resolution,
