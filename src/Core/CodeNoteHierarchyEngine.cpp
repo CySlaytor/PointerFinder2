@@ -226,7 +226,8 @@ namespace PointerFinder2::Core {
         const QString& style,
         bool indentDescriptions,
         const QString& headerComment,
-        std::vector<bool> ancestorIsLast
+        std::vector<bool> ancestorIsLast,
+        int parentNestingLevel
     ) {
         QString sb = "";
 
@@ -258,6 +259,7 @@ namespace PointerFinder2::Core {
             }
 
             QString prefix = "";
+            int nextNestingLevel = 0;
 
             if (style.startsWith("Unicode Tree")) {
                 if (isAttachedNote) {
@@ -277,13 +279,17 @@ namespace PointerFinder2::Core {
                         prefix.append(hasPointerChildren ? "┬" : "─");
                     }
                 }
+                nextNestingLevel = indentLevel + 1;
             }
             else {
                 QChar indentChar = style.startsWith("Plusses") ? '+' : '.';
 
                 if (isAttachedNote) {
                     if (indentDescriptions) {
-                        prefix = indentLevel > 0 ? QString(indentLevel, '.') : "";
+                        // Dynamically match the parent pointer's nesting level so descriptions align directly underneath
+                        int dotCount = (parentNestingLevel > 0) ? parentNestingLevel : std::max(1, indentLevel);
+                        prefix = QString(dotCount, '.');
+                        nextNestingLevel = dotCount + 1;
                     }
                 }
                 else {
@@ -293,6 +299,16 @@ namespace PointerFinder2::Core {
                     }
                     else {
                         prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
+                    }
+
+                    // Dynamically calculate the exact character width before the hexadecimal offset starts
+                    QString fullLine = prefix + node->content;
+                    int oxIndex = fullLine.indexOf("0x", 0, Qt::CaseInsensitive);
+                    if (oxIndex > 0) {
+                        nextNestingLevel = oxIndex;
+                    }
+                    else {
+                        nextNestingLevel = prefix.length() + 1;
                     }
                 }
             }
@@ -304,7 +320,7 @@ namespace PointerFinder2::Core {
                 if (indentLevel > 0) {
                     nextAncestors.push_back(isLastChild);
                 }
-                sb.append(rebuildTextFromTree(node->children, indentLevel + 1, style, indentDescriptions, "", nextAncestors));
+                sb.append(rebuildTextFromTree(node->children, indentLevel + 1, style, indentDescriptions, "", nextAncestors, nextNestingLevel));
             }
         }
         return sb;

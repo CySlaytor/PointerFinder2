@@ -36,7 +36,8 @@ namespace PointerFinder2::Core {
             const QString& style,
             bool indentDescriptions,
             const QString& headerComment = "",
-            std::vector<bool> ancestorIsLast = {}
+            std::vector<bool> ancestorIsLast = {},
+            int parentNestingLevel = 0
         );
     };
 
