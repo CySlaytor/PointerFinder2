@@ -19,10 +19,53 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSortFilterProxyModel>
 #include <QSplitter>
+#include <QStandardItemModel>
 #include <QTreeWidget>
 
 namespace PointerFinder2::UI {
+
+    // Filter proxy model providing real-time multi-keyword and hex address filtering
+    class AddressFilterProxyModel : public QSortFilterProxyModel {
+        Q_OBJECT
+    public:
+        explicit AddressFilterProxyModel(QObject* parent = nullptr)
+            : QSortFilterProxyModel(parent) {}
+
+        void setSearchFilter(const QString& filter) {
+            m_filterWords = filter.trimmed().split(' ', Qt::SkipEmptyParts);
+            invalidateFilter();
+        }
+
+    protected:
+        bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override {
+            if (m_filterWords.isEmpty()) return true;
+
+            QModelIndex idx = sourceModel()->index(sourceRow, 0, sourceParent);
+            QString text = sourceModel()->data(idx, Qt::DisplayRole).toString();
+            QVariant addrData = sourceModel()->data(idx, Qt::UserRole);
+            uint32_t addr = addrData.isValid() ? addrData.toUInt() : 0;
+            QString addrHexClean = QString::number(addr, 16).toUpper();
+
+            for (const auto& word : m_filterWords) {
+                QString cleanWord = word;
+                if (cleanWord.startsWith("0x", Qt::CaseInsensitive)) {
+                    cleanWord = cleanWord.mid(2);
+                }
+                bool matchText = text.contains(word, Qt::CaseInsensitive);
+                bool matchHex = (!cleanWord.isEmpty() && addrHexClean.contains(cleanWord, Qt::CaseInsensitive));
+
+                if (!matchText && !matchHex) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+    private:
+        QStringList m_filterWords;
+    };
 
     // A standalone workspace dialog integrating an intelligent, scope-aware pointer structure editor
     // with a PCSX2-styled read-only memory viewer, eliminating manual offset calculations and level management.
@@ -37,6 +80,7 @@ namespace PointerFinder2::UI {
     private slots:
         void onAddressSelectedInViewer(uint32_t address);
         void onAddressDoubleClickedInViewer(uint32_t address);
+        void onMemoryViewerContextMenu(uint32_t address, const QPoint& globalPos);
         void onStructureTreeItemDoubleClicked(QTreeWidgetItem* item, int column);
         void onStructureTreeCustomContextMenu(const QPoint& pos);
         void onAddVariableClicked();
@@ -51,6 +95,7 @@ namespace PointerFinder2::UI {
 
         // RA Game Data & Dissection slots
         void onAddressComboChanged(int index);
+        void onAddressSearchTextChanged(const QString& text);
         void onSaveUserTxtClicked();
         void onRevertServerClicked();
         void onResetClicked();
@@ -68,7 +113,11 @@ namespace PointerFinder2::UI {
         // UI Controls
         QSplitter* m_mainSplitter = nullptr;
 
+        // Top Toolbar
         QComboBox* m_addressSelectCombo = nullptr;
+        QStandardItemModel* m_addressSourceModel = nullptr;
+        AddressFilterProxyModel* m_addressProxyModel = nullptr;
+        QLineEdit* m_addressSearchEdit = nullptr;
         QPushButton* m_saveUserBtn = nullptr;
         QPushButton* m_revertServerBtn = nullptr;
         QPushButton* m_resetBtn = nullptr;

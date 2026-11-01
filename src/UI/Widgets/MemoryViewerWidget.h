@@ -57,6 +57,7 @@ namespace PointerFinder2::UI::Widgets {
     signals:
         void addressSelected(uint32_t address);
         void addressDoubleClicked(uint32_t address);
+        void contextMenuRequested(uint32_t address, const QPoint& globalPos);
 
     protected:
         void paintEvent(QPaintEvent* event) override;
@@ -66,6 +67,7 @@ namespace PointerFinder2::UI::Widgets {
         void mouseMoveEvent(QMouseEvent* event) override;
         void leaveEvent(QEvent* event) override;
         void keyPressEvent(QKeyEvent* event) override;
+        void contextMenuEvent(QContextMenuEvent* event) override;
 
     private:
         std::vector<uint8_t> m_memoryData;

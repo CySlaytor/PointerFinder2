@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <QApplication>
 #include <QClipboard>
+#include <QContextMenuEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -189,28 +190,22 @@ namespace PointerFinder2::UI::Widgets {
         else if (m_viewMode == ViewMode::Mode16Bit) {
             int wordWidth = m_charWidth * 4;
             int wordSpacing = m_charWidth;
-            bool isBE = m_isBigEndian;
             for (int i = 0; i < 8; ++i) {
                 int wx = m_hexColX + i * (wordWidth + wordSpacing);
                 if (pos.x() >= wx - 2 && pos.x() < wx + wordWidth + 2) {
-                    int charInWord = (pos.x() - wx) / (m_charWidth * 2);
-                    charInWord = std::clamp(charInWord, 0, 1);
-                    return isBE ? (rowAddress + (i * 2) + charInWord)
-                                : (rowAddress + (i * 2) + (1 - charInWord));
+                    // Snap click to 16-bit word alignment
+                    return rowAddress + (i * 2);
                 }
             }
         }
         else {
             int dwordWidth = m_charWidth * 8;
             int dwordSpacing = m_charWidth * 2;
-            bool isBE = (m_viewMode == ViewMode::Mode32BitBE) || m_isBigEndian;
             for (int i = 0; i < 4; ++i) {
                 int dx = m_hexColX + i * (dwordWidth + dwordSpacing);
                 if (pos.x() >= dx - 3 && pos.x() < dx + dwordWidth + 3) {
-                    int byteInDword = (pos.x() - dx) / (m_charWidth * 2);
-                    byteInDword = std::clamp(byteInDword, 0, 3);
-                    return isBE ? (rowAddress + (i * 4) + byteInDword)
-                                : (rowAddress + (i * 4) + (3 - byteInDword));
+                    // Snap click to 32-bit DWORD boundary to prevent unaligned selections
+                    return rowAddress + (i * 4);
                 }
             }
         }
@@ -218,7 +213,14 @@ namespace PointerFinder2::UI::Widgets {
         if (pos.x() >= m_asciiColX) {
             int charIdx = (pos.x() - m_asciiColX) / m_charWidth;
             if (charIdx >= 0 && charIdx < 16) {
-                return rowAddress + charIdx;
+                uint32_t raw = rowAddress + charIdx;
+                if (m_viewMode == ViewMode::Mode32Bit || m_viewMode == ViewMode::Mode32BitBE) {
+                    return raw & ~3U;
+                }
+                if (m_viewMode == ViewMode::Mode16Bit) {
+                    return raw & ~1U;
+                }
+                return raw;
             }
         }
 
@@ -248,6 +250,21 @@ namespace PointerFinder2::UI::Widgets {
             }
         }
         QAbstractScrollArea::mouseDoubleClickEvent(event);
+    }
+
+    void MemoryViewerWidget::contextMenuEvent(QContextMenuEvent* event) {
+        if (!m_memoryData.empty()) {
+            uint32_t addr = addressAtPosition(event->pos());
+            if (addr >= m_memoryBaseAddress && addr < m_memoryBaseAddress + m_memoryData.size()) {
+                m_selectedAddress = addr;
+                m_hasSelection = true;
+                emit addressSelected(m_selectedAddress);
+                viewport()->update();
+                emit contextMenuRequested(addr, event->globalPos());
+                return;
+            }
+        }
+        QAbstractScrollArea::contextMenuEvent(event);
     }
 
     void MemoryViewerWidget::mouseMoveEvent(QMouseEvent* event) {
@@ -380,7 +397,7 @@ namespace PointerFinder2::UI::Widgets {
             }
         }
 
-        painter.drawText(m_asciiColX, m_headerHeight - 6, "Text");
+        painter.drawText(m_asciiColX, m_headerHeight - 6, "ASCII Text");
 
         painter.setPen(QColor(48, 54, 61));
         painter.drawLine(0, m_headerHeight - 1, viewport()->width(), m_headerHeight - 1);

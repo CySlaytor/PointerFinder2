@@ -10,10 +10,15 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
-#include <QStandardPaths>
 #include <QTextStream>
 
 namespace PointerFinder2::Core {
+
+    static QString s_cachedDataDir;
+
+    void RaStorageService::clearDirectoryCache() {
+        s_cachedDataDir.clear();
+    }
 
     QString RaStorageService::unescapeUserTxt(const QString& in) {
         QString out;
@@ -53,12 +58,29 @@ namespace PointerFinder2::Core {
     QString RaStorageService::extractTitleFromNote(const QString& noteText) {
         QString trimmed = noteText.trimmed();
         if (trimmed.isEmpty()) return "Untitled Note";
-        QString firstLine = trimmed.split(QRegularExpression("[\r\n]+")).first().trimmed();
-        if (firstLine.length() > 60) firstLine = firstLine.left(57) + "...";
-        return firstLine;
+
+        // Fast character scan to extract first line without regex overhead
+        int lineEnd = -1;
+        for (int i = 0; i < trimmed.length(); ++i) {
+            if (trimmed[i] == '\r' || trimmed[i] == '\n') {
+                lineEnd = i;
+                break;
+            }
+        }
+
+        if (lineEnd != -1) {
+            trimmed = trimmed.left(lineEnd).trimmed();
+        }
+
+        if (trimmed.length() > 60) trimmed = trimmed.left(57) + "...";
+        return trimmed;
     }
 
     QString RaStorageService::resolveRaDataDirectory(PlatformHandle processHandle) {
+        if (!s_cachedDataDir.isEmpty() && QDir(s_cachedDataDir).exists()) {
+            return s_cachedDataDir;
+        }
+
         if (!processHandle) return QString();
 
         HANDLE hProcess = static_cast<HANDLE>(processHandle);
@@ -77,13 +99,15 @@ namespace PointerFinder2::Core {
         // 1. Direct portable directory: <exeDir>/RACache/Data
         QDir candidate1(exeDir.filePath("RACache/Data"));
         if (candidate1.exists()) {
-            return candidate1.absolutePath();
+            s_cachedDataDir = candidate1.absolutePath();
+            return s_cachedDataDir;
         }
 
         // 2. Parent directory: <exeDir>/../RACache/Data
         QDir candidate2(exeDir.filePath("../RACache/Data"));
         if (candidate2.exists()) {
-            return candidate2.absolutePath();
+            s_cachedDataDir = candidate2.absolutePath();
+            return s_cachedDataDir;
         }
 
         // 3. Inspect module list for RA_Integration.dll
@@ -98,17 +122,13 @@ namespace PointerFinder2::Core {
                     if (modPath.contains("RA_Integration", Qt::CaseInsensitive)) {
                         QDir raDir = QFileInfo(modPath).dir();
                         QDir raCandidate(raDir.filePath("RACache/Data"));
-                        if (raCandidate.exists()) return raCandidate.absolutePath();
+                        if (raCandidate.exists()) {
+                            s_cachedDataDir = raCandidate.absolutePath();
+                            return s_cachedDataDir;
+                        }
                     }
                 }
             }
-        }
-
-        // 4. Global AppData fallback: %APPDATA%/RetroAchievements/RACache/Data
-        QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-        QDir globalCandidate(QDir(appData).filePath("../RetroAchievements/RACache/Data"));
-        if (globalCandidate.exists()) {
-            return globalCandidate.absolutePath();
         }
 
         return QString();
@@ -129,34 +149,77 @@ namespace PointerFinder2::Core {
         QString userTxtFileName = gameId + "-User.txt";
         QFileInfo userTxtFile(dataDir.filePath(userTxtFileName));
 
-        outData = RaGameData();
-        outData.gameId = gameId;
-        outData.notesJsonPath = bestNotesFile.absoluteFilePath();
-        outData.userTxtPath = userTxtFile.absoluteFilePath();
+        bool sameGameLoaded = (outData.isValid && outData.gameId == gameId &&
+            outData.notesJsonPath == bestNotesFile.absoluteFilePath() &&
+            !outData.notes.empty());
 
-        // 1. Read Notes.json (Read-Only Server baseline)
-        QFile jsonFile(outData.notesJsonPath);
-        if (jsonFile.open(QIODevice::ReadOnly)) {
-            QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
-            if (doc.isArray()) {
-                QJsonArray arr = doc.array();
-                for (const auto& itemVal : arr) {
-                    if (itemVal.isObject()) {
-                        QJsonObject obj = itemVal.toObject();
-                        RaCodeNote note;
-                        note.author = obj["User"].toString();
-                        note.addressHex = obj["Address"].toString();
-                        bool ok = false;
-                        note.address = note.addressHex.toUInt(&ok, 16);
-                        note.noteText = obj["Note"].toString();
-                        note.title = extractTitleFromNote(note.noteText);
-                        note.isModified = false;
-                        note.isLocalOnly = false;
-                        outData.notes.push_back(note);
+        if (!sameGameLoaded) {
+            outData = RaGameData();
+            outData.gameId = gameId;
+            outData.notesJsonPath = bestNotesFile.absoluteFilePath();
+            outData.userTxtPath = userTxtFile.absoluteFilePath();
+
+            // 1. Read Notes.json (Read-Only Server baseline)
+            QFile jsonFile(outData.notesJsonPath);
+            if (jsonFile.open(QIODevice::ReadOnly)) {
+                QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
+                if (doc.isArray()) {
+                    QJsonArray arr = doc.array();
+                    outData.notes.reserve(arr.size());
+                    for (const auto& itemVal : arr) {
+                        if (itemVal.isObject()) {
+                            QJsonObject obj = itemVal.toObject();
+                            RaCodeNote note;
+                            note.author = obj["User"].toString();
+                            note.addressHex = obj["Address"].toString();
+                            bool ok = false;
+                            note.address = note.addressHex.toUInt(&ok, 16);
+                            note.noteText = obj["Note"].toString();
+                            note.title = extractTitleFromNote(note.noteText);
+                            note.isModified = false;
+                            note.isLocalOnly = false;
+                            outData.notes.push_back(note);
+                        }
                     }
                 }
+                jsonFile.close();
             }
-            jsonFile.close();
+        }
+        else {
+            // Fast path: reset in-memory server notes rather than re-parsing entire JSON from disk
+            outData.userTxtPath = userTxtFile.absoluteFilePath();
+            outData.notes.erase(
+                std::remove_if(outData.notes.begin(), outData.notes.end(), [](const RaCodeNote& n) {
+                    return n.isLocalOnly;
+                    }),
+                outData.notes.end()
+            );
+
+            // Re-read server baseline from cached notes to restore original text
+            QFile jsonFile(outData.notesJsonPath);
+            if (jsonFile.open(QIODevice::ReadOnly)) {
+                QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
+                if (doc.isArray()) {
+                    QJsonArray arr = doc.array();
+                    for (const auto& itemVal : arr) {
+                        if (itemVal.isObject()) {
+                            QJsonObject obj = itemVal.toObject();
+                            QString addrHex = obj["Address"].toString();
+                            bool ok = false;
+                            uint32_t addr = addrHex.toUInt(&ok, 16);
+                            auto it = std::find_if(outData.notes.begin(), outData.notes.end(), [&](const RaCodeNote& n) {
+                                return n.address == addr;
+                                });
+                            if (it != outData.notes.end()) {
+                                it->noteText = obj["Note"].toString();
+                                it->title = extractTitleFromNote(it->noteText);
+                                it->isModified = false;
+                            }
+                        }
+                    }
+                }
+                jsonFile.close();
+            }
         }
 
         // 2. Read User.txt (Local overlay)
@@ -186,7 +249,7 @@ namespace PointerFinder2::Core {
 
                         auto it = std::find_if(outData.notes.begin(), outData.notes.end(), [&](const RaCodeNote& n) {
                             return n.address == addr;
-                        });
+                            });
 
                         if (it != outData.notes.end()) {
                             it->noteText = unescapedNote;
@@ -220,7 +283,7 @@ namespace PointerFinder2::Core {
         // 1. Update in-memory model
         auto it = std::find_if(gameData.notes.begin(), gameData.notes.end(), [&](const RaCodeNote& n) {
             return n.address == activeAddr;
-        });
+            });
 
         if (it != gameData.notes.end()) {
             it->noteText = currentNote;

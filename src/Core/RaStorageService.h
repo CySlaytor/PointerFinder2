@@ -40,6 +40,7 @@ namespace PointerFinder2::Core {
         static QString extractTitleFromNote(const QString& noteText);
         static QString unescapeUserTxt(const QString& in);
         static QString escapeUserTxt(const QString& in);
+        static void clearDirectoryCache();
     };
 
 }

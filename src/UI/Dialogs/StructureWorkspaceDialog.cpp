@@ -17,6 +17,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QListView>
 #include <QMenu>
 #include <QMessageBox>
 #include <QRegularExpression>
@@ -67,35 +68,91 @@ namespace PointerFinder2::UI {
 
         // Top Toolbar
         auto* topToolbar = new QHBoxLayout();
+        topToolbar->setSpacing(6);
         topToolbar->addWidget(new QLabel("Dissect Address:", this));
 
         m_addressSelectCombo = new QComboBox(this);
-        m_addressSelectCombo->setMinimumWidth(340);
+        m_addressSelectCombo->setMinimumWidth(280);
+        m_addressSelectCombo->setFixedHeight(26);
+
+        // Model and filter proxy setup for real-time dropdown shrinking
+        m_addressSourceModel = new QStandardItemModel(this);
+        m_addressProxyModel = new AddressFilterProxyModel(this);
+        m_addressProxyModel->setSourceModel(m_addressSourceModel);
+        m_addressSelectCombo->setModel(m_addressProxyModel);
+
+        // Win32 classic compact dropdown appearance configuration
+        m_addressSelectCombo->setMaxVisibleItems(14);
+        auto* popupView = new QListView(m_addressSelectCombo);
+        popupView->setUniformItemSizes(true);
+        popupView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        popupView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+        bool isDark = (GlobalSettings::activeTheme.compare("Light", Qt::CaseInsensitive) != 0);
+        popupView->setStyleSheet(QString(
+            "QListView {"
+            "    background-color: %1;"
+            "    color: %2;"
+            "    border: 1px solid %3;"
+            "    padding: 1px;"
+            "    outline: 0;"
+            "    font-family: 'Consolas', 'Segoe UI', monospace;"
+            "    font-size: 11px;"
+            "}"
+            "QListView::item {"
+            "    height: 19px;"
+            "    min-height: 19px;"
+            "    padding: 1px 4px;"
+            "}"
+            "QListView::item:hover {"
+            "    background-color: %6;"
+            "}"
+            "QListView::item:selected {"
+            "    background-color: %4;"
+            "    color: %5;"
+            "}"
+        ).arg(isDark ? "#1a1a1a" : "#ffffff")
+         .arg(isDark ? "#ffffff" : "#2b2b2b")
+         .arg(isDark ? "#383838" : "#c0c0c0")
+         .arg(isDark ? "#3b4252" : "#d2def5")
+         .arg(isDark ? "#ffffff" : "#1e1e1e")
+         .arg(isDark ? "#2c2c2c" : "#f0f0f0"));
+
+        m_addressSelectCombo->setView(popupView);
         topToolbar->addWidget(m_addressSelectCombo);
+
+        m_addressSearchEdit = new QLineEdit(this);
+        m_addressSearchEdit->setPlaceholderText("Search note or address...");
+        m_addressSearchEdit->setClearButtonEnabled(true);
+        m_addressSearchEdit->setFixedWidth(170);
+        m_addressSearchEdit->setFixedHeight(26);
+        topToolbar->addWidget(m_addressSearchEdit);
 
         m_saveUserBtn = new QPushButton("Save to User.txt", this);
         m_saveUserBtn->setIcon(getThemeIcon(":/icons/save.svg"));
         m_saveUserBtn->setShortcut(QKeySequence::Save);
         m_saveUserBtn->setToolTip("Save active note override to User.txt (Ctrl+S)");
+        m_saveUserBtn->setFixedHeight(26);
         topToolbar->addWidget(m_saveUserBtn);
 
         m_revertServerBtn = new QPushButton("Revert to Server", this);
         m_revertServerBtn->setIcon(getThemeIcon(":/icons/undo.svg"));
         m_revertServerBtn->setToolTip("Remove local override from User.txt and restore original server note");
         m_revertServerBtn->setEnabled(false);
+        m_revertServerBtn->setFixedHeight(26);
         topToolbar->addWidget(m_revertServerBtn);
 
         m_resetBtn = new QPushButton("Reset", this);
         m_resetBtn->setIcon(getThemeIcon(":/icons/load.svg"));
         m_resetBtn->setToolTip("Reload Notes.json and User.txt from disk if modified externally");
+        m_resetBtn->setFixedHeight(26);
         topToolbar->addWidget(m_resetBtn);
-
-        topToolbar->addSpacing(15);
 
         m_toggleCodeNoteBtn = new QPushButton("Code Note Panel", this);
         m_toggleCodeNoteBtn->setCheckable(true);
         m_toggleCodeNoteBtn->setChecked(true);
         m_toggleCodeNoteBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
+        m_toggleCodeNoteBtn->setFixedHeight(26);
         topToolbar->addWidget(m_toggleCodeNoteBtn);
 
         topToolbar->addStretch();
@@ -134,15 +191,25 @@ namespace PointerFinder2::UI {
         leftLayout->addWidget(m_offsetPreviewLabel);
 
         auto* treeButtonsRow = new QHBoxLayout();
+        treeButtonsRow->setSpacing(6);
+
         m_addVariableBtn = new QPushButton("Add Variable (Enter)", m_leftContainer);
-        m_addVariableBtn->setStyleSheet("font-weight: bold;");
+        m_addVariableBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
+        m_addVariableBtn->setFixedHeight(26);
+
         m_addPointerBtn = new QPushButton("Add as Pointer", m_leftContainer);
+        m_addPointerBtn->setIcon(getThemeIcon(":/icons/attach.svg"));
+        m_addPointerBtn->setFixedHeight(26);
+
         m_followPointerBtn = new QPushButton("Follow Pointer ->", m_leftContainer);
-        m_followPointerBtn->setStyleSheet("color: #FF7B72; font-weight: bold;");
+        m_followPointerBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
+        m_followPointerBtn->setFixedHeight(26);
+
         m_removeNodeBtn = new QPushButton("Remove", m_leftContainer);
         m_removeNodeBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
+        m_removeNodeBtn->setFixedHeight(26);
 
-        treeButtonsRow->addWidget(m_addVariableBtn, 2);
+        treeButtonsRow->addWidget(m_addVariableBtn, 1);
         treeButtonsRow->addWidget(m_addPointerBtn, 1);
         treeButtonsRow->addWidget(m_followPointerBtn, 1);
         treeButtonsRow->addWidget(m_removeNodeBtn, 1);
@@ -156,25 +223,10 @@ namespace PointerFinder2::UI {
         middleLayout->setContentsMargins(0, 0, 0, 0);
         middleLayout->setSpacing(6);
 
-        auto* viewerHeaderRow = new QHBoxLayout();
-        m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
-        m_refreshRamBtn->setStyleSheet("font-weight: bold;");
-        viewerHeaderRow->addWidget(m_refreshRamBtn);
+        m_memoryViewer = new Widgets::MemoryViewerWidget(m_middleContainer);
+        middleLayout->addWidget(m_memoryViewer, 1);
 
-        m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
-        viewerHeaderRow->addWidget(m_ramStatusLabel);
-        viewerHeaderRow->addStretch();
-
-        viewerHeaderRow->addWidget(new QLabel("Go to (Hex):", m_middleContainer));
-        m_goToAddressEdit = new QLineEdit(m_middleContainer);
-        m_goToAddressEdit->setMaximumWidth(100);
-        m_goToAddressBtn = new QPushButton("Go", m_middleContainer);
-        viewerHeaderRow->addWidget(m_goToAddressEdit);
-        viewerHeaderRow->addWidget(m_goToAddressBtn);
-
-        middleLayout->addLayout(viewerHeaderRow);
-
-        // Memory View Mode Selector
+        // Memory View Mode Selector (positioned at bottom)
         auto* viewModeRow = new QHBoxLayout();
         viewModeRow->addWidget(new QLabel("Memory View:", m_middleContainer));
 
@@ -197,8 +249,26 @@ namespace PointerFinder2::UI {
         viewModeRow->addStretch();
         middleLayout->addLayout(viewModeRow);
 
-        m_memoryViewer = new Widgets::MemoryViewerWidget(m_middleContainer);
-        middleLayout->addWidget(m_memoryViewer, 1);
+        // Memory Controls Bar (positioned at bottom)
+        auto* viewerBottomRow = new QHBoxLayout();
+        m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
+        m_refreshRamBtn->setFixedHeight(26);
+        viewerBottomRow->addWidget(m_refreshRamBtn);
+
+        m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
+        viewerBottomRow->addWidget(m_ramStatusLabel);
+        viewerBottomRow->addStretch();
+
+        viewerBottomRow->addWidget(new QLabel("Go to (Hex):", m_middleContainer));
+        m_goToAddressEdit = new QLineEdit(m_middleContainer);
+        m_goToAddressEdit->setMaximumWidth(100);
+        m_goToAddressEdit->setFixedHeight(26);
+        m_goToAddressBtn = new QPushButton("Go", m_middleContainer);
+        m_goToAddressBtn->setFixedHeight(26);
+        viewerBottomRow->addWidget(m_goToAddressEdit);
+        viewerBottomRow->addWidget(m_goToAddressBtn);
+
+        middleLayout->addLayout(viewerBottomRow);
 
         m_mainSplitter->addWidget(m_middleContainer);
 
@@ -208,36 +278,6 @@ namespace PointerFinder2::UI {
         rightLayout->setContentsMargins(0, 0, 0, 0);
         rightLayout->setSpacing(6);
 
-        auto* fixerHeaderRow = new QHBoxLayout();
-        fixerHeaderRow->addWidget(new QLabel("Style:", m_rightContainer));
-
-        m_styleCombo = new QComboBox(m_rightContainer);
-        m_styleCombo->addItems({
-            "Plusses (+)",
-            "Dots (.)",
-            "Unicode Tree (├─)"
-        });
-        fixerHeaderRow->addWidget(m_styleCombo);
-
-        m_indentDescCheck = new QCheckBox("Indent Descriptions", m_rightContainer);
-        m_indentDescCheck->setChecked(true);
-        fixerHeaderRow->addWidget(m_indentDescCheck);
-
-        m_fixHierarchyBtn = new QPushButton("Fix Hierarchy", m_rightContainer);
-        m_fixHierarchyBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
-        QFont boldFont = m_fixHierarchyBtn->font();
-        boldFont.setBold(true);
-        m_fixHierarchyBtn->setFont(boldFont);
-        fixerHeaderRow->addWidget(m_fixHierarchyBtn);
-
-        fixerHeaderRow->addStretch();
-
-        m_copyCodeNoteBtn = new QPushButton("Copy", m_rightContainer);
-        m_copyCodeNoteBtn->setIcon(getThemeIcon(":/icons/copy.svg"));
-        fixerHeaderRow->addWidget(m_copyCodeNoteBtn);
-
-        rightLayout->addLayout(fixerHeaderRow);
-
         m_codeNoteTextEdit = new QPlainTextEdit(m_rightContainer);
         QFont monoFont("Consolas", 9);
         monoFont.setStyleHint(QFont::Monospace);
@@ -245,20 +285,53 @@ namespace PointerFinder2::UI {
         m_codeNoteTextEdit->setPlaceholderText("Code Note displays here. You can paste raw pointer chains or edit lines directly, then click 'Fix Hierarchy' to merge...");
         rightLayout->addWidget(m_codeNoteTextEdit, 1);
 
+        // Hierarchy Controls Bar (positioned at bottom)
+        auto* fixerBottomRow = new QHBoxLayout();
+        fixerBottomRow->addWidget(new QLabel("Style:", m_rightContainer));
+
+        m_styleCombo = new QComboBox(m_rightContainer);
+        m_styleCombo->addItems({
+            "Plusses (+)",
+            "Dots (.)",
+            "Unicode Tree (├─)"
+        });
+        m_styleCombo->setFixedHeight(26);
+        fixerBottomRow->addWidget(m_styleCombo);
+
+        m_indentDescCheck = new QCheckBox("Indent Descriptions", m_rightContainer);
+        m_indentDescCheck->setChecked(true);
+        fixerBottomRow->addWidget(m_indentDescCheck);
+
+        m_fixHierarchyBtn = new QPushButton("Fix Hierarchy", m_rightContainer);
+        m_fixHierarchyBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
+        m_fixHierarchyBtn->setFixedHeight(26);
+        fixerBottomRow->addWidget(m_fixHierarchyBtn);
+
+        fixerBottomRow->addStretch();
+
+        m_copyCodeNoteBtn = new QPushButton("Copy", m_rightContainer);
+        m_copyCodeNoteBtn->setIcon(getThemeIcon(":/icons/copy.svg"));
+        m_copyCodeNoteBtn->setFixedHeight(26);
+        fixerBottomRow->addWidget(m_copyCodeNoteBtn);
+
+        rightLayout->addLayout(fixerBottomRow);
+
         m_mainSplitter->addWidget(m_rightContainer);
 
         m_mainSplitter->setCollapsible(0, false);
         m_mainSplitter->setCollapsible(1, false);
         m_mainSplitter->setCollapsible(2, true);
 
-        m_mainSplitter->setStretchFactor(0, 3);
-        m_mainSplitter->setStretchFactor(1, 4);
-        m_mainSplitter->setStretchFactor(2, 3);
+        // Prioritize horizontal space for Structure Hierarchy while keeping Memory Viewer sized to content
+        m_mainSplitter->setStretchFactor(0, 1);
+        m_mainSplitter->setStretchFactor(1, 0);
+        m_mainSplitter->setStretchFactor(2, 0);
         rootLayout->addWidget(m_mainSplitter, 1);
 
         // Connections
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addressSelected, this, &StructureWorkspaceDialog::onAddressSelectedInViewer);
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addressDoubleClicked, this, &StructureWorkspaceDialog::onAddressDoubleClickedInViewer);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::contextMenuRequested, this, &StructureWorkspaceDialog::onMemoryViewerContextMenu);
         connect(m_structureTree, &QTreeWidget::itemDoubleClicked, this, &StructureWorkspaceDialog::onStructureTreeItemDoubleClicked);
         connect(m_structureTree, &QTreeWidget::customContextMenuRequested, this, &StructureWorkspaceDialog::onStructureTreeCustomContextMenu);
 
@@ -277,6 +350,7 @@ namespace PointerFinder2::UI {
 
         // RA Data controls
         connect(m_addressSelectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onAddressComboChanged);
+        connect(m_addressSearchEdit, &QLineEdit::textChanged, this, &StructureWorkspaceDialog::onAddressSearchTextChanged);
         connect(m_saveUserBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onSaveUserTxtClicked);
         connect(m_revertServerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onRevertServerClicked);
         connect(m_resetBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onResetClicked);
@@ -297,10 +371,11 @@ namespace PointerFinder2::UI {
 
     void StructureWorkspaceDialog::populateAddressDropdown() {
         m_addressSelectCombo->blockSignals(true);
-        m_addressSelectCombo->clear();
+        m_addressSourceModel->clear();
 
         if (!m_gameData.isValid || m_gameData.notes.empty()) {
-            m_addressSelectCombo->addItem("No active game code notes detected.");
+            auto* emptyItem = new QStandardItem("No active game code notes detected.");
+            m_addressSourceModel->appendRow(emptyItem);
             m_addressSelectCombo->blockSignals(false);
             return;
         }
@@ -310,7 +385,7 @@ namespace PointerFinder2::UI {
             return a.address < b.address;
         });
 
-        int selectIdx = 0;
+        int selectSourceRow = 0;
 
         for (size_t i = 0; i < m_gameData.notes.size(); ++i) {
             const auto& n = m_gameData.notes[i];
@@ -320,21 +395,62 @@ namespace PointerFinder2::UI {
                 .arg(n.title)
                 .arg(tag);
 
-            m_addressSelectCombo->addItem(itemText, n.address);
+            auto* item = new QStandardItem(itemText);
+            item->setData(n.address, Qt::UserRole);
+            m_addressSourceModel->appendRow(item);
 
             if (m_currentBaseAddress != 0 && n.address == m_currentBaseAddress) {
-                selectIdx = static_cast<int>(i);
+                selectSourceRow = static_cast<int>(i);
             }
         }
 
-        m_addressSelectCombo->setCurrentIndex(selectIdx);
+        m_addressProxyModel->setSearchFilter(m_addressSearchEdit ? m_addressSearchEdit->text() : "");
+
+        QModelIndex srcIndex = m_addressSourceModel->index(selectSourceRow, 0);
+        QModelIndex proxyIndex = m_addressProxyModel->mapFromSource(srcIndex);
+        if (proxyIndex.isValid()) {
+            m_addressSelectCombo->setCurrentIndex(proxyIndex.row());
+        }
+        else if (m_addressProxyModel->rowCount() > 0) {
+            m_addressSelectCombo->setCurrentIndex(0);
+        }
+
         m_addressSelectCombo->blockSignals(false);
 
         if (m_addressSelectCombo->count() > 0 && m_currentBaseAddress != 0) {
             selectAddressInUI(m_currentBaseAddress);
         }
         else if (m_addressSelectCombo->count() > 0) {
-            selectAddressInUI(m_gameData.notes[0].address);
+            QVariant data = m_addressSelectCombo->currentData();
+            if (data.isValid()) {
+                selectAddressInUI(data.toUInt());
+            }
+        }
+    }
+
+    void StructureWorkspaceDialog::onAddressSearchTextChanged(const QString& text) {
+        m_addressSelectCombo->blockSignals(true);
+        m_addressProxyModel->setSearchFilter(text);
+        m_addressSelectCombo->blockSignals(false);
+
+        if (m_addressProxyModel->rowCount() > 0) {
+            // Retain active address selection if it is present within filtered results
+            bool currentStillVisible = false;
+            for (int i = 0; i < m_addressProxyModel->rowCount(); ++i) {
+                QModelIndex proxyIdx = m_addressProxyModel->index(i, 0);
+                if (proxyIdx.data(Qt::UserRole).toUInt() == m_currentBaseAddress) {
+                    m_addressSelectCombo->setCurrentIndex(i);
+                    currentStillVisible = true;
+                    break;
+                }
+            }
+            if (!currentStillVisible) {
+                m_addressSelectCombo->setCurrentIndex(0);
+                QVariant data = m_addressSelectCombo->currentData();
+                if (data.isValid()) {
+                    selectAddressInUI(data.toUInt());
+                }
+            }
         }
     }
 
@@ -360,7 +476,9 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::populateTreeFromCodeNote(const QString& noteText) {
         QString text = noteText.trimmed();
         if (text.isEmpty()) {
+            m_structureTree->blockSignals(true);
             m_structureTree->clear();
+            m_structureTree->blockSignals(false);
             m_headerComment.clear();
             return;
         }
@@ -370,12 +488,15 @@ namespace PointerFinder2::UI {
         auto parsedTree = CodeNoteHierarchyEngine::parseLinesToTree(lines, m_headerComment);
         auto mergedTree = CodeNoteHierarchyEngine::mergeTree(parsedTree);
 
+        // Block tree signals to prevent redundant settings.ini and sync updates during population
+        m_structureTree->blockSignals(true);
         m_structureTree->clear();
         populateTreeFromHierarchyNodes(mergedTree);
 
         m_structureTree->expandAll();
         recalculateTreeAddresses();
         updateOffsetPreview();
+        m_structureTree->blockSignals(false);
     }
 
     void StructureWorkspaceDialog::onAddressComboChanged(int index) {
@@ -536,6 +657,46 @@ namespace PointerFinder2::UI {
         else {
             onAddVariableClicked();
         }
+    }
+
+    void StructureWorkspaceDialog::onMemoryViewerContextMenu(uint32_t address, const QPoint& globalPos) {
+        m_currentViewerSelectedAddress = address;
+        updateOffsetPreview();
+
+        QMenu menu(this);
+
+        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable", this, &StructureWorkspaceDialog::onAddVariableClicked);
+        addVarAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
+
+        auto* addPtrAct = menu.addAction(getThemeIcon(":/icons/attach.svg"), "Add as Pointer", this, &StructureWorkspaceDialog::onAddPointerClicked);
+        addPtrAct->setProperty("iconPath", ":/icons/attach.svg");
+
+        uint32_t dwordVal = m_memoryViewer->readDwordAt(address);
+        bool isPointer = (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal));
+
+        auto* followPtrAct = menu.addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Follow Pointer", this, [this, dwordVal]() {
+            if (m_manager) {
+                uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
+                navigateToAddress(nativeTarget);
+            }
+        });
+        followPtrAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
+        followPtrAct->setEnabled(isPointer);
+
+        menu.addSeparator();
+
+        auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, [this, address]() {
+            QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString("%1").arg(address, 8, 16, QChar('0')).toUpper();
+            QApplication::clipboard()->setText("0x" + addrStr);
+        });
+        copyAddrAct->setProperty("iconPath", ":/icons/copy.svg");
+
+        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this, [dwordVal]() {
+            QApplication::clipboard()->setText("0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper());
+        });
+        copyValAct->setProperty("iconPath", ":/icons/copy_ra.svg");
+
+        menu.exec(globalPos);
     }
 
     // Double-clicking a tree item: Column 0 edits; Columns 1-3 follow pointer to destination
@@ -844,10 +1005,10 @@ namespace PointerFinder2::UI {
             QString sign = (match.offset < 0) ? "-" : "+";
             QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
 
-            m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %30x%4")
+            m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %3%4")
                 .arg(QString::number(m_currentViewerSelectedAddress, 16).toUpper())
                 .arg(scopeName)
-                .arg(sign).arg(offsetHex));
+                .arg(sign).arg("0x" + offsetHex));
         }
         else {
             m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Out of range of known structure scopes.")
@@ -896,14 +1057,23 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onAddVariableClicked() {
         if (m_currentViewerSelectedAddress == 0) return;
 
-        auto match = findBestScopeForAddress(m_currentViewerSelectedAddress);
+        // Align address based on current active view mode
+        uint32_t alignedAddr = m_currentViewerSelectedAddress;
+        if (m_view32BitRadio->isChecked() || m_view32BitBERadio->isChecked()) {
+            alignedAddr &= ~3U;
+        }
+        else if (m_view16BitRadio->isChecked()) {
+            alignedAddr &= ~1U;
+        }
+
+        auto match = findBestScopeForAddress(alignedAddr);
         if (!match.isValid) {
             QMessageBox::warning(this, "Structure Placement", "Selected address does not fall within any active pointer scope.");
             return;
         }
 
         bool ok = false;
-        QString defaultDesc = suggestDefaultType(m_currentViewerSelectedAddress);
+        QString defaultDesc = suggestDefaultType(alignedAddr);
         QString desc = QInputDialog::getText(this, "Add Variable", "Variable description:", QLineEdit::Normal, defaultDesc, &ok);
         if (!ok || desc.trimmed().isEmpty()) return;
 
@@ -915,19 +1085,26 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onAddPointerClicked() {
         if (m_currentViewerSelectedAddress == 0) return;
 
-        auto match = findBestScopeForAddress(m_currentViewerSelectedAddress);
+        // Pointers are always 4-byte aligned on target platforms
+        uint32_t alignedAddr = m_currentViewerSelectedAddress & ~3U;
+
+        auto match = findBestScopeForAddress(alignedAddr);
         if (!match.isValid) {
             QMessageBox::warning(this, "Structure Placement", "Selected address does not fall within any active pointer scope.");
             return;
         }
 
-        QString ptrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
-        insertNodeInScope(match.pointerNode, match.offset, ptrDesc);
+        QString defaultPtrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+        bool ok = false;
+        QString ptrDesc = QInputDialog::getText(this, "Add as Pointer", "Pointer description:", QLineEdit::Normal, defaultPtrDesc, &ok);
+        if (!ok || ptrDesc.trimmed().isEmpty()) return;
+
+        insertNodeInScope(match.pointerNode, match.offset, ptrDesc.trimmed());
         recalculateTreeAddresses();
         syncTreeToCodeNoteText();
 
         // Directly navigate into the new pointer's target in RAM
-        auto valOpt = readMemoryDword(m_currentViewerSelectedAddress);
+        auto valOpt = readMemoryDword(alignedAddr);
         if (valOpt.has_value() && m_manager && m_manager->isValidPointerTarget(valOpt.value())) {
             uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
             navigateToAddress(nativeTarget);
@@ -970,14 +1147,14 @@ namespace PointerFinder2::UI {
 
         if (sizes[2] > 0) {
             m_lastCodeNotePanelWidth = sizes[2];
-            sizes[1] += sizes[2];
+            sizes[0] += sizes[2]; // Reallocate space to Structure Hierarchy
             sizes[2] = 0;
             m_mainSplitter->setSizes(sizes);
             m_toggleCodeNoteBtn->setChecked(false);
         }
         else {
             int restoreWidth = (m_lastCodeNotePanelWidth > 60) ? m_lastCodeNotePanelWidth : 330;
-            sizes[1] = std::max(100, sizes[1] - restoreWidth);
+            sizes[0] = std::max(100, sizes[0] - restoreWidth);
             sizes[2] = restoreWidth;
             m_mainSplitter->setSizes(sizes);
             m_toggleCodeNoteBtn->setChecked(true);
@@ -1075,7 +1252,9 @@ namespace PointerFinder2::UI {
 
         QString text = m_codeNoteTextEdit->toPlainText().trimmed();
         if (text.isEmpty()) {
+            m_structureTree->blockSignals(true);
             m_structureTree->clear();
+            m_structureTree->blockSignals(false);
             m_headerComment.clear();
             m_isSyncing = false;
             return;
@@ -1092,12 +1271,14 @@ namespace PointerFinder2::UI {
 
         m_codeNoteTextEdit->setPlainText(finalResult.trimmed());
 
+        m_structureTree->blockSignals(true);
         m_structureTree->clear();
         populateTreeFromHierarchyNodes(mergedTree);
 
         m_structureTree->expandAll();
         recalculateTreeAddresses();
         updateOffsetPreview();
+        m_structureTree->blockSignals(false);
 
         saveWorkspaceSettings();
         m_isSyncing = false;
@@ -1171,10 +1352,16 @@ namespace PointerFinder2::UI {
         if (settings.contains("geometry")) {
             restoreGeometry(settings.value("geometry").toByteArray());
         }
+
+        m_lastCodeNotePanelWidth = settings.value("lastCodeNoteWidth", 330).toInt();
+
         if (settings.contains("splitterState")) {
             m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
         }
-        m_lastCodeNotePanelWidth = settings.value("lastCodeNoteWidth", 330).toInt();
+        else {
+            // Default layout sizing favoring Structure Hierarchy over Memory Viewer dead space
+            m_mainSplitter->setSizes({ 500, 540, m_lastCodeNotePanelWidth });
+        }
 
         int viewModeId = settings.value("viewMode", 2).toInt();
         if (auto* btn = m_viewModeGroup->button(viewModeId)) {
