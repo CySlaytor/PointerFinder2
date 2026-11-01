@@ -60,6 +60,8 @@ namespace PointerFinder2::UI {
 
         m_closeButton = new QPushButton("Close", this);
         m_closeButton->setObjectName("closeButton");
+        m_closeButton->setAutoDefault(false);
+        m_closeButton->setDefault(false);
         mainLayout->addWidget(m_closeButton, 0, Qt::AlignRight);
 
         connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
@@ -102,6 +104,8 @@ namespace PointerFinder2::UI {
 
         m_resetAllButton = new QPushButton("Reset All Settings to Default...", tab);
         m_resetAllButton->setStyleSheet("color: #FF5555; font-weight: bold; padding: 4px;");
+        m_resetAllButton->setAutoDefault(false);
+        m_resetAllButton->setDefault(false);
         layout->addWidget(m_resetAllButton);
 
         m_tabWidget->addTab(tab, "General");
@@ -124,6 +128,8 @@ namespace PointerFinder2::UI {
         auto* noteHeaderDesc = new QLabel("Configure code note indirection levels and formatting standards:", tab);
         m_codeNoteHelpBtn = new QPushButton("?", tab);
         m_codeNoteHelpBtn->setFixedSize(22, 22);
+        m_codeNoteHelpBtn->setAutoDefault(false);
+        m_codeNoteHelpBtn->setDefault(false);
         m_codeNoteHelpBtn->setToolTip("Why standard indentation matters (QA & Code Review standards)");
 
         headerRow->addWidget(noteHeaderDesc);
@@ -176,6 +182,7 @@ namespace PointerFinder2::UI {
         QDialog helpDialog(this);
         helpDialog.setWindowTitle("Recommended Code Note Structure");
         helpDialog.resize(620, 600);
+        helpDialog.setWindowFlags(helpDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
         auto* layout = new QVBoxLayout(&helpDialog);
         layout->setSpacing(8);
@@ -184,27 +191,42 @@ namespace PointerFinder2::UI {
         titleLabel->setStyleSheet("font-size: 13px;");
         layout->addWidget(titleLabel);
 
+        bool isDark = (GlobalSettings::activeTheme.compare("Light", Qt::CaseInsensitive) != 0);
+        QString codeBg = isDark ? "#2b2d31" : "#e3e5e8";
+        QString codeFg = isDark ? "#e2e4e9" : "#2b2d31";
+        QString codeBorder = isDark ? "#3d4149" : "#c4c7cc";
+
+        // Discord-style inline code badge formatter
+        auto codeBadge = [&](const QString& text) -> QString {
+            return QString("<span style='background-color: %1; color: %2; border: 1px solid %3; font-family: Consolas, monospace; font-size: 11px;'>&nbsp;%4&nbsp;</span>")
+                .arg(codeBg, codeFg, codeBorder, text.toHtmlEscaped());
+        };
+
         auto* descLabel = new QLabel(
-            "RetroAchievements QA and Code Review (CR) teams strongly encourage adopting standardized "
-            "hierarchical code note formatting for all new sets and updates:<br>"
-            "<ul>"
-            "<li><b>Older Sets of Inactive Developers:</b> Many legacy achievement sets were created years ago by "
-            "developers who have long since become inactive, long before modern code note conventions were established. "
-            "When these older sets require maintenance, logic upgrades, or bug fixes, current developers and reviewers "
-            "must spend considerable time reverse-engineering flat, unformatted lists of offsets. Following this structure "
-            "ensures sets remain transparent and maintainable by anyone in the future.</li>"
-            "<li><b>Pointers (<code>+</code>) vs. Enums (<code>.</code>):</b> While dots were previously used for indirection, "
-            "using plusses (<code>+</code>) exclusively for pointer jumps and dots (<code>.</code>) exclusively for value "
-            "enumerations provides an immediate visual distinction between structural memory offsets and variable states.</li>"
-            "<li><b>Leveling Up Enums:</b> Dots are used to level up enumerations directly under their respective variable "
-            "at the current pointer level (e.g., <code>...0x00=Idle</code> directly beneath <code>++0x28</code>), making complex "
-            "structures intuitive to read.</li>"
-            "<li><b>Explicit Pointer Annotations:</b> It is recommended to use <code>=</code> followed by <code>[32-bit] Pointer</code> "
-            "or <code>[24-bit] Pointer</code> depending on the platform architecture.</li>"
-            "<li><b>Why Pipelines (<code>|</code>) Were Reallocated:</b> Using <code>|</code> as a pointer delimiter has been retired. "
-            "Pipelines are now reserved exclusively to document <b>Array structures</b> and indexed element offsets "
-            "(e.g., <code>+++|0x00</code>).</li>"
-            "</ul>",
+            QString(
+                "<p style='line-height: 130%%; margin: 0;'>RetroAchievements QA and Code Review (CR) teams strongly encourage adopting standardized "
+                "hierarchical code note formatting for all new sets and updates:</p>"
+                "<ul style='margin-top: 8px; margin-bottom: 8px; margin-left: -22px; line-height: 135%%;'>"
+                "<li style='margin-bottom: 7px;'><b>Older Sets of Inactive Developers:</b> Many legacy achievement sets were created years ago by "
+                "developers who have long since become inactive, long before modern code note conventions were established. "
+                "When these older sets require maintenance, logic upgrades, or bug fixes, current developers and reviewers "
+                "must spend considerable time reverse-engineering flat, unformatted lists of offsets. Following this structure "
+                "ensures sets remain transparent and maintainable by anyone in the future.</li>"
+                "<li style='margin-bottom: 7px;'><b>Pointers (%1) vs. Enums (%2):</b> While dots were previously used for indirection, "
+                "using plusses (%1) exclusively for pointer jumps and dots (%2) exclusively for value "
+                "enumerations provides an immediate visual distinction between structural memory offsets and variable states.</li>"
+                "<li style='margin-bottom: 7px;'><b>Leveling Up Enums:</b> Dots are used to level up enumerations directly under their respective variable "
+                "at the current pointer level (e.g., %3 directly beneath %4), making complex "
+                "structures intuitive to read.</li>"
+                "<li style='margin-bottom: 7px;'><b>Explicit Pointer Annotations:</b> It is recommended to use %5 followed by %6 "
+                "or %7 depending on the platform architecture.</li>"
+                "<li style='margin-bottom: 4px;'><b>Why Pipelines (%8) Were Reallocated:</b> Using %8 as a pointer delimiter has been retired. "
+                "Pipelines are now reserved exclusively to document <b>Array structures</b> and indexed element offsets "
+                "(e.g., %9).</li>"
+                "</ul>"
+            ).arg(codeBadge("+"), codeBadge("."), codeBadge("...0x00=Idle"), codeBadge("++0x28"))
+             .arg(codeBadge("="), codeBadge("[32-bit] Pointer"), codeBadge("[24-bit] Pointer"))
+             .arg(codeBadge("|"), codeBadge("+++|0x00")),
             &helpDialog
         );
         descLabel->setWordWrap(true);
@@ -241,6 +263,8 @@ namespace PointerFinder2::UI {
 
         auto* closeBtn = new QPushButton("Close", &helpDialog);
         closeBtn->setObjectName("closeButton");
+        closeBtn->setAutoDefault(false);
+        closeBtn->setDefault(false);
         connect(closeBtn, &QPushButton::clicked, &helpDialog, &QDialog::accept);
         layout->addWidget(closeBtn, 0, Qt::AlignRight);
 
