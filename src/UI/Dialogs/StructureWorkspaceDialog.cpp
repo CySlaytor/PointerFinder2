@@ -17,6 +17,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QListView>
 #include <QMenu>
 #include <QMessageBox>
@@ -59,6 +60,31 @@ namespace PointerFinder2::UI {
 
     QIcon StructureWorkspaceDialog::getThemeIcon(const QString& resourcePath) const {
         return ThemeManager::getIcon(resourcePath, GlobalSettings::activeTheme);
+    }
+
+    void StructureWorkspaceDialog::keyPressEvent(QKeyEvent* event) {
+        // Allow Backspace / Alt+Left and Alt+Right navigation history shortcuts anywhere in
+        // the workspace, unless the user is actively typing inside a text input field.
+        QWidget* fw = focusWidget();
+        bool isTextInput = fw && (qobject_cast<QLineEdit*>(fw) || qobject_cast<QPlainTextEdit*>(fw) || qobject_cast<QTextEdit*>(fw));
+
+        if (!isTextInput) {
+            if (event->key() == Qt::Key_Backspace || (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Left)) {
+                if (m_memoryViewer && m_memoryViewer->canNavigateBack()) {
+                    event->accept();
+                    m_memoryViewer->navigateBack();
+                    return;
+                }
+            }
+            if (event->modifiers() & Qt::AltModifier && event->key() == Qt::Key_Right) {
+                if (m_memoryViewer && m_memoryViewer->canNavigateForward()) {
+                    event->accept();
+                    m_memoryViewer->navigateForward();
+                    return;
+                }
+            }
+        }
+        QDialog::keyPressEvent(event);
     }
 
     void StructureWorkspaceDialog::setupLayout() {
@@ -219,8 +245,8 @@ namespace PointerFinder2::UI {
         auto* treeButtonsRow = new QHBoxLayout();
         treeButtonsRow->setSpacing(6);
 
-        m_addVariableBtn = new QPushButton("Add Variable (V / Enter)", m_leftContainer);
-        m_addVariableBtn->setToolTip("Add variable at selected address (Shortcut: V or Enter)");
+        m_addVariableBtn = new QPushButton("Add Variable (V)", m_leftContainer);
+        m_addVariableBtn->setToolTip("Add variable at selected address (Shortcut: V)");
         m_addVariableBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
         m_addVariableBtn->setFixedHeight(26);
         m_addVariableBtn->setAutoDefault(false);
@@ -234,7 +260,7 @@ namespace PointerFinder2::UI {
         m_addPointerBtn->setDefault(false);
 
         m_followPointerBtn = new QPushButton("Follow Pointer -> (F)", m_leftContainer);
-        m_followPointerBtn->setToolTip("Follow pointer value to destination address (Shortcut: F or Double-click)");
+        m_followPointerBtn->setToolTip("Follow pointer value to destination address (Shortcut: Enter, F, or Double-click)");
         m_followPointerBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
         m_followPointerBtn->setFixedHeight(26);
         m_followPointerBtn->setAutoDefault(false);
@@ -309,6 +335,11 @@ namespace PointerFinder2::UI {
         m_navForwardBtn->setAutoDefault(false);
         m_navForwardBtn->setDefault(false);
         viewerBottomRow->addWidget(m_navForwardBtn);
+
+        m_navHistoryLabel = new QLabel("0/0", m_middleContainer);
+        m_navHistoryLabel->setObjectName("navHistoryLabel");
+        m_navHistoryLabel->setStyleSheet("color: #8B949E; font-size: 11px; font-weight: bold; padding: 0 4px;");
+        viewerBottomRow->addWidget(m_navHistoryLabel);
 
         m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
         m_refreshRamBtn->setFixedHeight(26);
@@ -406,10 +437,17 @@ namespace PointerFinder2::UI {
         // Connect navigation history controls
         connect(m_navBackBtn, &QPushButton::clicked, m_memoryViewer, &Widgets::MemoryViewerWidget::navigateBack);
         connect(m_navForwardBtn, &QPushButton::clicked, m_memoryViewer, &Widgets::MemoryViewerWidget::navigateForward);
-        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::navigationHistoryChanged, this, [this](bool canBack, bool canForward) {
-            m_navBackBtn->setEnabled(canBack);
-            m_navForwardBtn->setEnabled(canForward);
-        });
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::navigationHistoryChanged, this,
+            [this](bool canBack, bool canForward, int currentIndex, int totalCount) {
+                m_navBackBtn->setEnabled(canBack);
+                m_navForwardBtn->setEnabled(canForward);
+                if (totalCount > 0) {
+                    m_navHistoryLabel->setText(QString("%1/%2").arg(currentIndex).arg(totalCount));
+                }
+                else {
+                    m_navHistoryLabel->setText("0/0");
+                }
+            });
 
         // Connect focus-scoped memory viewer shortcut signals
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addVariableTriggered, this, &StructureWorkspaceDialog::onAddVariableClicked);
@@ -799,7 +837,7 @@ namespace PointerFinder2::UI {
         if (nativeAddr >= m_memoryViewer->getMemoryBase() && 
             nativeAddr < m_memoryViewer->getMemoryBase() + m_memoryViewer->getMemorySize()) {
 
-            m_memoryViewer->setSelectedAddress(nativeAddr);
+            m_memoryViewer->setSelectedAddress(nativeAddr, true, true);
         }
     }
 
@@ -840,7 +878,7 @@ namespace PointerFinder2::UI {
 
         QMenu menu(this);
 
-        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable (V / Enter)", this, &StructureWorkspaceDialog::onAddVariableClicked);
+        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable (V)", this, &StructureWorkspaceDialog::onAddVariableClicked);
         addVarAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
 
         auto* addPtrAct = menu.addAction(getThemeIcon(":/icons/attach.svg"), "Add as Pointer (P)", this, &StructureWorkspaceDialog::onAddPointerClicked);
@@ -1062,6 +1100,16 @@ namespace PointerFinder2::UI {
 
     // Traverses the pointer directly to its pointed destination, establishing the new structure scope
     void StructureWorkspaceDialog::onFollowPointerClicked() {
+        // If an address is selected in Memory Viewer and holds a valid pointer, follow it directly
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            uint32_t dwordVal = m_memoryViewer->readDwordAt(m_currentViewerSelectedAddress);
+            if (dwordVal != 0 && m_manager->isValidPointerTarget(dwordVal)) {
+                uint32_t target = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
+                navigateToAddress(target);
+                return;
+            }
+        }
+
         auto* current = m_structureTree->currentItem();
         if (!current) return;
 
@@ -1131,7 +1179,7 @@ namespace PointerFinder2::UI {
 
             if (node != item && (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive))) {
                 auto ptrVal = readMemoryDword(currentAddress);
-                if (ptrVal.has_value() && m_manager->isValidPointerTarget(ptrVal.value())) {
+                if (ptrVal.has_value() && m_manager && m_manager->isValidPointerTarget(ptrVal.value())) {
                     currentAddress = m_manager->unnormalizeAddress(QString::number(ptrVal.value(), 16));
                 }
                 else {

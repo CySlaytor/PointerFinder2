@@ -40,6 +40,11 @@ namespace PointerFinder2::UI::Widgets {
             uint32_t size = 0;
         };
 
+        struct NavState {
+            uint32_t address = 0;
+            int scrollValue = 0;
+        };
+
         explicit MemoryViewerWidget(QWidget* parent = nullptr);
         ~MemoryViewerWidget() override;
 
@@ -70,8 +75,8 @@ namespace PointerFinder2::UI::Widgets {
         uint32_t getSelectedAddress() const { return m_selectedAddress; }
         uint32_t getHoverAddress() const { return m_hoverAddress; }
         bool isAddressDocumented(uint32_t address) const;
-        void setSelectedAddress(uint32_t address);
-        void goToAddress(uint32_t address);
+        void setSelectedAddress(uint32_t address, bool recordHistory = true, bool centerTarget = false);
+        void goToAddress(uint32_t address, bool recordHistory = true, bool centerTarget = false);
 
         uint32_t readDwordAt(uint32_t address) const;
 
@@ -85,7 +90,7 @@ namespace PointerFinder2::UI::Widgets {
         void contextMenuRequested(uint32_t address, const QPoint& globalPos);
         void rangeSelected(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
         void defineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
-        void navigationHistoryChanged(bool canBack, bool canForward);
+        void navigationHistoryChanged(bool canBack, bool canForward, int currentIndex, int totalCount);
 
         // Keyboard actions scoped to Memory Viewer
         void addVariableTriggered();
@@ -125,7 +130,7 @@ namespace PointerFinder2::UI::Widgets {
 
         // Navigation history state
         static constexpr size_t MAX_NAV_HISTORY = 50;
-        std::vector<uint32_t> m_navHistory;
+        std::vector<NavState> m_navHistory;
         int m_navHistoryIndex = -1;
         bool m_isNavigatingHistory = false;
 

@@ -137,8 +137,9 @@ namespace PointerFinder2::UI::Widgets {
 
         clearRangeSelection();
         m_navHistory.clear();
-        m_navHistoryIndex = -1;
-        emit navigationHistoryChanged(false, false);
+        m_navHistory.push_back({ m_selectedAddress, 0 });
+        m_navHistoryIndex = 0;
+        emit navigationHistoryChanged(false, false, 1, 1);
 
         updateMetrics();
         updateScrollBars();
@@ -153,7 +154,7 @@ namespace PointerFinder2::UI::Widgets {
         clearRangeSelection();
         m_navHistory.clear();
         m_navHistoryIndex = -1;
-        emit navigationHistoryChanged(false, false);
+        emit navigationHistoryChanged(false, false, 0, 0);
         updateScrollBars();
         viewport()->update();
     }
@@ -240,20 +241,46 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::navigateBack() {
         if (canNavigateBack()) {
             m_isNavigatingHistory = true;
+
+            // Preserve current view and scroll position in the current slot before moving back
+            if (m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
+                m_navHistory[m_navHistoryIndex] = { m_selectedAddress, verticalScrollBar()->value() };
+            }
+
             --m_navHistoryIndex;
-            goToAddress(m_navHistory[m_navHistoryIndex]);
+            const auto& state = m_navHistory[m_navHistoryIndex];
+
+            m_selectedAddress = state.address;
+            m_hasSelection = true;
+            verticalScrollBar()->setValue(state.scrollValue);
+
             m_isNavigatingHistory = false;
-            emit navigationHistoryChanged(canNavigateBack(), canNavigateForward());
+            emit addressSelected(m_selectedAddress);
+            emit navigationHistoryChanged(canNavigateBack(), canNavigateForward(), m_navHistoryIndex + 1, static_cast<int>(m_navHistory.size()));
+            viewport()->update();
         }
     }
 
     void MemoryViewerWidget::navigateForward() {
         if (canNavigateForward()) {
             m_isNavigatingHistory = true;
+
+            // Preserve current view and scroll position in the current slot before moving forward
+            if (m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
+                m_navHistory[m_navHistoryIndex] = { m_selectedAddress, verticalScrollBar()->value() };
+            }
+
             ++m_navHistoryIndex;
-            goToAddress(m_navHistory[m_navHistoryIndex]);
+            const auto& state = m_navHistory[m_navHistoryIndex];
+
+            m_selectedAddress = state.address;
+            m_hasSelection = true;
+            verticalScrollBar()->setValue(state.scrollValue);
+
             m_isNavigatingHistory = false;
-            emit navigationHistoryChanged(canNavigateBack(), canNavigateForward());
+            emit addressSelected(m_selectedAddress);
+            emit navigationHistoryChanged(canNavigateBack(), canNavigateForward(), m_navHistoryIndex + 1, static_cast<int>(m_navHistory.size()));
+            viewport()->update();
         }
     }
 
@@ -296,19 +323,19 @@ namespace PointerFinder2::UI::Widgets {
         updateRangeBanner();
     }
 
-    void MemoryViewerWidget::setSelectedAddress(uint32_t address) {
+    void MemoryViewerWidget::setSelectedAddress(uint32_t address, bool recordHistory, bool centerTarget) {
         if (m_memoryData.empty()) return;
 
         uint32_t maxAddr = m_memoryBaseAddress + static_cast<uint32_t>(m_memoryData.size());
         m_selectedAddress = std::clamp(address, m_memoryBaseAddress, maxAddr > 1 ? maxAddr - 1 : m_memoryBaseAddress);
         m_hasSelection = true;
 
-        goToAddress(m_selectedAddress);
+        goToAddress(m_selectedAddress, recordHistory, centerTarget);
         emit addressSelected(m_selectedAddress);
         viewport()->update();
     }
 
-    void MemoryViewerWidget::goToAddress(uint32_t address) {
+    void MemoryViewerWidget::goToAddress(uint32_t address, bool recordHistory, bool centerTarget) {
         if (m_memoryData.empty()) return;
 
         if (address < m_memoryBaseAddress) address = m_memoryBaseAddress;
@@ -316,24 +343,76 @@ namespace PointerFinder2::UI::Widgets {
         int targetRow = static_cast<int>(offset / 16);
 
         int visibleRows = (viewport()->height() - m_headerHeight) / m_lineHeight;
-        int centeredRow = std::max(0, targetRow - (visibleRows / 2));
+        int currentRow = verticalScrollBar()->value();
+        int maxRow = verticalScrollBar()->maximum();
 
-        verticalScrollBar()->setValue(centeredRow);
+        // 1. If this is a new navigation step, record the PREVIOUS state before scrolling
+        if (recordHistory && !m_isNavigatingHistory && m_selectedAddress != 0) {
+            if (m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
+                m_navHistory[m_navHistoryIndex] = { m_selectedAddress, currentRow };
+            }
+        }
+
+        // 2. Perform the view positioning
+        if (centerTarget) {
+            // Explicit pointer exploration or jump: Center the target address row in view
+            int centeredRow = std::max(0, targetRow - (visibleRows / 2));
+            verticalScrollBar()->setValue(std::min(centeredRow, maxRow));
+        }
+        else {
+            // Three-section viewport deadzone approach:
+            // The visible rows are divided into three equal sections.
+            // When moving with arrows, the cursor moves freely inside the middle third section.
+            // When reaching either edge, the view scrolls row-by-row underneath the cursor, pinning it to the edge.
+            if (visibleRows >= 6) {
+                int topMargin = visibleRows / 3;
+                int bottomMargin = (2 * visibleRows) / 3;
+
+                if (targetRow < currentRow + topMargin) {
+                    int newScroll = std::max(0, targetRow - topMargin);
+                    verticalScrollBar()->setValue(newScroll);
+                }
+                else if (targetRow > currentRow + bottomMargin) {
+                    int newScroll = std::min(maxRow, targetRow - bottomMargin);
+                    verticalScrollBar()->setValue(newScroll);
+                }
+            }
+            else if (visibleRows > 0) {
+                if (targetRow < currentRow) {
+                    verticalScrollBar()->setValue(targetRow);
+                }
+                else if (targetRow >= currentRow + visibleRows) {
+                    verticalScrollBar()->setValue(std::min(maxRow, targetRow - visibleRows + 1));
+                }
+            }
+        }
+
         m_selectedAddress = address;
         m_hasSelection = true;
 
-        // Maintain browser-style navigation history (up to 50 steps)
+        // 3. Record or update the navigation state
         if (!m_isNavigatingHistory && address != 0) {
-            if (m_navHistoryIndex < 0 || m_navHistory[m_navHistoryIndex] != address) {
+            int newScroll = verticalScrollBar()->value();
+
+            if (recordHistory) {
+                // If branching from an earlier point in history, discard forward history
                 if (m_navHistoryIndex >= 0 && m_navHistoryIndex + 1 < static_cast<int>(m_navHistory.size())) {
                     m_navHistory.erase(m_navHistory.begin() + (m_navHistoryIndex + 1), m_navHistory.end());
                 }
-                m_navHistory.push_back(address);
+
+                m_navHistory.push_back({ address, newScroll });
                 if (m_navHistory.size() > MAX_NAV_HISTORY) {
                     m_navHistory.erase(m_navHistory.begin());
                 }
                 m_navHistoryIndex = static_cast<int>(m_navHistory.size()) - 1;
-                emit navigationHistoryChanged(canNavigateBack(), canNavigateForward());
+
+                emit navigationHistoryChanged(canNavigateBack(), canNavigateForward(), m_navHistoryIndex + 1, static_cast<int>(m_navHistory.size()));
+            }
+            else {
+                // Track current cursor and scroll position in-place without creating a new step
+                if (m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
+                    m_navHistory[m_navHistoryIndex] = { m_selectedAddress, newScroll };
+                }
             }
         }
 
@@ -430,6 +509,12 @@ namespace PointerFinder2::UI::Widgets {
                     m_rangeAnchor = addr;
                     m_selectedAddress = addr;
                     m_hasSelection = true;
+
+                    // Update current history slot position when clicking to select an address
+                    if (!m_isNavigatingHistory && m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
+                        m_navHistory[m_navHistoryIndex] = { m_selectedAddress, verticalScrollBar()->value() };
+                    }
+
                     emit addressSelected(m_selectedAddress);
                     viewport()->update();
                 }
@@ -456,6 +541,12 @@ namespace PointerFinder2::UI::Widgets {
             if (addr >= m_memoryBaseAddress && addr < m_memoryBaseAddress + m_memoryData.size()) {
                 m_selectedAddress = addr;
                 m_hasSelection = true;
+
+                // Update current history slot before opening context menu
+                if (!m_isNavigatingHistory && m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
+                    m_navHistory[m_navHistoryIndex] = { m_selectedAddress, verticalScrollBar()->value() };
+                }
+
                 emit addressSelected(m_selectedAddress);
                 viewport()->update();
                 emit contextMenuRequested(addr, event->globalPos());
@@ -561,7 +652,12 @@ namespace PointerFinder2::UI::Widgets {
         }
 
         // Handle scoped shortcuts strictly within the Memory Viewer boundary
-        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_V) {
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_F) {
+            event->accept();
+            emit followPointerTriggered();
+            return;
+        }
+        if (event->key() == Qt::Key_V) {
             event->accept();
             emit addVariableTriggered();
             return;
@@ -569,11 +665,6 @@ namespace PointerFinder2::UI::Widgets {
         if (event->key() == Qt::Key_P) {
             event->accept();
             emit addPointerTriggered();
-            return;
-        }
-        if (event->key() == Qt::Key_F) {
-            event->accept();
-            emit followPointerTriggered();
             return;
         }
         if (event->key() == Qt::Key_X || event->key() == Qt::Key_Delete) {
@@ -600,28 +691,28 @@ namespace PointerFinder2::UI::Widgets {
 
         if (event->key() == Qt::Key_Up) {
             if (m_selectedAddress >= m_memoryBaseAddress + 16) {
-                setSelectedAddress(m_selectedAddress - 16);
+                setSelectedAddress(m_selectedAddress - 16, false, false);
             }
             event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Down) {
             if (m_selectedAddress + 16 < maxAddr) {
-                setSelectedAddress(m_selectedAddress + 16);
+                setSelectedAddress(m_selectedAddress + 16, false, false);
             }
             event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Left) {
             if (m_selectedAddress >= m_memoryBaseAddress + step) {
-                setSelectedAddress(m_selectedAddress - step);
+                setSelectedAddress(m_selectedAddress - step, false, false);
             }
             event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Right) {
             if (m_selectedAddress + step < maxAddr) {
-                setSelectedAddress(m_selectedAddress + step);
+                setSelectedAddress(m_selectedAddress + step, false, false);
             }
             event->accept();
             return;

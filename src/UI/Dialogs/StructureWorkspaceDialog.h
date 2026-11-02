@@ -83,6 +83,9 @@ namespace PointerFinder2::UI {
 
         void refreshMemorySnapshot();
 
+    protected:
+        void keyPressEvent(QKeyEvent* event) override;
+
     private slots:
         void onAddressSelectedInViewer(uint32_t address);
         void onAddressDoubleClickedInViewer(uint32_t address);
@@ -148,6 +151,7 @@ namespace PointerFinder2::UI {
         QWidget* m_middleContainer = nullptr;
         QPushButton* m_navBackBtn = nullptr;
         QPushButton* m_navForwardBtn = nullptr;
+        QLabel* m_navHistoryLabel = nullptr;
         QLineEdit* m_goToAddressEdit = nullptr;
         QPushButton* m_goToAddressBtn = nullptr;
         QPushButton* m_refreshRamBtn = nullptr;
