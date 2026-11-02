@@ -62,6 +62,12 @@ namespace PointerFinder2::Core {
                 }
 
                 content = untrimmedLine.mid(offsetPos).trimmed();
+
+                // If content starts with an array-dereference compound (e.g., "|+0x..."),
+                // it naturally represents a child level beneath the array element (|0x...).
+                if (content.startsWith("|+") || content.startsWith("|-")) {
+                    indent += 1;
+                }
             }
             else {
                 indent = 0;
@@ -293,9 +299,10 @@ namespace PointerFinder2::Core {
                     }
                 }
                 else {
-                    // Array element offsets (|0x..) align directly at root without plusses, or to child depth
+                    // Array element offsets (|0x..) align directly at root without plusses, or to child depth.
+                    // If the node already contains a pipe prefix (e.g., "|0x" or "|+0x"), do not prepend extra plusses.
                     if (node->content.startsWith('|')) {
-                        prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
+                        prefix = "";
                     }
                     else {
                         prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";

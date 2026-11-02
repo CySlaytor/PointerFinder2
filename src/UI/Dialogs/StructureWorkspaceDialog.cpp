@@ -1451,10 +1451,11 @@ namespace PointerFinder2::UI {
             QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
 
             QString prefix = match.isArrayScope ? "|" : sign;
-            m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %30x%4")
+            QString offsetDisplay = prefix + (match.isArrayScope && match.offset < 0 ? "-" : "") + "0x" + offsetHex;
+            m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Scope: %2 | Calculated Offset: %3")
                 .arg(QString::number(m_currentViewerSelectedAddress, 16).toUpper())
                 .arg(scopeName)
-                .arg(prefix, offsetHex));
+                .arg(offsetDisplay));
         }
         else {
             m_offsetPreviewLabel->setText(QString("Selected: 0x%1 | Out of range of known structure scopes.")
@@ -1590,7 +1591,7 @@ namespace PointerFinder2::UI {
             auto match = rx.match(txt);
             if (match.hasMatch()) {
                 QString prefix = match.captured(1);
-                bool isArrayElem = prefix.contains('|');
+                bool isArrayElem = (prefix == "|");
                 bool ok = false;
                 int32_t val = match.captured(2).toInt(&ok, 16);
                 if (prefix.contains('-')) val = -val;
@@ -1672,8 +1673,12 @@ namespace PointerFinder2::UI {
                 QString delimiter = match.captured(2);
                 QString desc = match.captured(3).trimmed();
 
-                bool isArrayElem = rawOffset.startsWith('|');
-                if (isArrayElem) {
+                bool isArrayChild = rawOffset.startsWith("|+") || rawOffset.startsWith("|-");
+                bool isArrayElem = !isArrayChild && rawOffset.startsWith('|');
+                if (isArrayChild) {
+                    rawOffset = rawOffset.mid(1);
+                }
+                else if (isArrayElem) {
                     rawOffset = rawOffset.mid(1);
                 }
 
@@ -1693,7 +1698,10 @@ namespace PointerFinder2::UI {
                 QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
 
                 QString displayOffset;
-                if (isArrayElem) {
+                if (isArrayChild) {
+                    displayOffset = "|+" + (offsetVal < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
+                }
+                else if (isArrayElem) {
                     displayOffset = "|" + (offsetVal < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
                 }
                 else {
