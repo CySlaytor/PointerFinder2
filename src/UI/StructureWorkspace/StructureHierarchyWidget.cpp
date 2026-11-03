@@ -4,10 +4,13 @@
 #include "UI/Common/ThemeManager.h"
 
 #include <algorithm>
+#include <QApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
@@ -46,6 +49,24 @@ namespace PointerFinder2::UI {
         return m_structureTree ? m_structureTree->currentItem() : nullptr;
     }
 
+    QList<QTreeWidgetItem*> StructureHierarchyWidget::selectedItemsInOrder() const {
+        QList<QTreeWidgetItem*> result;
+        if (!m_structureTree) return result;
+
+        QList<QTreeWidgetItem*> selected = m_structureTree->selectedItems();
+        if (selected.isEmpty()) return result;
+
+        // Collect selected items in natural top-to-bottom visual hierarchy order
+        QTreeWidgetItemIterator it(m_structureTree);
+        while (*it) {
+            if (selected.contains(*it)) {
+                result.append(*it);
+            }
+            ++it;
+        }
+        return result;
+    }
+
     QTreeWidget* StructureHierarchyWidget::treeWidget() const {
         return m_structureTree;
     }
@@ -80,7 +101,12 @@ namespace PointerFinder2::UI {
         m_structureTree->setColumnWidth(3, 110);
 
         m_structureTree->setAlternatingRowColors(true);
+        // Enable multi-selection like a standard file explorer / tree view
+        m_structureTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
         m_structureTree->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
+
+        // Install event filter on m_structureTree to handle navigation and hierarchy shortcuts (Enter, F, V, P, Delete, X)
+        m_structureTree->installEventFilter(this);
 
         // Setup actions and keyboard shortcuts for Structure Hierarchy
         m_treeCopyRaAction = new QAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this);
@@ -105,6 +131,13 @@ namespace PointerFinder2::UI {
         m_structureTree->addAction(m_treeCopyNoteAction);
         m_structureTree->addAction(m_treeCopyAddressAction);
         m_structureTree->addAction(m_treeCopyValueAction);
+
+        // Hook Delete key to remove selected hierarchy node(s)
+        auto* removeKeyAction = new QAction(this);
+        removeKeyAction->setShortcut(QKeySequence::Delete);
+        removeKeyAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+        connect(removeKeyAction, &QAction::triggered, this, &StructureHierarchyWidget::removeNodeClicked);
+        m_structureTree->addAction(removeKeyAction);
 
         leftLayout->addWidget(m_structureTree, 1);
 
@@ -158,6 +191,40 @@ namespace PointerFinder2::UI {
         connect(m_addPointerBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::addPointerClicked);
         connect(m_followPointerBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::followPointerClicked);
         connect(m_removeNodeBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::removeNodeClicked);
+    }
+
+    bool StructureHierarchyWidget::eventFilter(QObject* obj, QEvent* event) {
+        if (obj == m_structureTree && event->type() == QEvent::KeyPress) {
+            auto* keyEvent = static_cast<QKeyEvent*>(event);
+
+            // Do not intercept hotkeys if an item cell editor is actively open
+            QWidget* focusW = QApplication::focusWidget();
+            bool isEditing = focusW && (focusW != m_structureTree) && (focusW != m_structureTree->viewport()) && m_structureTree->isAncestorOf(focusW);
+
+            if (!isEditing) {
+                if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_F) {
+                    keyEvent->accept();
+                    emit followPointerClicked();
+                    return true;
+                }
+                if (keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_X) {
+                    keyEvent->accept();
+                    emit removeNodeClicked();
+                    return true;
+                }
+                if (keyEvent->key() == Qt::Key_V) {
+                    keyEvent->accept();
+                    emit addVariableClicked();
+                    return true;
+                }
+                if (keyEvent->key() == Qt::Key_P) {
+                    keyEvent->accept();
+                    emit addPointerClicked();
+                    return true;
+                }
+            }
+        }
+        return QWidget::eventFilter(obj, event);
     }
 
     void StructureHierarchyWidget::populateFromNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
@@ -686,29 +753,51 @@ namespace PointerFinder2::UI {
         std::reverse(lineage.begin(), lineage.end());
 
         PointerPath path;
-        path.baseAddress = currentBaseAddress;
-        for (auto* node : lineage) {
-            path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+
+        // In static array structures, the top-level element offset represents a direct offset in static RAM,
+        // not an additional indirect pointer chain level.
+        if (rootArr && !lineage.empty()) {
+            int32_t elemOffset = lineage[0]->data(1, Qt::UserRole).toInt();
+            path.baseAddress = currentBaseAddress + static_cast<uint32_t>(elemOffset);
+
+            // Append offsets within the pointed instance
+            for (size_t i = 1; i < lineage.size(); ++i) {
+                path.offsets.push_back(lineage[i]->data(1, Qt::UserRole).toInt());
+            }
+
+            // If the element itself is selected, target offset is 0
+            if (path.offsets.empty()) {
+                path.offsets.push_back(0);
+            }
         }
+        else {
+            path.baseAddress = currentBaseAddress;
+            for (auto* node : lineage) {
+                path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+            }
+        }
+
         path.finalAddress = const_cast<StructureHierarchyWidget*>(this)->resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
         return path;
     }
 
-    // Double-clicking a tree item: Column 0 edits; Columns 1-3 follow pointer to destination
+    // Double-clicking a tree item: Navigates to target address in Memory Viewer
     void StructureHierarchyWidget::onTreeItemDoubleClicked(QTreeWidgetItem* item, int column) {
+        Q_UNUSED(column);
         if (!item) return;
 
-        if (column == 0) {
-            m_structureTree->editItem(item, 0);
-        }
-        else {
-            emit followPointerClicked();
-        }
+        // Double-clicking follows the pointer / navigates to entry's target in Memory Viewer
+        emit followPointerClicked();
     }
 
     void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
-        auto* item = m_structureTree->itemAt(pos);
-        if (!item) return;
+        auto* clickedItem = m_structureTree->itemAt(pos);
+        if (!clickedItem) return;
+
+        // If clicked item is not part of current multi-selection, select it exclusively
+        if (!m_structureTree->selectedItems().contains(clickedItem)) {
+            m_structureTree->setCurrentItem(clickedItem);
+        }
 
         QMenu menu(this);
 
@@ -730,7 +819,7 @@ namespace PointerFinder2::UI {
 
         menu.addSeparator();
 
-        bool hasPointerVal = !item->text(3).trimmed().isEmpty() && item->text(3) != "N/A" && item->text(3) != "0x00000000";
+        bool hasPointerVal = !clickedItem->text(3).trimmed().isEmpty() && clickedItem->text(3) != "N/A" && clickedItem->text(3) != "0x00000000";
         if (hasPointerVal) {
             auto* followAct = menu.addAction(getThemeIcon(":/icons/follow_pointer.svg"), "Follow Pointer", this, &StructureHierarchyWidget::followPointerClicked);
             followAct->setProperty("iconPath", ":/icons/follow_pointer.svg");

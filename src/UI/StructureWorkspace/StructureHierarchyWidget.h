@@ -49,6 +49,7 @@ namespace PointerFinder2::UI {
         QString generateCodeNoteFromTree(const QString& style, bool indentDesc, const QString& headerComment) const;
 
         QTreeWidgetItem* currentItem() const;
+        QList<QTreeWidgetItem*> selectedItemsInOrder() const;
         QTreeWidget* treeWidget() const;
 
         std::optional<DataModels::PointerPath> getPathForTreeItem(QTreeWidgetItem* item, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
@@ -67,6 +68,9 @@ namespace PointerFinder2::UI {
         void copyNoteRequested();
         void copyAddressRequested();
         void copyValueRequested();
+
+    protected:
+        bool eventFilter(QObject* obj, QEvent* event) override;
 
     private slots:
         void onTreeItemDoubleClicked(QTreeWidgetItem* item, int column);

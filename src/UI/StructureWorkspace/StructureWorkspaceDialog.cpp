@@ -587,8 +587,10 @@ namespace PointerFinder2::UI {
         auto match = const_cast<StructureWorkspaceDialog*>(this)->findBestScopeForAddress(address);
         if (!match.isValid) return std::nullopt;
 
+        uint32_t rootArrSize = 0;
+        bool rootArr = isRootArray(&rootArrSize);
+
         PointerPath path;
-        path.baseAddress = m_currentBaseAddress;
 
         auto* ptrNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
         if (ptrNode) {
@@ -598,96 +600,159 @@ namespace PointerFinder2::UI {
             }
             std::reverse(lineage.begin(), lineage.end());
 
-            for (auto* node : lineage) {
-                path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+            if (rootArr && !lineage.empty()) {
+                int32_t elemOffset = lineage[0]->data(1, Qt::UserRole).toInt();
+                path.baseAddress = m_currentBaseAddress + static_cast<uint32_t>(elemOffset);
+                for (size_t i = 1; i < lineage.size(); ++i) {
+                    path.offsets.push_back(lineage[i]->data(1, Qt::UserRole).toInt());
+                }
+            }
+            else {
+                path.baseAddress = m_currentBaseAddress;
+                for (auto* node : lineage) {
+                    path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+                }
+            }
+        }
+        else {
+            if (rootArr && match.isArrayScope) {
+                path.baseAddress = m_currentBaseAddress + static_cast<uint32_t>(match.offset);
+            }
+            else {
+                path.baseAddress = m_currentBaseAddress;
+                path.offsets.push_back(match.offset);
             }
         }
 
-        path.offsets.push_back(match.offset);
+        if (ptrNode) {
+            path.offsets.push_back(match.offset);
+        }
+        else if (path.offsets.empty()) {
+            path.offsets.push_back(0);
+        }
+
         path.finalAddress = address;
         return path;
     }
 
     void StructureWorkspaceDialog::onCopySelectedAsRaFormat() {
-        std::optional<PointerPath> pathOpt;
         uint32_t rootArrSize = 0;
         bool rootArr = isRootArray(&rootArrSize);
 
-        if (m_hierarchyWidget->treeWidget()->hasFocus() && m_hierarchyWidget->currentItem()) {
-            pathOpt = m_hierarchyWidget->getPathForTreeItem(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
-        }
-        else if (m_currentViewerSelectedAddress != 0) {
-            pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
-        }
-        else if (m_hierarchyWidget->currentItem()) {
-            pathOpt = m_hierarchyWidget->getPathForTreeItem(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
+        // Prioritize hierarchy tree selection if items are selected
+        auto selectedTreeItems = m_hierarchyWidget->selectedItemsInOrder();
+        if (!selectedTreeItems.isEmpty() && m_manager) {
+            QStringList raStrings;
+            for (auto* item : selectedTreeItems) {
+                auto pathOpt = m_hierarchyWidget->getPathForTreeItem(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
+                if (pathOpt.has_value()) {
+                    raStrings.append(pathOpt->toRetroAchievementsString(m_manager));
+                }
+            }
+            if (!raStrings.isEmpty()) {
+                QApplication::clipboard()->setText(raStrings.join("\n"));
+            }
+            return;
         }
 
-        if (pathOpt.has_value() && m_manager) {
-            ExportService::copyAsRetroAchievementsFormat(pathOpt.value(), m_manager);
+        // Fallback for Memory Viewer selection
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
+            if (pathOpt.has_value()) {
+                ExportService::copyAsRetroAchievementsFormat(pathOpt.value(), m_manager);
+            }
         }
     }
 
     void StructureWorkspaceDialog::onCopySelectedAsCodeNote() {
-        std::optional<PointerPath> pathOpt;
         uint32_t rootArrSize = 0;
         bool rootArr = isRootArray(&rootArrSize);
 
-        if (m_hierarchyWidget->treeWidget()->hasFocus() && m_hierarchyWidget->currentItem()) {
-            pathOpt = m_hierarchyWidget->getPathForTreeItem(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
-        }
-        else if (m_currentViewerSelectedAddress != 0) {
-            pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
-        }
-        else if (m_hierarchyWidget->currentItem()) {
-            pathOpt = m_hierarchyWidget->getPathForTreeItem(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
+        // Prioritize hierarchy tree selection if items are selected
+        auto selectedTreeItems = m_hierarchyWidget->selectedItemsInOrder();
+        if (!selectedTreeItems.isEmpty() && m_manager) {
+            QStringList noteStrings;
+            CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
+            QString ptrTemplate = m_manager->getPlatformPointerTypeDescription();
+
+            for (auto* item : selectedTreeItems) {
+                auto pathOpt = m_hierarchyWidget->getPathForTreeItem(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
+                if (pathOpt.has_value()) {
+                    noteStrings.append(CodeNoteHelper::buildCodeNote(pathOpt->offsets, settings, "", item->text(0), ptrTemplate));
+                }
+            }
+            if (!noteStrings.isEmpty()) {
+                QApplication::clipboard()->setText(noteStrings.join("\n"));
+            }
+            return;
         }
 
-        if (pathOpt.has_value() && m_manager) {
-            ExportService::copyAsCodeNote(pathOpt.value(), m_manager);
+        // Fallback for Memory Viewer selection
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
+            if (pathOpt.has_value()) {
+                ExportService::copyAsCodeNote(pathOpt.value(), m_manager);
+            }
         }
     }
 
     void StructureWorkspaceDialog::onCopySelectedAddress() {
-        uint32_t addr = 0;
         uint32_t rootArrSize = 0;
         bool rootArr = isRootArray(&rootArrSize);
 
-        if (m_hierarchyWidget->treeWidget()->hasFocus() && m_hierarchyWidget->currentItem()) {
-            addr = m_hierarchyWidget->resolveNodeAddress(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
-        }
-        else if (m_currentViewerSelectedAddress != 0) {
-            addr = m_currentViewerSelectedAddress;
-        }
-        else if (m_hierarchyWidget->currentItem()) {
-            addr = m_hierarchyWidget->resolveNodeAddress(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
+        // Prioritize hierarchy tree selection if items are selected
+        auto selectedTreeItems = m_hierarchyWidget->selectedItemsInOrder();
+        if (!selectedTreeItems.isEmpty() && m_manager) {
+            QStringList addrStrings;
+            for (auto* item : selectedTreeItems) {
+                uint32_t addr = m_hierarchyWidget->resolveNodeAddress(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
+                if (addr != 0) {
+                    addrStrings.append("0x" + m_manager->formatDisplayAddress(addr));
+                }
+            }
+            if (!addrStrings.isEmpty()) {
+                QApplication::clipboard()->setText(addrStrings.join("\n"));
+            }
+            return;
         }
 
-        if (addr != 0 && m_manager) {
-            QString addrStr = m_manager->formatDisplayAddress(addr);
+        // Fallback for Memory Viewer selection
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            QString addrStr = m_manager->formatDisplayAddress(m_currentViewerSelectedAddress);
             QApplication::clipboard()->setText("0x" + addrStr);
         }
     }
 
     void StructureWorkspaceDialog::onCopySelectedValue() {
-        uint32_t addr = 0;
         uint32_t rootArrSize = 0;
         bool rootArr = isRootArray(&rootArrSize);
 
-        if (m_hierarchyWidget->treeWidget()->hasFocus() && m_hierarchyWidget->currentItem()) {
-            addr = m_hierarchyWidget->resolveNodeAddress(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
-        }
-        else if (m_currentViewerSelectedAddress != 0) {
-            addr = m_currentViewerSelectedAddress;
-        }
-        else if (m_hierarchyWidget->currentItem()) {
-            addr = m_hierarchyWidget->resolveNodeAddress(m_hierarchyWidget->currentItem(), m_currentBaseAddress, m_snapshotMemory, rootArr);
+        // Prioritize hierarchy tree selection if items are selected
+        auto selectedTreeItems = m_hierarchyWidget->selectedItemsInOrder();
+        if (!selectedTreeItems.isEmpty() && m_manager) {
+            QStringList valueStrings;
+            for (auto* item : selectedTreeItems) {
+                uint32_t addr = m_hierarchyWidget->resolveNodeAddress(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
+                if (addr != 0) {
+                    uint32_t dwordVal = m_memoryViewer ? m_memoryViewer->readDwordAt(addr) : 0;
+                    if (dwordVal == 0) {
+                        auto valOpt = StructureAnalyzer::readMemoryDword(addr, m_manager, m_snapshotMemory);
+                        if (valOpt.has_value()) dwordVal = valOpt.value();
+                    }
+                    valueStrings.append("0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper());
+                }
+            }
+            if (!valueStrings.isEmpty()) {
+                QApplication::clipboard()->setText(valueStrings.join("\n"));
+            }
+            return;
         }
 
-        if (addr != 0 && m_manager) {
-            uint32_t dwordVal = m_memoryViewer ? m_memoryViewer->readDwordAt(addr) : 0;
+        // Fallback for Memory Viewer selection
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            uint32_t dwordVal = m_memoryViewer ? m_memoryViewer->readDwordAt(m_currentViewerSelectedAddress) : 0;
             if (dwordVal == 0) {
-                auto valOpt = StructureAnalyzer::readMemoryDword(addr, m_manager, m_snapshotMemory);
+                auto valOpt = StructureAnalyzer::readMemoryDword(m_currentViewerSelectedAddress, m_manager, m_snapshotMemory);
                 if (valOpt.has_value()) dwordVal = valOpt.value();
             }
             QApplication::clipboard()->setText("0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper());
@@ -876,7 +941,19 @@ namespace PointerFinder2::UI {
 
     // Traverses the pointer directly to its pointed destination, establishing the new structure scope
     void StructureWorkspaceDialog::onFollowPointerClicked() {
-        // If an address is selected in Memory Viewer and holds a valid pointer, follow it directly
+        // Priority 1: If an item in the Structure Hierarchy is active, navigate to its memory location in RAM
+        auto* current = m_hierarchyWidget->currentItem();
+        if (current) {
+            uint32_t rootArrSize = 0;
+            bool rootArr = isRootArray(&rootArrSize);
+            uint32_t resolved = m_hierarchyWidget->resolveNodeAddress(current, m_currentBaseAddress, m_snapshotMemory, rootArr);
+            if (resolved != 0) {
+                navigateToAddress(resolved);
+                return;
+            }
+        }
+
+        // Priority 2: If an address is selected in Memory Viewer and holds a valid pointer, follow it directly
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
             uint32_t dwordVal = m_memoryViewer->readDwordAt(m_currentViewerSelectedAddress);
             if (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal)) {
@@ -885,41 +962,12 @@ namespace PointerFinder2::UI {
                 return;
             }
         }
-
-        auto* current = m_hierarchyWidget->currentItem();
-        if (!current) return;
-
-        uint32_t derefTarget = current->data(0, Qt::UserRole + 4).toUInt();
-        if (derefTarget != 0) {
-            navigateToAddress(derefTarget);
-            return;
-        }
-
-        uint32_t rootArrSize = 0;
-        bool rootArr = isRootArray(&rootArrSize);
-        uint32_t resolved = m_hierarchyWidget->resolveNodeAddress(current, m_currentBaseAddress, m_snapshotMemory, rootArr);
-        if (resolved != 0) {
-            auto valOpt = StructureAnalyzer::readMemoryDword(resolved, m_manager, m_snapshotMemory);
-            if (valOpt.has_value() && m_manager && m_manager->isValidPointerTarget(valOpt.value())) {
-                uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
-                navigateToAddress(nativeTarget);
-            }
-        }
     }
 
     void StructureWorkspaceDialog::onTreeSelectionChanged() {
         updateOffsetPreview();
         updateMemoryHighlights();
-
-        auto* current = m_hierarchyWidget->currentItem();
-        if (current && m_memoryViewer->hasData()) {
-            uint32_t rootArrSize = 0;
-            bool rootArr = isRootArray(&rootArrSize);
-            uint32_t resolved = m_hierarchyWidget->resolveNodeAddress(current, m_currentBaseAddress, m_snapshotMemory, rootArr);
-            if (resolved != 0) {
-                navigateToAddress(resolved);
-            }
-        }
+        // Selection change only updates highlights and preview without moving the viewport
     }
 
     void StructureWorkspaceDialog::updateMemoryHighlights() {
@@ -1128,10 +1176,35 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onRemoveNodeClicked() {
-        auto* current = m_hierarchyWidget->currentItem();
-        if (!current) return;
+        // Collect all selected items in hierarchy order
+        auto selected = m_hierarchyWidget->selectedItemsInOrder();
+        if (selected.isEmpty()) {
+            auto* current = m_hierarchyWidget->currentItem();
+            if (current) {
+                selected.append(current);
+            }
+        }
+        if (selected.isEmpty()) return;
 
-        delete current;
+        // Filter out items whose ancestor is also selected to avoid double-deletion
+        QList<QTreeWidgetItem*> itemsToDelete;
+        for (auto* item : selected) {
+            bool hasSelectedAncestor = false;
+            for (auto* p = item->parent(); p != nullptr; p = p->parent()) {
+                if (selected.contains(p)) {
+                    hasSelectedAncestor = true;
+                    break;
+                }
+            }
+            if (!hasSelectedAncestor) {
+                itemsToDelete.append(item);
+            }
+        }
+
+        for (auto* item : itemsToDelete) {
+            delete item;
+        }
+
         uint32_t rootArrSize = 0;
         bool rootArr = isRootArray(&rootArrSize);
         m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
