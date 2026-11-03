@@ -644,9 +644,9 @@ namespace PointerFinder2::UI {
         if (!selectedTreeItems.isEmpty() && m_manager) {
             QStringList raStrings;
             for (auto* item : selectedTreeItems) {
-                auto pathOpt = m_hierarchyWidget->getPathForTreeItem(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
-                if (pathOpt.has_value()) {
-                    raStrings.append(pathOpt->toRetroAchievementsString(m_manager));
+                QString trigger = m_hierarchyWidget->formatRetroAchievementsTrigger(item, m_currentBaseAddress, rootArr, m_headerComment);
+                if (!trigger.isEmpty()) {
+                    raStrings.append(trigger);
                 }
             }
             if (!raStrings.isEmpty()) {

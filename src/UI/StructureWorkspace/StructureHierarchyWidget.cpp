@@ -781,6 +781,106 @@ namespace PointerFinder2::UI {
         return path;
     }
 
+    QString StructureHierarchyWidget::formatRetroAchievementsTrigger(QTreeWidgetItem* item, uint32_t currentBaseAddress, bool rootArr, const QString& headerComment) const {
+        if (!item || currentBaseAddress == 0 || !m_manager) return QString();
+
+        std::vector<QTreeWidgetItem*> lineage;
+        for (QTreeWidgetItem* curr = item; curr != nullptr; curr = curr->parent()) {
+            lineage.push_back(curr);
+        }
+        std::reverse(lineage.begin(), lineage.end());
+
+        QString sizePrefix = "X";
+        QString pointerMask = "";
+        QString raPrefix = m_manager->getRetroAchievementsPrefix();
+        QString emuName = m_manager->getEmulatorName();
+
+        if (raPrefix == "W" || raPrefix == "D" || raPrefix == "O") {
+            sizePrefix = "W";
+        }
+        else if (raPrefix == "G") {
+            sizePrefix = "G";
+            pointerMask = "&536870911"; // 0x1FFFFFFF mask
+        }
+        else if (emuName.contains("PPSSPP", Qt::CaseInsensitive)) {
+            sizePrefix = "X";
+            pointerMask = "&33554431";  // 0x01FFFFFF mask
+        }
+
+        bool rootIsPointer = false;
+        if (!rootArr) {
+            QString cleanHeader = headerComment.trimmed();
+            rootIsPointer = cleanHeader.contains("Pointer", Qt::CaseInsensitive);
+        }
+
+        uint32_t currentStaticAddr = currentBaseAddress;
+        bool isStatic = !rootIsPointer;
+
+        struct StepInfo {
+            bool isIndirect = true;
+            uint32_t value = 0;
+        };
+        std::vector<StepInfo> steps;
+
+        if (rootIsPointer) {
+            steps.push_back({ true, currentBaseAddress });
+        }
+
+        uint32_t accumulatedOffset = 0;
+
+        for (size_t i = 0; i < lineage.size(); ++i) {
+            QTreeWidgetItem* node = lineage[i];
+            int32_t offset = node->data(1, Qt::UserRole).toInt();
+            bool isPtr = (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive));
+            bool isLast = (i == lineage.size() - 1);
+
+            if (isStatic) {
+                currentStaticAddr += static_cast<uint32_t>(offset);
+                if (isPtr) {
+                    steps.push_back({ true, currentStaticAddr });
+                    isStatic = false;
+                    accumulatedOffset = 0;
+                }
+            }
+            else {
+                accumulatedOffset += static_cast<uint32_t>(offset);
+                if (isPtr && !isLast) {
+                    steps.push_back({ true, accumulatedOffset });
+                    accumulatedOffset = 0;
+                }
+            }
+        }
+
+        // Case 1: Pure static memory variable with no pointer dereferencing involved
+        if (isStatic && steps.empty()) {
+            QString norm = m_manager->formatDisplayAddress(currentStaticAddr);
+            return QString("I:0x%1%2").arg(sizePrefix, norm.rightJustified(8, '0').toLower());
+        }
+
+        // Case 2 & 3: Pointer chain with one or more indirect hops
+        QString sb;
+        for (size_t i = 0; i < steps.size(); ++i) {
+            const auto& step = steps[i];
+            QString addrStr = (i == 0)
+                ? m_manager->formatDisplayAddress(step.value).rightJustified(8, '0').toLower()
+                : QString("%1").arg(step.value, 8, 16, QChar('0')).toLower();
+
+            if (i == 0) {
+                sb.append(QString("I:0x%1%2%3").arg(sizePrefix, addrStr, pointerMask));
+            }
+            else {
+                sb.append(QString("_I:0x%1%2%3").arg(sizePrefix, addrStr, pointerMask));
+            }
+        }
+
+        if (accumulatedOffset != 0 || lineage.back()->childCount() == 0) {
+            QString offStr = QString("%1").arg(accumulatedOffset, 8, 16, QChar('0')).toLower();
+            sb.append(QString("_0x%1%2=1").arg(sizePrefix, offStr));
+        }
+
+        return sb;
+    }
+
     // Double-clicking a tree item: Navigates to target address in Memory Viewer
     void StructureHierarchyWidget::onTreeItemDoubleClicked(QTreeWidgetItem* item, int column) {
         Q_UNUSED(column);

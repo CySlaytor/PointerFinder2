@@ -53,6 +53,7 @@ namespace PointerFinder2::UI {
         QTreeWidget* treeWidget() const;
 
         std::optional<DataModels::PointerPath> getPathForTreeItem(QTreeWidgetItem* item, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
+        QString formatRetroAchievementsTrigger(QTreeWidgetItem* item, uint32_t currentBaseAddress, bool rootArr, const QString& headerComment) const;
 
         void updateThemeIcons();
 
