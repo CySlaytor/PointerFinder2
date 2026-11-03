@@ -21,8 +21,8 @@ namespace PointerFinder2::Core {
         int lineIndex = 0;
         bool hasEncounteredOffset = false;
 
-        // Support standard offset jumps as well as array element offsets with pipe symbol
-        QRegularExpression offsetSearch("(?:\\|[\\+\\-])?0x[0-9a-fA-F]+|[\\+\\-]0x[0-9a-fA-F]+|\\|0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
+        // Support standard offset jumps (+0x, -0x) as well as array element offsets (|0x, |+0x, |-0x)
+        QRegularExpression offsetSearch("(?:\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& line : lines) {
             QString trimmedLine = line.trimmed();
@@ -125,7 +125,7 @@ namespace PointerFinder2::Core {
         std::map<QString, std::vector<std::shared_ptr<CodeNoteNode>>> mergeableGroups;
         std::vector<std::shared_ptr<CodeNoteNode>> nonMergeableNodes;
 
-        QRegularExpression offsetRegex("^(\\|?[\\+\\-]?0x[0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetRegex("^(\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& node : nodes) {
             auto match = offsetRegex.match(node->content);
@@ -149,7 +149,7 @@ namespace PointerFinder2::Core {
             }
         }
 
-        QRegularExpression contentRegex("^(\\|?[\\+\\-]?0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression contentRegex("^(\\|[\\+\\-]?0x|[\\+\\-]0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& [key, group] : mergeableGroups) {
             auto representative = group.front();
@@ -204,7 +204,7 @@ namespace PointerFinder2::Core {
 
     std::vector<std::shared_ptr<CodeNoteNode>>
     CodeNoteHierarchyEngine::sortNodes(std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
-        QRegularExpression offsetRegex("^\\|?[\\+\\-]?0x([0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetRegex("^(?:\\|[\\+\\-]?|[\\+\\-])0x([0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
 
         std::sort(nodes.begin(), nodes.end(), [&](const std::shared_ptr<CodeNoteNode>& a, const std::shared_ptr<CodeNoteNode>& b) {
             bool aIsOffset = offsetRegex.match(a->content).hasMatch();

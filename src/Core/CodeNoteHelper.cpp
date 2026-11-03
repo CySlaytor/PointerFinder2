@@ -65,7 +65,7 @@ namespace PointerFinder2::Core {
             QString finalMemorySize = "8-bit";
 
             QStringList lines = codeNote.split(QRegularExpression("[\r\n]+"), Qt::SkipEmptyParts);
-            QRegularExpression offsetRegex("(?:\\+|-)?0x([0-9a-fA-F]+)");
+            QRegularExpression offsetRegex("(?:\\|[\\+\\-]?|[\\+\\-])0x([0-9a-fA-F]+)");
 
             for (int i = 0; i < lines.size(); ++i) {
                 auto match = offsetRegex.match(lines[i]);

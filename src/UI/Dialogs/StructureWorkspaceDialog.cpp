@@ -335,7 +335,6 @@ namespace PointerFinder2::UI {
 
         middleLayout->addLayout(viewerTopRow);
 
-        // Instantiate Memory Viewer widget
         m_memoryViewer = new Widgets::MemoryViewerWidget(m_middleContainer);
         middleLayout->addWidget(m_memoryViewer, 1);
 
@@ -1327,7 +1326,7 @@ namespace PointerFinder2::UI {
         // If an address is selected in Memory Viewer and holds a valid pointer, follow it directly
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
             uint32_t dwordVal = m_memoryViewer->readDwordAt(m_currentViewerSelectedAddress);
-            if (dwordVal != 0 && m_manager->isValidPointerTarget(dwordVal)) {
+            if (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal)) {
                 uint32_t target = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
                 navigateToAddress(target);
                 return;
@@ -1502,7 +1501,8 @@ namespace PointerFinder2::UI {
 
         // Add root array highlight to Memory Viewer if the dissected note declares an array
         uint32_t rootArrSize = 0;
-        if (isRootArray(&rootArrSize) && rootArrSize > 0 && m_currentBaseAddress != 0) {
+        bool rootArr = isRootArray(&rootArrSize);
+        if (rootArr && rootArrSize > 0 && m_currentBaseAddress != 0) {
             uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
             if (base != 0) {
                 Widgets::MemoryViewerWidget::DefinedArrayInfo arrInfo;
@@ -1511,6 +1511,61 @@ namespace PointerFinder2::UI {
                 arrInfo.size = rootArrSize;
                 arrInfo.endAddress = base + rootArrSize - 1;
                 definedArrays.push_back(arrInfo);
+            }
+        }
+
+        // If this note has no sub-offsets, document the root base address itself as a single variable
+        if (m_structureTree->topLevelItemCount() == 0 && m_currentBaseAddress != 0 && !rootArr) {
+            auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+                return n.address == m_currentBaseAddress;
+            });
+            if (it != m_gameData.notes.end()) {
+                uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
+                if (base != 0) {
+                    Widgets::MemoryViewerWidget::HighlightInfo info;
+                    QString rawTitle = it->title;
+                    static const QRegularExpression sizeTagRegex("^\\s*\\[([^\\]]+)\\]\\s*");
+                    auto match = sizeTagRegex.match(rawTitle);
+
+                    uint32_t varSize = 4;
+                    if (match.hasMatch()) {
+                        QString tag = match.captured(1).trimmed().toLower();
+                        if (tag.startsWith("8-bit") || tag == "8bit" || tag == "byte" ||
+                            tag.startsWith("bit") || tag.contains("bitflag") ||
+                            tag == "lower4" || tag == "upper4") {
+                            varSize = 1;
+                        }
+                        else if (tag.startsWith("16-bit") || tag == "16bit" || tag == "short") {
+                            varSize = 2;
+                        }
+                        else if (tag.startsWith("24-bit") || tag == "24bit") {
+                            varSize = 3;
+                        }
+                        else if (tag.startsWith("64-bit") || tag == "64bit" || tag.contains("double")) {
+                            varSize = 8;
+                        }
+                        else if (tag.startsWith("32-bit") || tag == "32bit" || tag.contains("float") || tag.contains("pointer")) {
+                            varSize = 4;
+                        }
+                    }
+
+                    QString cleanName = rawTitle;
+                    cleanName.remove(sizeTagRegex);
+                    cleanName = cleanName.trimmed();
+                    if (cleanName.isEmpty()) cleanName = rawTitle;
+
+                    info.name = cleanName;
+                    info.offset = "+0x00";
+                    info.label = cleanName;
+                    info.startAddress = base;
+                    info.size = varSize;
+                    info.isPointer = false;
+                    info.isChildOfActive = true;
+
+                    for (uint32_t b = 0; b < varSize; ++b) {
+                        highlights[base + b] = info;
+                    }
+                }
             }
         }
 
@@ -1859,7 +1914,7 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onStructureTreeItemChanged(QTreeWidgetItem* item, int column) {
         if (column == 1) {
             QString txt = item->text(1).trimmed();
-            QRegularExpression rx("^(\\|?[\\+\\-]?)0x([0-9a-fA-F]+)");
+            QRegularExpression rx("^(\\|[\\+\\-]?|[\\+\\-])0x([0-9a-fA-F]+)");
             auto match = rx.match(txt);
             if (match.hasMatch()) {
                 QString prefix = match.captured(1);
@@ -1936,7 +1991,7 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem) {
-        QRegularExpression offsetRx("^(\\|?[\\+\\-]?0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
+        QRegularExpression offsetRx("^(\\|[\\+\\-]?0x[0-9a-fA-F]+|[\\+\\-]0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
 
         for (const auto& node : nodes) {
             auto match = offsetRx.match(node->content.trimmed());
