@@ -29,5 +29,7 @@
 		<file>icons/rename.svg</file>
 		<file>icons/about.svg</file>
 		<file>icons/update.svg</file>
+		<file>icons/refresh.svg</file>
+		<file>icons/follow_pointer.svg</file>
 	</qresource>
 </RCC>

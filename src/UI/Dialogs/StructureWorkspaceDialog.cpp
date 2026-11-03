@@ -174,6 +174,9 @@ namespace PointerFinder2::UI {
         m_deleteAddressBtn->setDefault(false);
         topToolbar->addWidget(m_deleteAddressBtn);
 
+        // Right-align configuration and panel control buttons
+        topToolbar->addStretch();
+
         m_saveUserBtn = new QPushButton("Save to User.txt", this);
         m_saveUserBtn->setIcon(getThemeIcon(":/icons/save.svg"));
         m_saveUserBtn->setShortcut(QKeySequence::Save);
@@ -193,7 +196,7 @@ namespace PointerFinder2::UI {
         topToolbar->addWidget(m_revertServerBtn);
 
         m_resetBtn = new QPushButton("Reset", this);
-        m_resetBtn->setIcon(getThemeIcon(":/icons/load.svg"));
+        m_resetBtn->setIcon(getThemeIcon(":/icons/refresh.svg"));
         m_resetBtn->setToolTip("Reload Notes.json and User.txt from disk if modified externally");
         m_resetBtn->setFixedHeight(26);
         m_resetBtn->setAutoDefault(false);
@@ -209,7 +212,6 @@ namespace PointerFinder2::UI {
         m_toggleCodeNoteBtn->setDefault(false);
         topToolbar->addWidget(m_toggleCodeNoteBtn);
 
-        topToolbar->addStretch();
         rootLayout->addLayout(topToolbar);
 
         m_mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -272,29 +274,30 @@ namespace PointerFinder2::UI {
         auto* treeButtonsRow = new QHBoxLayout();
         treeButtonsRow->setSpacing(6);
 
-        m_addVariableBtn = new QPushButton("Add Variable (V)", m_leftContainer);
+        m_addVariableBtn = new QPushButton("Add Variable", m_leftContainer);
         m_addVariableBtn->setToolTip("Add variable at selected address (Shortcut: V)");
         m_addVariableBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
         m_addVariableBtn->setFixedHeight(26);
         m_addVariableBtn->setAutoDefault(false);
         m_addVariableBtn->setDefault(false);
 
-        m_addPointerBtn = new QPushButton("Add as Pointer (P)", m_leftContainer);
+        m_addPointerBtn = new QPushButton("Add as Pointer", m_leftContainer);
         m_addPointerBtn->setToolTip("Add pointer at selected address (Shortcut: P)");
         m_addPointerBtn->setIcon(getThemeIcon(":/icons/attach.svg"));
         m_addPointerBtn->setFixedHeight(26);
         m_addPointerBtn->setAutoDefault(false);
         m_addPointerBtn->setDefault(false);
 
-        m_followPointerBtn = new QPushButton("Follow Pointer -> (F)", m_leftContainer);
+        m_followPointerBtn = new QPushButton("Follow Pointer", m_leftContainer);
         m_followPointerBtn->setToolTip("Follow pointer value to destination address (Shortcut: Enter, F, or Double-click)");
-        m_followPointerBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
+        m_followPointerBtn->setIcon(getThemeIcon(":/icons/follow_pointer.svg"));
         m_followPointerBtn->setFixedHeight(26);
         m_followPointerBtn->setAutoDefault(false);
         m_followPointerBtn->setDefault(false);
 
         m_removeNodeBtn = new QPushButton("Remove", m_leftContainer);
         m_removeNodeBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
+        m_removeNodeBtn->setToolTip("Remove selected node (Shortcut: Delete / X)");
         m_removeNodeBtn->setFixedHeight(26);
         m_removeNodeBtn->setAutoDefault(false);
         m_removeNodeBtn->setDefault(false);
@@ -313,6 +316,26 @@ namespace PointerFinder2::UI {
         middleLayout->setContentsMargins(0, 0, 0, 0);
         middleLayout->setSpacing(6);
 
+        // Top Header Row for Memory Viewer: Re-dump / Refresh RAM and Snapshot Info
+        auto* viewerTopRow = new QHBoxLayout();
+        viewerTopRow->setContentsMargins(0, 0, 0, 0);
+        viewerTopRow->setSpacing(6);
+
+        m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
+        m_refreshRamBtn->setIcon(getThemeIcon(":/icons/refresh.svg"));
+        m_refreshRamBtn->setFixedHeight(26);
+        m_refreshRamBtn->setAutoDefault(false);
+        m_refreshRamBtn->setDefault(false);
+        viewerTopRow->addWidget(m_refreshRamBtn);
+
+        m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
+        m_ramStatusLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+        viewerTopRow->addWidget(m_ramStatusLabel);
+        viewerTopRow->addStretch();
+
+        middleLayout->addLayout(viewerTopRow);
+
+        // Instantiate Memory Viewer widget
         m_memoryViewer = new Widgets::MemoryViewerWidget(m_middleContainer);
         middleLayout->addWidget(m_memoryViewer, 1);
 
@@ -368,21 +391,15 @@ namespace PointerFinder2::UI {
         m_navHistoryLabel->setStyleSheet("color: #8B949E; font-size: 11px; font-weight: bold; padding: 0 4px;");
         viewerBottomRow->addWidget(m_navHistoryLabel);
 
-        m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
-        m_refreshRamBtn->setFixedHeight(26);
-        m_refreshRamBtn->setAutoDefault(false);
-        m_refreshRamBtn->setDefault(false);
-        viewerBottomRow->addWidget(m_refreshRamBtn);
-
-        m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
-        viewerBottomRow->addWidget(m_ramStatusLabel);
         viewerBottomRow->addStretch();
 
         viewerBottomRow->addWidget(new QLabel("Go to (Hex):", m_middleContainer));
         m_goToAddressEdit = new QLineEdit(m_middleContainer);
-        m_goToAddressEdit->setMaximumWidth(100);
+        m_goToAddressEdit->setMinimumWidth(90);
+        m_goToAddressEdit->setMaximumWidth(120);
         m_goToAddressEdit->setFixedHeight(26);
         m_goToAddressBtn = new QPushButton("Go", m_middleContainer);
+        m_goToAddressBtn->setIcon(getThemeIcon(":/icons/follow_pointer.svg"));
         m_goToAddressBtn->setFixedHeight(26);
         m_goToAddressBtn->setAutoDefault(false);
         m_goToAddressBtn->setDefault(false);
@@ -1062,27 +1079,27 @@ namespace PointerFinder2::UI {
 
         QMenu menu(this);
 
-        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable (V)", this, &StructureWorkspaceDialog::onAddVariableClicked);
+        auto* addVarAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), "Add Variable", this, &StructureWorkspaceDialog::onAddVariableClicked);
         addVarAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
 
-        auto* addPtrAct = menu.addAction(getThemeIcon(":/icons/attach.svg"), "Add as Pointer (P)", this, &StructureWorkspaceDialog::onAddPointerClicked);
+        auto* addPtrAct = menu.addAction(getThemeIcon(":/icons/attach.svg"), "Add as Pointer", this, &StructureWorkspaceDialog::onAddPointerClicked);
         addPtrAct->setProperty("iconPath", ":/icons/attach.svg");
 
         uint32_t dwordVal = m_memoryViewer->readDwordAt(address);
         bool isPointer = (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal));
 
-        auto* followPtrAct = menu.addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Follow Pointer -> (F)", this, [this, dwordVal]() {
+        auto* followPtrAct = menu.addAction(getThemeIcon(":/icons/follow_pointer.svg"), "Follow Pointer", this, [this, dwordVal]() {
             if (m_manager) {
                 uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
                 navigateToAddress(nativeTarget);
             }
         });
-        followPtrAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
+        followPtrAct->setProperty("iconPath", ":/icons/follow_pointer.svg");
         followPtrAct->setEnabled(isPointer);
 
         if (m_memoryViewer->isAddressDocumented(address)) {
             menu.addSeparator();
-            auto* removeDocAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove Documentation (X / Del)", this, [this, address]() {
+            auto* removeDocAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove Documentation", this, [this, address]() {
                 onRemoveDocumentationAtAddress(address);
             });
             removeDocAct->setProperty("iconPath", ":/icons/delete.svg");
@@ -1294,8 +1311,8 @@ namespace PointerFinder2::UI {
 
         bool hasPointerVal = !item->text(3).trimmed().isEmpty() && item->text(3) != "N/A" && item->text(3) != "0x00000000";
         if (hasPointerVal) {
-            auto* followAct = menu.addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Follow Pointer -> (F)", this, &StructureWorkspaceDialog::onFollowPointerClicked);
-            followAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
+            auto* followAct = menu.addAction(getThemeIcon(":/icons/follow_pointer.svg"), "Follow Pointer", this, &StructureWorkspaceDialog::onFollowPointerClicked);
+            followAct->setProperty("iconPath", ":/icons/follow_pointer.svg");
             menu.addSeparator();
         }
 
