@@ -4,6 +4,7 @@
 #include "../../Core/RaStorageService.h"
 #include "../../Core/StructureAnalyzer.h"
 #include "../../Emulators/IEmulatorManager.h"
+#include "../../Models/PointerPath.h"
 #include "../Widgets/MemoryViewerWidget.h"
 #include "NewAddressDialog.h"
 
@@ -11,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#include <QAction>
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
@@ -113,6 +115,12 @@ namespace PointerFinder2::UI {
         void onRevertServerClicked();
         void onResetClicked();
 
+        // Clipboard copy slots for Tree & Viewer
+        void onCopySelectedAsRaFormat();
+        void onCopySelectedAsCodeNote();
+        void onCopySelectedAddress();
+        void onCopySelectedValue();
+
         // Panel 3 & Synchronization slots
         void onToggleCodeNotePanelClicked();
         void onFixHierarchyClicked();
@@ -146,6 +154,12 @@ namespace PointerFinder2::UI {
         QPushButton* m_addPointerBtn = nullptr;
         QPushButton* m_followPointerBtn = nullptr;
         QPushButton* m_removeNodeBtn = nullptr;
+
+        // Shared Copy Actions
+        QAction* m_treeCopyRaAction = nullptr;
+        QAction* m_treeCopyNoteAction = nullptr;
+        QAction* m_treeCopyAddressAction = nullptr;
+        QAction* m_treeCopyValueAction = nullptr;
 
         // Panel 2: Memory Viewer
         QWidget* m_middleContainer = nullptr;
@@ -204,8 +218,8 @@ namespace PointerFinder2::UI {
 
         // RA Data Pipeline
         bool loadActiveGameData();
-        void populateAddressDropdown();
-        void selectAddressInUI(uint32_t address);
+        void populateAddressDropdown(bool autoNavigate = true);
+        void selectAddressInUI(uint32_t address, bool navigate = true);
         void populateTreeFromCodeNote(const QString& noteText);
         bool saveActiveNoteToUserTxt();
         void updateToolbarButtonStates();
@@ -222,6 +236,9 @@ namespace PointerFinder2::UI {
         ScopeMatch findBestScopeForAddress(uint32_t selectedAddr);
         void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description, bool isArrayElement = false);
         QString suggestDefaultType(uint32_t address);
+
+        std::optional<DataModels::PointerPath> getPathForTreeItem(QTreeWidgetItem* item) const;
+        std::optional<DataModels::PointerPath> getPathForViewerAddress(uint32_t address) const;
 
         void syncTreeToCodeNoteText();
         QString generateCodeNoteFromTree() const;

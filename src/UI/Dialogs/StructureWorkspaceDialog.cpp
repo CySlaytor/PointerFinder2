@@ -3,6 +3,7 @@
 
 #include "../../Common/EndianUtils.h"
 #include "../../Core/CodeNoteHelper.h"
+#include "../../Core/ExportService.h"
 #include "../../Models/CodeNoteSettings.h"
 #include "../../Models/GlobalSettings.h"
 #include "../Styles/ThemeManager.h"
@@ -22,6 +23,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSplitter>
 #include <QTimer>
@@ -236,6 +238,31 @@ namespace PointerFinder2::UI {
 
         m_structureTree->setAlternatingRowColors(true);
         m_structureTree->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
+
+        // Setup actions and keyboard shortcuts for Structure Hierarchy
+        m_treeCopyRaAction = new QAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this);
+        m_treeCopyRaAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+        m_treeCopyRaAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+        connect(m_treeCopyRaAction, &QAction::triggered, this, &StructureWorkspaceDialog::onCopySelectedAsRaFormat);
+
+        m_treeCopyNoteAction = new QAction(getThemeIcon(":/icons/copy_note.svg"), "Copy Code Note", this);
+        connect(m_treeCopyNoteAction, &QAction::triggered, this, &StructureWorkspaceDialog::onCopySelectedAsCodeNote);
+
+        m_treeCopyAddressAction = new QAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this);
+        m_treeCopyAddressAction->setShortcut(QKeySequence::Copy);
+        m_treeCopyAddressAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+        connect(m_treeCopyAddressAction, &QAction::triggered, this, &StructureWorkspaceDialog::onCopySelectedAddress);
+
+        m_treeCopyValueAction = new QAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this);
+        m_treeCopyValueAction->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
+        m_treeCopyValueAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+        connect(m_treeCopyValueAction, &QAction::triggered, this, &StructureWorkspaceDialog::onCopySelectedValue);
+
+        m_structureTree->addAction(m_treeCopyRaAction);
+        m_structureTree->addAction(m_treeCopyNoteAction);
+        m_structureTree->addAction(m_treeCopyAddressAction);
+        m_structureTree->addAction(m_treeCopyValueAction);
+
         leftLayout->addWidget(m_structureTree, 1);
 
         m_offsetPreviewLabel = new QLabel("Select an address in Memory Viewer to calculate relative offset.", m_leftContainer);
@@ -455,6 +482,12 @@ namespace PointerFinder2::UI {
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::followPointerTriggered, this, &StructureWorkspaceDialog::onFollowPointerClicked);
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::removeDocumentationTriggered, this, &StructureWorkspaceDialog::onRemoveDocumentationAtAddress);
 
+        // Connect clipboard copy signals from Memory Viewer
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyAddressTriggered, this, &StructureWorkspaceDialog::onCopySelectedAddress);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyValueTriggered, this, &StructureWorkspaceDialog::onCopySelectedValue);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyRaTriggered, this, &StructureWorkspaceDialog::onCopySelectedAsRaFormat);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyCodeNoteTriggered, this, &StructureWorkspaceDialog::onCopySelectedAsCodeNote);
+
         connect(m_addVariableBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onAddVariableClicked);
         connect(m_addPointerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onAddPointerClicked);
         connect(m_followPointerBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onFollowPointerClicked);
@@ -491,7 +524,7 @@ namespace PointerFinder2::UI {
         return RaStorageService::loadActiveGameData(m_manager->getProcessHandle(), m_gameData);
     }
 
-    void StructureWorkspaceDialog::populateAddressDropdown() {
+    void StructureWorkspaceDialog::populateAddressDropdown(bool autoNavigate) {
         m_addressSelectCombo->blockSignals(true);
         m_addressSourceModel->clear();
 
@@ -540,12 +573,12 @@ namespace PointerFinder2::UI {
         m_addressSelectCombo->blockSignals(false);
 
         if (m_addressSelectCombo->count() > 0 && m_currentBaseAddress != 0) {
-            selectAddressInUI(m_currentBaseAddress);
+            selectAddressInUI(m_currentBaseAddress, autoNavigate);
         }
         else if (m_addressSelectCombo->count() > 0) {
             QVariant comboVal = m_addressSelectCombo->currentData();
             if (comboVal.isValid()) {
-                selectAddressInUI(comboVal.toUInt());
+                selectAddressInUI(comboVal.toUInt(), autoNavigate);
             }
         }
     }
@@ -575,7 +608,7 @@ namespace PointerFinder2::UI {
                     QMessageBox::Yes
                 );
                 if (reply == QMessageBox::Yes) {
-                    selectAddressInUI(address);
+                    selectAddressInUI(address, true);
                 }
                 return;
             }
@@ -591,8 +624,8 @@ namespace PointerFinder2::UI {
 
             m_gameData.notes.push_back(newNote);
 
-            populateAddressDropdown();
-            selectAddressInUI(address);
+            populateAddressDropdown(true);
+            selectAddressInUI(address, true);
         }
     }
 
@@ -615,12 +648,12 @@ namespace PointerFinder2::UI {
         RaStorageService::deleteLocalNote(m_gameData, activeAddr);
 
         m_currentBaseAddress = 0;
-        populateAddressDropdown();
+        populateAddressDropdown(true);
 
         if (m_addressSelectCombo->count() > 0) {
             QVariant val = m_addressSelectCombo->currentData();
             if (val.isValid()) {
-                selectAddressInUI(val.toUInt());
+                selectAddressInUI(val.toUInt(), true);
             }
         }
         else {
@@ -653,13 +686,13 @@ namespace PointerFinder2::UI {
                 m_addressSelectCombo->setCurrentIndex(0);
                 QVariant matchedVal = m_addressSelectCombo->currentData();
                 if (matchedVal.isValid()) {
-                    selectAddressInUI(matchedVal.toUInt());
+                    selectAddressInUI(matchedVal.toUInt(), true);
                 }
             }
         }
     }
 
-    void StructureWorkspaceDialog::selectAddressInUI(uint32_t address) {
+    void StructureWorkspaceDialog::selectAddressInUI(uint32_t address, bool navigate) {
         auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
             return n.address == address;
         });
@@ -674,7 +707,9 @@ namespace PointerFinder2::UI {
 
         // Populate tree non-destructively without altering or rewriting original user note text
         populateTreeFromCodeNote(it->noteText);
-        navigateToAddress(address);
+        if (navigate) {
+            navigateToAddress(address);
+        }
         updateToolbarButtonStates();
     }
 
@@ -710,18 +745,28 @@ namespace PointerFinder2::UI {
         if (!comboData.isValid()) return;
 
         uint32_t addr = comboData.toUInt();
-        selectAddressInUI(addr);
+        selectAddressInUI(addr, true);
     }
 
     bool StructureWorkspaceDialog::saveActiveNoteToUserTxt() {
         uint32_t activeAddr = m_currentBaseAddress;
         if (activeAddr == 0) return false;
 
+        // Capture current memory viewer location and cursor to prevent jumping
+        uint32_t savedCursor = (m_currentViewerSelectedAddress != 0) ? m_currentViewerSelectedAddress : m_memoryViewer->getSelectedAddress();
+        int savedScroll = m_memoryViewer->verticalScrollBar()->value();
+
         QString currentNote = m_codeNoteTextEdit->toPlainText();
         bool ok = RaStorageService::saveActiveNoteToUserTxt(m_gameData, activeAddr, currentNote);
         if (ok) {
-            populateAddressDropdown();
+            populateAddressDropdown(false);
             updateToolbarButtonStates();
+
+            // Restore exact cursor and scroll state in Memory Viewer
+            if (savedCursor != 0) {
+                m_memoryViewer->setSelectedAddress(savedCursor, false, false);
+                m_memoryViewer->verticalScrollBar()->setValue(savedScroll);
+            }
         }
         return ok;
     }
@@ -742,20 +787,40 @@ namespace PointerFinder2::UI {
         uint32_t activeAddr = m_currentBaseAddress;
         if (activeAddr == 0) return;
 
+        // Capture current memory viewer location and cursor to prevent jumping
+        uint32_t savedCursor = (m_currentViewerSelectedAddress != 0) ? m_currentViewerSelectedAddress : m_memoryViewer->getSelectedAddress();
+        int savedScroll = m_memoryViewer->verticalScrollBar()->value();
+
         if (RaStorageService::revertServerNote(m_gameData, activeAddr)) {
             loadActiveGameData();
-            populateAddressDropdown();
-            selectAddressInUI(activeAddr);
+            populateAddressDropdown(false);
+            selectAddressInUI(activeAddr, false);
+
+            // Restore exact cursor and scroll state in Memory Viewer
+            if (savedCursor != 0) {
+                m_memoryViewer->setSelectedAddress(savedCursor, false, false);
+                m_memoryViewer->verticalScrollBar()->setValue(savedScroll);
+            }
         }
     }
 
     void StructureWorkspaceDialog::onResetClicked() {
         uint32_t currentAddr = m_currentBaseAddress;
 
+        // Capture current memory viewer location and cursor to prevent jumping
+        uint32_t savedCursor = (m_currentViewerSelectedAddress != 0) ? m_currentViewerSelectedAddress : m_memoryViewer->getSelectedAddress();
+        int savedScroll = m_memoryViewer->verticalScrollBar()->value();
+
         loadActiveGameData();
-        populateAddressDropdown();
+        populateAddressDropdown(false);
         if (currentAddr != 0) {
-            selectAddressInUI(currentAddr);
+            selectAddressInUI(currentAddr, false);
+
+            // Restore exact cursor and scroll state in Memory Viewer
+            if (savedCursor != 0) {
+                m_memoryViewer->setSelectedAddress(savedCursor, false, false);
+                m_memoryViewer->verticalScrollBar()->setValue(savedScroll);
+            }
         }
 
         QString origText = m_resetBtn->text();
@@ -856,6 +921,7 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onAddressSelectedInViewer(uint32_t address) {
         m_currentViewerSelectedAddress = address;
         updateOffsetPreview();
+        updateMemoryHighlights();
     }
 
     // Double-clicking in Memory Viewer: If DWORD is a pointer, traverse it; otherwise prompt to add variable
@@ -869,6 +935,124 @@ namespace PointerFinder2::UI {
         }
         else {
             onAddVariableClicked();
+        }
+    }
+
+    std::optional<DataModels::PointerPath> StructureWorkspaceDialog::getPathForTreeItem(QTreeWidgetItem* item) const {
+        if (!item || m_currentBaseAddress == 0) return std::nullopt;
+
+        std::vector<QTreeWidgetItem*> lineage;
+        for (QTreeWidgetItem* curr = item; curr != nullptr; curr = curr->parent()) {
+            lineage.push_back(curr);
+        }
+        std::reverse(lineage.begin(), lineage.end());
+
+        DataModels::PointerPath path;
+        path.baseAddress = m_currentBaseAddress;
+        for (auto* node : lineage) {
+            path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+        }
+        path.finalAddress = const_cast<StructureWorkspaceDialog*>(this)->resolveNodeAddress(item);
+        return path;
+    }
+
+    std::optional<DataModels::PointerPath> StructureWorkspaceDialog::getPathForViewerAddress(uint32_t address) const {
+        if (address == 0 || m_currentBaseAddress == 0 || !m_manager) return std::nullopt;
+
+        auto match = const_cast<StructureWorkspaceDialog*>(this)->findBestScopeForAddress(address);
+        if (!match.isValid) return std::nullopt;
+
+        DataModels::PointerPath path;
+        path.baseAddress = m_currentBaseAddress;
+
+        if (match.pointerNode) {
+            std::vector<QTreeWidgetItem*> lineage;
+            for (QTreeWidgetItem* curr = match.pointerNode; curr != nullptr; curr = curr->parent()) {
+                lineage.push_back(curr);
+            }
+            std::reverse(lineage.begin(), lineage.end());
+
+            for (auto* node : lineage) {
+                path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+            }
+        }
+
+        path.offsets.push_back(match.offset);
+        path.finalAddress = address;
+        return path;
+    }
+
+    void StructureWorkspaceDialog::onCopySelectedAsRaFormat() {
+        std::optional<PointerPath> pathOpt;
+        if (m_structureTree && m_structureTree->hasFocus() && m_structureTree->currentItem()) {
+            pathOpt = getPathForTreeItem(m_structureTree->currentItem());
+        }
+        else if (m_currentViewerSelectedAddress != 0) {
+            pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
+        }
+        else if (m_structureTree && m_structureTree->currentItem()) {
+            pathOpt = getPathForTreeItem(m_structureTree->currentItem());
+        }
+
+        if (pathOpt.has_value() && m_manager) {
+            ExportService::copyAsRetroAchievementsFormat(pathOpt.value(), m_manager);
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopySelectedAsCodeNote() {
+        std::optional<PointerPath> pathOpt;
+        if (m_structureTree && m_structureTree->hasFocus() && m_structureTree->currentItem()) {
+            pathOpt = getPathForTreeItem(m_structureTree->currentItem());
+        }
+        else if (m_currentViewerSelectedAddress != 0) {
+            pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
+        }
+        else if (m_structureTree && m_structureTree->currentItem()) {
+            pathOpt = getPathForTreeItem(m_structureTree->currentItem());
+        }
+
+        if (pathOpt.has_value() && m_manager) {
+            ExportService::copyAsCodeNote(pathOpt.value(), m_manager);
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopySelectedAddress() {
+        uint32_t addr = 0;
+        if (m_structureTree && m_structureTree->hasFocus() && m_structureTree->currentItem()) {
+            addr = resolveNodeAddress(m_structureTree->currentItem());
+        }
+        else if (m_currentViewerSelectedAddress != 0) {
+            addr = m_currentViewerSelectedAddress;
+        }
+        else if (m_structureTree && m_structureTree->currentItem()) {
+            addr = resolveNodeAddress(m_structureTree->currentItem());
+        }
+
+        if (addr != 0 && m_manager) {
+            QString addrStr = m_manager->formatDisplayAddress(addr);
+            QApplication::clipboard()->setText("0x" + addrStr);
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopySelectedValue() {
+        uint32_t addr = 0;
+        if (m_structureTree && m_structureTree->hasFocus() && m_structureTree->currentItem()) {
+            addr = resolveNodeAddress(m_structureTree->currentItem());
+        }
+        else if (m_currentViewerSelectedAddress != 0) {
+            addr = m_currentViewerSelectedAddress;
+        }
+        else if (m_structureTree && m_structureTree->currentItem()) {
+            addr = resolveNodeAddress(m_structureTree->currentItem());
+        }
+
+        if (addr != 0 && m_manager) {
+            uint32_t dwordVal = m_memoryViewer ? m_memoryViewer->readDwordAt(addr) : 0;
+            if (dwordVal == 0) {
+                auto valOpt = readMemoryDword(addr);
+                if (valOpt.has_value()) dwordVal = valOpt.value();
+            }
+            QApplication::clipboard()->setText("0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper());
         }
     }
 
@@ -906,6 +1090,26 @@ namespace PointerFinder2::UI {
 
         menu.addSeparator();
 
+        // Standardized clipboard copy choices consistent with main results view
+        auto* copyRaAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this, &StructureWorkspaceDialog::onCopySelectedAsRaFormat);
+        copyRaAct->setProperty("iconPath", ":/icons/copy_ra.svg");
+        copyRaAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+        copyRaAct->setEnabled(getPathForViewerAddress(address).has_value());
+
+        auto* copyNoteAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Copy Code Note", this, &StructureWorkspaceDialog::onCopySelectedAsCodeNote);
+        copyNoteAct->setProperty("iconPath", ":/icons/copy_note.svg");
+        copyNoteAct->setEnabled(getPathForViewerAddress(address).has_value());
+
+        auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, &StructureWorkspaceDialog::onCopySelectedAddress);
+        copyAddrAct->setProperty("iconPath", ":/icons/copy.svg");
+        copyAddrAct->setShortcut(QKeySequence::Copy);
+
+        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this, &StructureWorkspaceDialog::onCopySelectedValue);
+        copyValAct->setProperty("iconPath", ":/icons/copy_ra.svg");
+        copyValAct->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
+
+        menu.addSeparator();
+
         QString displayAddrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString("%1").arg(address, 8, 16, QChar('0')).toUpper();
 
         auto* newAddrAct = menu.addAction(getThemeIcon(":/icons/bookmark_add.svg"), QString("Create New Structure at 0x%1...").arg(displayAddrStr), this, [this, address]() {
@@ -930,19 +1134,6 @@ namespace PointerFinder2::UI {
             }
         });
         newAddrAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
-
-        menu.addSeparator();
-
-        auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, [this, address]() {
-            QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString("%1").arg(address, 8, 16, QChar('0')).toUpper();
-            QApplication::clipboard()->setText("0x" + addrStr);
-        });
-        copyAddrAct->setProperty("iconPath", ":/icons/copy.svg");
-
-        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this, [dwordVal]() {
-            QApplication::clipboard()->setText("0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper());
-        });
-        copyValAct->setProperty("iconPath", ":/icons/copy_ra.svg");
 
         menu.exec(globalPos);
     }
@@ -1081,17 +1272,33 @@ namespace PointerFinder2::UI {
 
         QMenu menu(this);
 
-        auto* copyResolvedAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Resolved RAM Address", this, [this, item]() {
-            QApplication::clipboard()->setText(item->text(2));
-        });
-        copyResolvedAct->setProperty("iconPath", ":/icons/copy.svg");
+        // Standardized clipboard copy choices matching main results view
+        auto* copyRaAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this, &StructureWorkspaceDialog::onCopySelectedAsRaFormat);
+        copyRaAct->setProperty("iconPath", ":/icons/copy_ra.svg");
+        copyRaAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
+        copyRaAct->setEnabled(getPathForTreeItem(item).has_value());
 
-        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Pointer Value", this, [this, item]() {
-            QApplication::clipboard()->setText(item->text(3));
-        });
+        auto* copyNoteAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Copy Code Note", this, &StructureWorkspaceDialog::onCopySelectedAsCodeNote);
+        copyNoteAct->setProperty("iconPath", ":/icons/copy_note.svg");
+        copyNoteAct->setEnabled(getPathForTreeItem(item).has_value());
+
+        auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, &StructureWorkspaceDialog::onCopySelectedAddress);
+        copyAddrAct->setProperty("iconPath", ":/icons/copy.svg");
+        copyAddrAct->setShortcut(QKeySequence::Copy);
+
+        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this, &StructureWorkspaceDialog::onCopySelectedValue);
         copyValAct->setProperty("iconPath", ":/icons/copy_ra.svg");
+        copyValAct->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
 
         menu.addSeparator();
+
+        bool hasPointerVal = !item->text(3).trimmed().isEmpty() && item->text(3) != "N/A" && item->text(3) != "0x00000000";
+        if (hasPointerVal) {
+            auto* followAct = menu.addAction(getThemeIcon(":/icons/hierarchy_fixer.svg"), "Follow Pointer -> (F)", this, &StructureWorkspaceDialog::onFollowPointerClicked);
+            followAct->setProperty("iconPath", ":/icons/hierarchy_fixer.svg");
+            menu.addSeparator();
+        }
+
         auto* removeAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove", this, &StructureWorkspaceDialog::onRemoveNodeClicked);
         removeAct->setProperty("iconPath", ":/icons/delete.svg");
 
@@ -1961,7 +2168,7 @@ namespace PointerFinder2::UI {
 
         settings.setValue("geometry", saveGeometry());
         settings.setValue("splitterState", m_mainSplitter->saveState());
-        settings.setValue("lastCodeNoteWidth", m_lastCodeNotePanelWidth);
+        settings.setValue("lastCodeNotePanelWidth", m_lastCodeNotePanelWidth);
 
         QList<int> sizes = m_mainSplitter->sizes();
         settings.setValue("codeNotePanelVisible", (sizes.size() > 2 && sizes[2] > 0));

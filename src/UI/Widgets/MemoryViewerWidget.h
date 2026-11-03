@@ -43,6 +43,7 @@ namespace PointerFinder2::UI::Widgets {
         struct NavState {
             uint32_t address = 0;
             int scrollValue = 0;
+            bool hasSelection = false;
         };
 
         explicit MemoryViewerWidget(QWidget* parent = nullptr);
@@ -97,6 +98,12 @@ namespace PointerFinder2::UI::Widgets {
         void addPointerTriggered();
         void followPointerTriggered();
         void removeDocumentationTriggered(uint32_t address);
+
+        // Clipboard copy actions scoped to Memory Viewer
+        void copyAddressTriggered();
+        void copyValueTriggered();
+        void copyRaTriggered();
+        void copyCodeNoteTriggered();
 
     protected:
         void paintEvent(QPaintEvent* event) override;
