@@ -342,22 +342,12 @@ namespace PointerFinder2::UI {
         auto* viewModeRow = new QHBoxLayout();
         viewModeRow->addWidget(new QLabel("Memory View:", m_middleContainer));
 
-        m_view8BitRadio = new QRadioButton("8-bit", m_middleContainer);
-        m_view16BitRadio = new QRadioButton("16-bit", m_middleContainer);
-        m_view32BitRadio = new QRadioButton("32-bit", m_middleContainer);
-        m_view32BitBERadio = new QRadioButton("32-bit BE", m_middleContainer);
-        m_view32BitRadio->setChecked(true);
-
-        m_viewModeGroup = new QButtonGroup(this);
-        m_viewModeGroup->addButton(m_view8BitRadio, 0);
-        m_viewModeGroup->addButton(m_view16BitRadio, 1);
-        m_viewModeGroup->addButton(m_view32BitRadio, 2);
-        m_viewModeGroup->addButton(m_view32BitBERadio, 3);
-
-        viewModeRow->addWidget(m_view8BitRadio);
-        viewModeRow->addWidget(m_view16BitRadio);
-        viewModeRow->addWidget(m_view32BitRadio);
-        viewModeRow->addWidget(m_view32BitBERadio);
+        m_viewModeCombo = new QComboBox(m_middleContainer);
+        m_viewModeCombo->addItems({ "8-bit", "16-bit", "32-bit", "32-bit BE", "Float", "Float BE" });
+        m_viewModeCombo->setCurrentIndex(2);
+        m_viewModeCombo->setFixedHeight(24);
+        m_viewModeCombo->setMinimumWidth(110);
+        viewModeRow->addWidget(m_viewModeCombo);
         viewModeRow->addStretch();
         middleLayout->addLayout(viewModeRow);
 
@@ -515,7 +505,7 @@ namespace PointerFinder2::UI {
         connect(m_goToAddressBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onGoToAddressClicked);
         connect(m_goToAddressEdit, &QLineEdit::returnPressed, this, &StructureWorkspaceDialog::onGoToAddressClicked);
 
-        connect(m_viewModeGroup, &QButtonGroup::idClicked, this, &StructureWorkspaceDialog::onViewModeChanged);
+        connect(m_viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onViewModeChanged);
 
         // RA Data controls
         connect(m_newAddressBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onNewAddressClicked);
@@ -872,12 +862,14 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onViewModeChanged() {
-        int id = m_viewModeGroup->checkedId();
+        int id = m_viewModeCombo ? m_viewModeCombo->currentIndex() : 2;
         switch (id) {
         case 0: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode8Bit); break;
         case 1: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode16Bit); break;
         case 2: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode32Bit); break;
         case 3: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode32BitBE); break;
+        case 4: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::ModeFloat); break;
+        case 5: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE); break;
         default: break;
         }
         saveWorkspaceSettings();
@@ -1849,10 +1841,14 @@ namespace PointerFinder2::UI {
 
         // Align address based on current active view mode
         uint32_t alignedAddr = m_currentViewerSelectedAddress;
-        if (m_view32BitRadio->isChecked() || m_view32BitBERadio->isChecked()) {
+        auto mode = m_memoryViewer->getViewMode();
+        if (mode == Widgets::MemoryViewerWidget::ViewMode::Mode32Bit ||
+            mode == Widgets::MemoryViewerWidget::ViewMode::Mode32BitBE ||
+            mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloat ||
+            mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE) {
             alignedAddr &= ~3U;
         }
-        else if (m_view16BitRadio->isChecked()) {
+        else if (mode == Widgets::MemoryViewerWidget::ViewMode::Mode16Bit) {
             alignedAddr &= ~1U;
         }
 
@@ -1863,7 +1859,9 @@ namespace PointerFinder2::UI {
         }
 
         bool ok = false;
-        QString defaultDesc = suggestDefaultType(alignedAddr);
+        QString defaultDesc = (mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloat || mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE)
+            ? "[Float] Variable"
+            : suggestDefaultType(alignedAddr);
         QString desc = QInputDialog::getText(this, "Add Variable", "Variable description:", QLineEdit::Normal, defaultDesc, &ok);
         if (!ok || desc.trimmed().isEmpty()) return;
 
@@ -1914,11 +1912,11 @@ namespace PointerFinder2::UI {
     void StructureWorkspaceDialog::onStructureTreeItemChanged(QTreeWidgetItem* item, int column) {
         if (column == 1) {
             QString txt = item->text(1).trimmed();
-            QRegularExpression rx("^(\\|[\\+\\-]?|[\\+\\-])0x([0-9a-fA-F]+)");
+            QRegularExpression rx("^((?:\\|[\\+\\-]?|[\\+\\-])0x)([0-9a-fA-F]+)");
             auto match = rx.match(txt);
             if (match.hasMatch()) {
                 QString prefix = match.captured(1);
-                bool isArrayElem = (prefix == "|");
+                bool isArrayElem = (prefix.startsWith('|') && !prefix.startsWith("|+") && !prefix.startsWith("|-"));
                 bool ok = false;
                 int32_t val = match.captured(2).toInt(&ok, 16);
                 if (prefix.contains('-')) val = -val;
@@ -1991,7 +1989,7 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, QTreeWidgetItem* parentItem) {
-        QRegularExpression offsetRx("^(\\|[\\+\\-]?0x[0-9a-fA-F]+|[\\+\\-]0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
+        QRegularExpression offsetRx("^((?:\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
 
         for (const auto& node : nodes) {
             auto match = offsetRx.match(node->content.trimmed());
@@ -2206,8 +2204,10 @@ namespace PointerFinder2::UI {
         }
 
         int viewModeId = settings.value("viewMode", 2).toInt();
-        if (auto* btn = m_viewModeGroup->button(viewModeId)) {
-            btn->setChecked(true);
+        if (m_viewModeCombo && viewModeId >= 0 && viewModeId < m_viewModeCombo->count()) {
+            m_viewModeCombo->blockSignals(true);
+            m_viewModeCombo->setCurrentIndex(viewModeId);
+            m_viewModeCombo->blockSignals(false);
         }
         onViewModeChanged();
 
@@ -2245,7 +2245,7 @@ namespace PointerFinder2::UI {
         QList<int> sizes = m_mainSplitter->sizes();
         settings.setValue("codeNotePanelVisible", (sizes.size() > 2 && sizes[2] > 0));
 
-        settings.setValue("viewMode", m_viewModeGroup->checkedId());
+        settings.setValue("viewMode", m_viewModeCombo ? m_viewModeCombo->currentIndex() : 2);
         settings.setValue("hierarchyStyle", m_styleCombo->currentText());
         settings.setValue("indentDescriptions", m_indentDescCheck->isChecked());
 

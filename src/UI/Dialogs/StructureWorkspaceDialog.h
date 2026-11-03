@@ -13,7 +13,6 @@
 #include <optional>
 #include <vector>
 #include <QAction>
-#include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -21,7 +20,6 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QSortFilterProxyModel>
 #include <QSplitter>
 #include <QStandardItemModel>
@@ -171,12 +169,8 @@ namespace PointerFinder2::UI {
         QPushButton* m_refreshRamBtn = nullptr;
         QLabel* m_ramStatusLabel = nullptr;
 
-        // Memory View Radios
-        QRadioButton* m_view8BitRadio = nullptr;
-        QRadioButton* m_view16BitRadio = nullptr;
-        QRadioButton* m_view32BitRadio = nullptr;
-        QRadioButton* m_view32BitBERadio = nullptr;
-        QButtonGroup* m_viewModeGroup = nullptr;
+        // Memory View Mode Combo
+        QComboBox* m_viewModeCombo = nullptr;
 
         Widgets::MemoryViewerWidget* m_memoryViewer = nullptr;
 

@@ -125,7 +125,7 @@ namespace PointerFinder2::Core {
         std::map<QString, std::vector<std::shared_ptr<CodeNoteNode>>> mergeableGroups;
         std::vector<std::shared_ptr<CodeNoteNode>> nonMergeableNodes;
 
-        QRegularExpression offsetRegex("^(\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression offsetRegex("^((?:\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+)", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& node : nodes) {
             auto match = offsetRegex.match(node->content);
@@ -149,7 +149,7 @@ namespace PointerFinder2::Core {
             }
         }
 
-        QRegularExpression contentRegex("^(\\|[\\+\\-]?0x|[\\+\\-]0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression contentRegex("^((?:\\|[\\+\\-]?|[\\+\\-])0x)([0-9a-fA-F]+)(.*)", QRegularExpression::CaseInsensitiveOption);
 
         for (const auto& [key, group] : mergeableGroups) {
             auto representative = group.front();

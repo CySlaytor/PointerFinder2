@@ -20,7 +20,9 @@ namespace PointerFinder2::UI::Widgets {
             Mode8Bit,
             Mode16Bit,
             Mode32Bit,
-            Mode32BitBE
+            Mode32BitBE,
+            ModeFloat,
+            ModeFloatBE
         };
 
         struct HighlightInfo {

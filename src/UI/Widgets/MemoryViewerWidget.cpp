@@ -1,6 +1,8 @@
 #include "MemoryViewerWidget.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
@@ -116,6 +118,10 @@ namespace PointerFinder2::UI::Widgets {
         case ViewMode::Mode32BitBE:
             hexBlockWidth = (4 * (m_charWidth * 8)) + (3 * (m_charWidth * 2));
             break;
+        case ViewMode::ModeFloat:
+        case ViewMode::ModeFloatBE:
+            hexBlockWidth = (4 * (m_charWidth * 9)) + (3 * (m_charWidth * 2));
+            break;
         }
 
         m_asciiColX = m_hexColX + hexBlockWidth + 15;
@@ -126,8 +132,13 @@ namespace PointerFinder2::UI::Widgets {
         m_memoryBaseAddress = memoryBaseAddress;
         m_isBigEndian = isBigEndian;
 
-        if (m_isBigEndian && m_viewMode == ViewMode::Mode32Bit) {
-            m_viewMode = ViewMode::Mode32BitBE;
+        if (m_isBigEndian) {
+            if (m_viewMode == ViewMode::Mode32Bit) {
+                m_viewMode = ViewMode::Mode32BitBE;
+            }
+            else if (m_viewMode == ViewMode::ModeFloat) {
+                m_viewMode = ViewMode::ModeFloatBE;
+            }
         }
 
         if (m_selectedAddress < m_memoryBaseAddress || 
@@ -289,7 +300,7 @@ namespace PointerFinder2::UI::Widgets {
         size_t offset = address - m_memoryBaseAddress;
         if (offset + 3 >= m_memoryData.size()) return 0;
 
-        bool isBE = (m_viewMode == ViewMode::Mode32BitBE) || m_isBigEndian;
+        bool isBE = (m_viewMode == ViewMode::Mode32BitBE) || (m_viewMode == ViewMode::ModeFloatBE) || m_isBigEndian;
         if (isBE) {
             return (static_cast<uint32_t>(m_memoryData[offset]) << 24) |
                    (static_cast<uint32_t>(m_memoryData[offset + 1]) << 16) |
@@ -450,7 +461,8 @@ namespace PointerFinder2::UI::Widgets {
             }
         }
         else {
-            int dwordWidth = m_charWidth * 8;
+            int dwordWidth = (m_viewMode == ViewMode::ModeFloat || m_viewMode == ViewMode::ModeFloatBE)
+                             ? m_charWidth * 9 : m_charWidth * 8;
             int dwordSpacing = m_charWidth * 2;
             for (int i = 0; i < 4; ++i) {
                 int dx = m_hexColX + i * (dwordWidth + dwordSpacing);
@@ -465,7 +477,8 @@ namespace PointerFinder2::UI::Widgets {
             int charIdx = (pos.x() - m_asciiColX) / m_charWidth;
             if (charIdx >= 0 && charIdx < 16) {
                 uint32_t raw = rowAddress + charIdx;
-                if (m_viewMode == ViewMode::Mode32Bit || m_viewMode == ViewMode::Mode32BitBE) {
+                if (m_viewMode == ViewMode::Mode32Bit || m_viewMode == ViewMode::Mode32BitBE ||
+                    m_viewMode == ViewMode::ModeFloat || m_viewMode == ViewMode::ModeFloatBE) {
                     return raw & ~3U;
                 }
                 if (m_viewMode == ViewMode::Mode16Bit) {
@@ -772,6 +785,15 @@ namespace PointerFinder2::UI::Widgets {
                 painter.drawText(wx, m_headerHeight - 6, wordHeaders[i]);
             }
         }
+        else if (m_viewMode == ViewMode::ModeFloat || m_viewMode == ViewMode::ModeFloatBE) {
+            int dwordWidth = m_charWidth * 9;
+            int dwordSpacing = m_charWidth * 2;
+            const char* dwordHeaders[] = { "0", "4", "8", "C" };
+            for (int i = 0; i < 4; ++i) {
+                int dx = m_hexColX + i * (dwordWidth + dwordSpacing);
+                painter.drawText(dx, m_headerHeight - 6, dwordHeaders[i]);
+            }
+        }
         else {
             int dwordWidth = m_charWidth * 8;
             int dwordSpacing = m_charWidth * 2;
@@ -919,6 +941,99 @@ namespace PointerFinder2::UI::Widgets {
                             }
                             painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                         }
+                    }
+                }
+            }
+            else if (m_viewMode == ViewMode::ModeFloat || m_viewMode == ViewMode::ModeFloatBE) {
+                int dwordWidth = m_charWidth * 9;
+                int dwordSpacing = m_charWidth * 2;
+                bool isBE = (m_viewMode == ViewMode::ModeFloatBE) || m_isBigEndian;
+
+                for (int i = 0; i < 4; ++i) {
+                    uint32_t dwordAddr = rowAddress + (i * 4);
+                    int dx = m_hexColX + i * (dwordWidth + dwordSpacing);
+
+                    if (dataOffset + (i * 4) + 3 < m_memoryData.size()) {
+                        // Tier 1: Array background
+                        for (const auto& arr : m_definedArrays) {
+                            if ((dwordAddr + 3 >= arr.startAddress) && (dwordAddr <= arr.endAddress)) {
+                                painter.fillRect(QRect(dx - 1, y, dwordWidth + 2, m_lineHeight), arrayBgColor);
+                                break;
+                            }
+                        }
+
+                        // Active Shift+Click Range highlight
+                        if (m_hasRangeSelection && (dwordAddr + 3 >= m_rangeStart) && (dwordAddr <= m_rangeEnd)) {
+                            painter.fillRect(QRect(dx - 1, y, dwordWidth + 2, m_lineHeight), rangeSelectBgColor);
+                        }
+
+                        bool childActive = false;
+                        for (uint32_t k = 0; k < 4; ++k) {
+                            auto itK = m_highlights.find(dwordAddr + k);
+                            if (itK != m_highlights.end() && itK->second.isChildOfActive) {
+                                childActive = true;
+                                break;
+                            }
+                        }
+                        if (childActive) {
+                            painter.fillRect(QRect(dx - 1, y, dwordWidth + 2, m_lineHeight), activeContextBg);
+                        }
+
+                        if (m_hasSelection && (m_selectedAddress & ~3U) == dwordAddr) {
+                            QRect selRect(dx - 2, y, dwordWidth + 4, m_lineHeight);
+                            painter.fillRect(selRect, selectionBgColor);
+                            painter.setPen(selectionBorderColor);
+                            painter.drawRect(selRect);
+                        }
+
+                        uint32_t rawVal = 0;
+                        if (isBE) {
+                            rawVal = (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4)]) << 24) |
+                                     (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4) + 1]) << 16) |
+                                     (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4) + 2]) << 8) |
+                                     (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4) + 3]));
+                        }
+                        else {
+                            rawVal = (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4) + 3]) << 24) |
+                                     (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4) + 2]) << 16) |
+                                     (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4) + 1]) << 8) |
+                                     (static_cast<uint32_t>(m_memoryData[dataOffset + (i * 4)]));
+                        }
+
+                        float fVal = 0.0f;
+                        std::memcpy(&fVal, &rawVal, sizeof(float));
+
+                        QString floatStr;
+                        if (rawVal == 0) {
+                            floatStr = "0.0";
+                        }
+                        else if (std::isnan(fVal)) {
+                            floatStr = "NaN";
+                        }
+                        else if (std::isinf(fVal)) {
+                            floatStr = (fVal > 0) ? "+Inf" : "-Inf";
+                        }
+                        else if (std::abs(fVal) >= 1e7f || (std::abs(fVal) < 1e-4f && std::abs(fVal) > 0.0f)) {
+                            floatStr = QString::number(fVal, 'e', 2);
+                        }
+                        else {
+                            floatStr = QString::number(fVal, 'f', (std::abs(fVal) >= 100.0f) ? 2 : 3);
+                            if (floatStr.contains('.')) {
+                                while (floatStr.endsWith('0') && !floatStr.endsWith(".0")) {
+                                    floatStr.chop(1);
+                                }
+                            }
+                        }
+
+                        auto it = m_highlights.find(dwordAddr);
+                        if (it != m_highlights.end()) {
+                            painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                        }
+                        else {
+                            painter.setPen(rawVal == 0 ? QColor(100, 100, 100) : textColor);
+                        }
+
+                        painter.drawText(dx, y + m_charHeight, floatStr);
                     }
                 }
             }
