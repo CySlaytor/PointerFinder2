@@ -1,11 +1,11 @@
 #include "SettingsDialog.h"
 
-#include "../../Core/CodeNoteHelper.h"
-#include "../../Core/SettingsManager.h"
-#include "../../Models/CodeNoteSettings.h"
-#include "../../Models/GlobalSettings.h"
-#include "../MainWindow.h"
-#include "../Styles/ThemeManager.h"
+#include "Core/CodeNotes/CodeNoteHelper.h"
+#include "Core/Storage/SettingsManager.h"
+#include "Models/CodeNoteSettings.h"
+#include "Models/GlobalSettings.h"
+#include "UI/MainWindow.h"
+#include "UI/Common/ThemeManager.h"
 
 #include <QCoreApplication>
 #include <QDir>

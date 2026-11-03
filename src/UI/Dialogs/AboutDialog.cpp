@@ -1,7 +1,7 @@
 #include "AboutDialog.h"
 
-#include "../../Models/GlobalSettings.h"
-#include "../Styles/ThemeManager.h"
+#include "Models/GlobalSettings.h"
+#include "UI/Common/ThemeManager.h"
 
 #include <QFrame>
 #include <QHBoxLayout>

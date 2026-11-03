@@ -187,20 +187,20 @@ namespace PointerFinder2::UI {
         paramGrid->setHorizontalSpacing(10);
         paramGrid->setVerticalSpacing(4);
 
-        m_maxLevelSpin = new CustomSpinBox(this, 5);
+        m_maxLevelSpin = new Widgets::CustomSpinBox(this, 5);
         m_maxLevelSpin->setRange(1, 50);
         m_maxLevelSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>The maximum depth (number of pointer jumps) to search. Deeper levels scan deeper but increase complexity exponentially.</td></tr></table></body>");
 
-        m_candidatesPerLevelSpin = new CustomSpinBox(this, 5);
+        m_candidatesPerLevelSpin = new Widgets::CustomSpinBox(this, 5);
         m_candidatesPerLevelSpin->setRange(1, 1000);
         m_candidatesPerLevelSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Limits how many parent candidates are evaluated at each level. Low values (e.g., 3 to 7) dramatically speed up scans and favor logically sound paths.</td></tr></table></body>");
 
-        m_maxCandidatesSpin = new ThousandsSpinBox(this, 1000000);
+        m_maxCandidatesSpin = new Widgets::ThousandsSpinBox(this, 1000000);
         m_maxCandidatesSpin->setRange(1, 100000000);
         m_maxCandidatesSpin->setSingleStep(100000);
         m_maxCandidatesSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Clamps the maximum number of intermediate nodes generated during BFS search to protect RAM resources.</td></tr></table></body>");
 
-        m_maxOffsetSpin = new HexSpinBox(this, 0x1000);
+        m_maxOffsetSpin = new Widgets::HexSpinBox(this, 0x1000);
         m_maxOffsetSpin->setRange(0, 0x7FFFFFFF);
         m_maxOffsetSpin->setSingleStep(1);
         m_maxOffsetSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>The maximum distance allowed between pointer addresses. Match this with system limits (e.g., FFF for 4KB boundaries).</td></tr></table></body>");
@@ -208,7 +208,7 @@ namespace PointerFinder2::UI {
         m_useLastOffsetHintCheck = new QCheckBox("Last Offset Hint (Hex)", this);
         m_useLastOffsetHintCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Accelerates the search by forcing the first jump (Level 1) to use this exact offset value.</td></tr></table></body>");
 
-        m_lastOffsetHintSpin = new HexSpinBox(this, 0x1000);
+        m_lastOffsetHintSpin = new Widgets::HexSpinBox(this, 0x1000);
         m_lastOffsetHintSpin->setRange(0, 0x7FFFFFFF);
         m_lastOffsetHintSpin->setSingleStep(1);
         m_lastOffsetHintSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'>Accelerates the search by forcing the first jump (Level 1) to use this exact offset value.</td></tr></table></body>");
@@ -216,7 +216,7 @@ namespace PointerFinder2::UI {
         m_detectArraysCheck = new QCheckBox("Detect Array Lists (Hex)", this);
         m_detectArraysCheck->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'><b>Experimental:</b> Post-processes the static base addresses to check if they belong to contiguous structures or array sets. Excessively high ranges can cause instability.</td></tr></table></body>");
 
-        m_arrayRangeSpin = new HexSpinBox(this, 0x80);
+        m_arrayRangeSpin = new Widgets::HexSpinBox(this, 0x80);
         m_arrayRangeSpin->setRange(4, 0xFFFF);
         m_arrayRangeSpin->setToolTip("<body style='margin:0; padding:0;'><table border='0' cellpadding='0' cellspacing='0' style='margin:0; padding:0;' width='250'><tr><td style='margin:0; padding:0; line-height: 125%;'><b>Experimental:</b> Post-processes the static base addresses to check if they belong to contiguous structures or array sets. Excessively high ranges can cause instability.</td></tr></table></body>");
 

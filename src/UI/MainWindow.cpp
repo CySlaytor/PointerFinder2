@@ -1,27 +1,27 @@
 #define NOMINMAX 
 #include "MainWindow.h"
 
-#include "../Common/EndianUtils.h"
-#include "../Core/ArrayDetector.h"
-#include "../Core/CodeNoteHelper.h"
-#include "../Core/ExportService.h"
-#include "../Core/ProcessScanner.h"
-#include "../Core/RangeFinderRegistry.h"
-#include "../Core/SessionManager.h"
-#include "../Core/SettingsManager.h"
-#include "../Core/SoundManager.h"
-#include "../Emulators/EmulatorProfileRegistry.h"
-#include "../Models/CodeNoteSettings.h"
-#include "../Models/SessionData.h"
-#include "Dialogs/AboutDialog.h"
-#include "Dialogs/AddressSearchDialog.h"
-#include "Dialogs/CodeNoteConverterDialog.h"
-#include "Dialogs/SettingsDialog.h"
-#include "Dialogs/StateCaptureDialog.h"
-#include "Dialogs/StructureWorkspaceDialog.h"
-#include "Dialogs/UpdateDialog.h"
-#include "Styles/ThemeManager.h"
-#include "Widgets/PointerResultsHeaderView.h"
+#include "Common/EndianUtils.h"
+#include "Core/Scanning/ArrayDetector.h"
+#include "Core/CodeNotes/CodeNoteHelper.h"
+#include "Core/CodeNotes/ExportService.h"
+#include "Core/Scanning/ProcessScanner.h"
+#include "Core/System/RangeFinderRegistry.h"
+#include "Core/Storage/SessionManager.h"
+#include "Core/Storage/SettingsManager.h"
+#include "Core/System/SoundManager.h"
+#include "Emulators/EmulatorProfileRegistry.h"
+#include "Models/CodeNoteSettings.h"
+#include "Models/SessionData.h"
+#include "UI/Dialogs/AboutDialog.h"
+#include "UI/Dialogs/AddressSearchDialog.h"
+#include "UI/Dialogs/CodeNoteConverterDialog.h"
+#include "UI/Dialogs/SettingsDialog.h"
+#include "UI/Dialogs/StateCaptureDialog.h"
+#include "UI/StructureWorkspace/StructureWorkspaceDialog.h"
+#include "UI/Dialogs/UpdateDialog.h"
+#include "UI/Common/ThemeManager.h"
+#include "UI/Views/PointerResultsHeaderView.h"
 
 #include <windows.h>
 #include <QApplication>
@@ -67,6 +67,10 @@ namespace PointerFinder2::UI {
         setupUI();
         setUIStateDetached();
 
+        // Install hardware-accelerated symmetric fade-in and fade-out filter for tooltips
+        m_tooltipFilter = new TooltipAnimationFilter(this);
+        qApp->installEventFilter(m_tooltipFilter);
+
         // Install application-level event filter so pasting triggers anywhere launches converter reliably
         qApp->installEventFilter(this);
 
@@ -106,6 +110,9 @@ namespace PointerFinder2::UI {
     MainWindow::~MainWindow() {
         if (qApp) {
             qApp->removeEventFilter(this);
+            if (m_tooltipFilter) {
+                qApp->removeEventFilter(m_tooltipFilter);
+            }
         }
         m_arrayWatcher.cancel();
         m_arrayWatcher.waitForFinished();
@@ -170,8 +177,12 @@ namespace PointerFinder2::UI {
 
         mainLayout->addWidget(m_mainTabWidget, 1);
 
-        setupBottomPanel();
-        mainLayout->addWidget(m_bottomPanel);
+        m_scanControlPanel = new Views::ScanControlPanel(this);
+        connect(m_scanControlPanel, &Views::ScanControlPanel::stateBasedScanClicked, this, &MainWindow::onStateBasedScanClicked);
+        connect(m_scanControlPanel, &Views::ScanControlPanel::filterClicked, this, &MainWindow::onFilterClicked);
+        connect(m_scanControlPanel, &Views::ScanControlPanel::stopScanClicked, this, &MainWindow::onStopScanClicked);
+
+        mainLayout->addWidget(m_scanControlPanel);
 
         setCentralWidget(centralWidget);
         setupStatusBar();
@@ -292,43 +303,6 @@ namespace PointerFinder2::UI {
         m_viewStack->setCurrentWidget(m_emptyStateWidget);
     }
 
-    void setupBottomPanel(); // declaration for helper layout
-    void MainWindow::setupBottomPanel() {
-        m_bottomPanel = new QWidget(this);
-        auto* bottomLayout = new QVBoxLayout(m_bottomPanel);
-        bottomLayout->setContentsMargins(5, 5, 5, 5);
-
-        auto* progressRow = new QHBoxLayout();
-        m_timeLabel = new QLabel("Time: 00:00.0", m_bottomPanel);
-        m_progressBar = new QProgressBar(m_bottomPanel);
-        m_progressBar->setValue(0);
-        m_progressLabel = new QLabel("0 / 0", m_bottomPanel);
-        m_stopScanButton = new QPushButton("Stop", m_bottomPanel);
-
-        progressRow->addWidget(m_timeLabel);
-        progressRow->addWidget(m_progressBar, 1);
-        progressRow->addWidget(m_progressLabel);
-        progressRow->addWidget(m_stopScanButton);
-        bottomLayout->addLayout(progressRow);
-
-        m_scanButtonsWidget = new QWidget(m_bottomPanel);
-        auto* scanButtonsLayout = new QHBoxLayout(m_scanButtonsWidget);
-        scanButtonsLayout->setContentsMargins(0, 0, 0, 0);
-
-        m_stateScanButton = new QPushButton("State-Based Scan", m_scanButtonsWidget);
-        m_filterButton = new QPushButton("Filter Dynamic Paths", m_scanButtonsWidget);
-        m_stateScanButton->setFixedHeight(35);
-        m_filterButton->setFixedHeight(35);
-
-        scanButtonsLayout->addWidget(m_stateScanButton);
-        scanButtonsLayout->addWidget(m_filterButton);
-        bottomLayout->addWidget(m_scanButtonsWidget);
-
-        connect(m_stateScanButton, &QPushButton::clicked, this, &MainWindow::onStateBasedScanClicked);
-        connect(m_filterButton, &QPushButton::clicked, this, &MainWindow::onFilterClicked);
-        connect(m_stopScanButton, &QPushButton::clicked, this, &MainWindow::onStopScanClicked);
-    }
-
     void MainWindow::setupMenuBar() {
         auto* bar = menuBar();
 
@@ -427,78 +401,6 @@ namespace PointerFinder2::UI {
     }
 
     bool MainWindow::eventFilter(QObject* obj, QEvent* event) {
-#ifdef Q_OS_WIN
-        // Hardware-accelerated symmetric fade-in and fade-out for all application tooltips
-        if (obj && obj->isWidgetType()) {
-            auto* w = static_cast<QWidget*>(obj);
-            if ((w->windowFlags() & Qt::WindowType_Mask) == Qt::ToolTip) {
-                if (event->type() == QEvent::Show) {
-                    auto* existingAnim = w->findChild<QPropertyAnimation*>("tooltip_anim");
-                    if (existingAnim) {
-                        existingAnim->stop();
-                        delete existingAnim;
-                    }
-
-                    w->setProperty("pf_closing", false);
-                    w->setProperty("pf_allow_close", false);
-                    w->setWindowOpacity(0.0);
-
-                    auto* anim = new QPropertyAnimation(w, "windowOpacity", w);
-                    anim->setObjectName("tooltip_anim");
-                    anim->setDuration(120);
-                    anim->setStartValue(0.0);
-                    anim->setEndValue(1.0);
-                    anim->setEasingCurve(QEasingCurve::OutQuad);
-                    anim->start(QAbstractAnimation::DeleteWhenStopped);
-                }
-                else if (event->type() == QEvent::Close) {
-                    if (w->property("pf_allow_close").toBool()) {
-                        return false;
-                    }
-
-                    event->ignore();
-
-                    if (!w->property("pf_closing").toBool()) {
-                        w->setProperty("pf_closing", true);
-
-                        auto* existingAnim = w->findChild<QPropertyAnimation*>("tooltip_anim");
-                        if (existingAnim) {
-                            existingAnim->stop();
-                            delete existingAnim;
-                        }
-
-                        if (w->windowOpacity() <= 0.05) {
-                            w->setProperty("pf_allow_close", true);
-                            w->close();
-                            w->deleteLater();
-                            return true;
-                        }
-
-                        auto* anim = new QPropertyAnimation(w, "windowOpacity", w);
-                        anim->setObjectName("tooltip_anim");
-                        anim->setDuration(140);
-                        anim->setStartValue(w->windowOpacity());
-                        anim->setEndValue(0.0);
-                        anim->setEasingCurve(QEasingCurve::OutQuad);
-                        connect(anim, &QPropertyAnimation::finished, w, [w]() {
-                            w->setProperty("pf_allow_close", true);
-                            w->close();
-                            w->deleteLater();
-                        });
-                        anim->start(QAbstractAnimation::DeleteWhenStopped);
-                    }
-                    return true;
-                }
-                else if (event->type() == QEvent::DeferredDelete) {
-                    // Prevent Qt from destroying the tooltip widget immediately before the fade-out animation completes
-                    if (!w->property("pf_allow_close").toBool()) {
-                        return true;
-                    }
-                }
-            }
-        }
-#endif
-
         if (event->type() == QEvent::KeyPress) {
             QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
             if (keyEvent->matches(QKeySequence::Paste)) {
@@ -632,17 +534,12 @@ namespace PointerFinder2::UI {
             loadAct->setEnabled(false);
         }
 
-        m_stateScanButton->setEnabled(false);
-        m_filterButton->setEnabled(false);
+        m_scanControlPanel->setAttached(false, false);
         switchToScanUI(false);
     }
 
     void MainWindow::switchToScanUI(bool scanningActive, const QString& customMessage) {
-        m_scanButtonsWidget->setVisible(!scanningActive);
-        m_progressBar->setVisible(scanningActive);
-        m_stopScanButton->setVisible(scanningActive);
-        m_progressLabel->setVisible(scanningActive);
-        m_timeLabel->setVisible(scanningActive);
+        m_scanControlPanel->setScanningActive(scanningActive);
 
         bool attached = m_currentManager && m_currentManager->isAttached();
         m_resultCountLabel->setVisible(!scanningActive && m_resultsManager.hasResults());
@@ -655,8 +552,7 @@ namespace PointerFinder2::UI {
         }
         else {
             menuBar()->setEnabled(true);
-            m_stateScanButton->setEnabled(attached);
-            m_filterButton->setEnabled(attached && m_resultsManager.hasResults());
+            m_scanControlPanel->setAttached(attached, m_resultsManager.hasResults());
         }
     }
 
@@ -1086,7 +982,7 @@ namespace PointerFinder2::UI {
         switchToScanUI(true, message);
         m_scanStopwatch.restart();
         m_scanTimer.start();
-        m_progressBar->setValue(0);
+        m_scanControlPanel->resetProgress();
     }
 
     void MainWindow::onOperationFinished(const QString& finalStatusMessage) {
@@ -1101,28 +997,15 @@ namespace PointerFinder2::UI {
         }
 
         int max = static_cast<int>(std::min(report.maxValue > 0 ? report.maxValue : static_cast<int64_t>(m_scanCoordinator.getLastScanParams().maxCandidates), static_cast<int64_t>(std::numeric_limits<int>::max())));
-        m_progressBar->setMaximum(max);
 
         int64_t current = report.currentValue > 0 ? report.currentValue : report.foundCount;
         int targetValue = static_cast<int>(std::min(current, static_cast<int64_t>(max)));
 
-        animateProgressBar(targetValue);
-
-        m_progressLabel->setText(report.maxValue > 0
+        QString progressText = report.maxValue > 0
             ? QString("%1 / %2").arg(report.currentValue).arg(report.maxValue)
-            : QString::number(report.foundCount + report.partialCount));
-    }
+            : QString::number(report.foundCount + report.partialCount);
 
-    void MainWindow::animateProgressBar(int targetValue) {
-        if (!m_progressAnimation) {
-            m_progressAnimation = new QPropertyAnimation(m_progressBar, "value", this);
-        }
-        m_progressAnimation->stop();
-        m_progressAnimation->setDuration(120);
-        m_progressAnimation->setStartValue(m_progressBar->value());
-        m_progressAnimation->setEndValue(targetValue);
-        m_progressAnimation->setEasingCurve(QEasingCurve::OutQuad);
-        m_progressAnimation->start();
+        m_scanControlPanel->setProgress(targetValue, max, progressText);
     }
 
     void MainWindow::onScanCompleted(const std::vector<PointerPath>& results, qint64 durationMs, bool wasCancelled) {
@@ -1131,9 +1014,7 @@ namespace PointerFinder2::UI {
         auto lastParams = m_scanCoordinator.getLastScanParams();
         if (!wasCancelled && lastParams.detectArrays && m_multiScanState.hasState(0) && !results.empty()) {
             switchToScanUI(true, "Detecting array lists...");
-            m_progressBar->setMaximum(0);
-            m_progressBar->setValue(0);
-            m_progressLabel->setText("Running array analysis...");
+            m_scanControlPanel->setIndeterminate(true, "Running array analysis...");
 
             m_lastScanDurationMs = durationMs;
             m_lastScanWasCancelled = wasCancelled;
@@ -1256,7 +1137,7 @@ namespace PointerFinder2::UI {
             int seconds = static_cast<int>((elapsed % 60000) / 1000);
             int ms = static_cast<int>((elapsed % 1000) / 100);
 
-            m_timeLabel->setText(QString("Time: %1:%2.%3")
+            m_scanControlPanel->setTimeText(QString("Time: %1:%2.%3")
                 .arg(minutes, 2, 10, QChar('0'))
                 .arg(seconds, 2, 10, QChar('0'))
                 .arg(ms));

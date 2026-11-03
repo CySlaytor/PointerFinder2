@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../Core/ProcessScanner.h"
+#include "Core/Scanning/ProcessScanner.h"
 
 #include <QDialog>
 #include <QListWidget>

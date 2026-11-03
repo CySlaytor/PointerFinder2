@@ -1,7 +1,7 @@
 #include "CodeNoteConverterDialog.h"
 
-#include "../../Core/CodeNoteHelper.h"
-#include "../../Models/CodeNoteSettings.h"
+#include "Core/CodeNotes/CodeNoteHelper.h"
+#include "Models/CodeNoteSettings.h"
 
 #include <QApplication>
 #include <QClipboard>

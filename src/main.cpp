@@ -1,10 +1,10 @@
-#include "Core/SettingsManager.h"
-#include "Core/SoundManager.h"
+#include "Core/Storage/SettingsManager.h"
+#include "Core/System/SoundManager.h"
 #include "Models/GlobalSettings.h"
 #include "Models/PointerPath.h"
 #include "Models/ScanProgressReport.h"
 #include "UI/MainWindow.h"
-#include "UI/Styles/ThemeManager.h"
+#include "UI/Common/ThemeManager.h"
 
 #include <QApplication>
 

@@ -1,17 +1,20 @@
 #pragma once
-#include "../Core/MultiScanState.h"
-#include "../Core/ResultsManager.h"
-#include "../Core/ScanCoordinator.h"
-#include "../Core/UpdateChecker.h"
-#include "../Emulators/EmulatorProfile.h"
-#include "../Emulators/IEmulatorManager.h"
-#include "../Models/PointerPath.h"
-#include "Dialogs/CodeNoteConverterDialog.h"
-#include "Dialogs/EmulatorSelectionDialog.h"
-#include "Dialogs/StructureWorkspaceDialog.h"
-#include "Widgets/ArrayDetectionWidget.h"
-#include "Widgets/BookmarksWidget.h"
-#include "Widgets/PointerResultsModel.h"
+
+#include "Core/Scanning/MultiScanState.h"
+#include "Core/Scanning/ResultsManager.h"
+#include "Core/Scanning/ScanCoordinator.h"
+#include "Core/System/UpdateChecker.h"
+#include "Emulators/EmulatorProfile.h"
+#include "Emulators/IEmulatorManager.h"
+#include "Models/PointerPath.h"
+#include "UI/Common/TooltipAnimationFilter.h"
+#include "UI/Dialogs/CodeNoteConverterDialog.h"
+#include "UI/Dialogs/EmulatorSelectionDialog.h"
+#include "UI/StructureWorkspace/StructureWorkspaceDialog.h"
+#include "UI/Views/ScanControlPanel.h"
+#include "UI/Views/ArrayDetectionWidget.h"
+#include "UI/Views/BookmarksWidget.h"
+#include "UI/Views/PointerResultsModel.h"
 
 #include <QAction>
 #include <QElapsedTimer>
@@ -21,10 +24,8 @@
 #include <QLabel>
 #include <QMainWindow>
 #include <QPointer>
-#include <QProgressBar>
 #include <QProgressDialog>
 #include <QPropertyAnimation>
-#include <QPushButton>
 #include <QStackedWidget>
 #include <QTableView>
 #include <QTabWidget>
@@ -109,15 +110,7 @@ namespace PointerFinder2::UI {
 		Controls::BookmarksWidget* m_bookmarksWidget = nullptr;
 		Controls::ArrayDetectionWidget* m_arrayDetectionWidget = nullptr;
 
-		QWidget* m_bottomPanel = nullptr;
-		QProgressBar* m_progressBar = nullptr;
-		QPushButton* m_stopScanButton = nullptr;
-		QLabel* m_progressLabel = nullptr;
-		QLabel* m_timeLabel = nullptr;
-
-		QWidget* m_scanButtonsWidget = nullptr;
-		QPushButton* m_stateScanButton = nullptr;
-		QPushButton* m_filterButton = nullptr;
+		Views::ScanControlPanel* m_scanControlPanel = nullptr;
 
 		QLabel* m_statusLabel = nullptr;
 		QLabel* m_baseAddressLabel = nullptr;
@@ -139,7 +132,7 @@ namespace PointerFinder2::UI {
 		QPointer<QDialog> m_staticRangeFinderDialog;
 		QPointer<QProgressDialog> m_updateProgressDialog;
 
-		QPropertyAnimation* m_progressAnimation = nullptr;
+		TooltipAnimationFilter* m_tooltipFilter = nullptr;
 		QFutureWatcher<Controls::ArrayDetectionResult> m_arrayWatcher;
 
 		qint64 m_lastScanDurationMs = 0;
@@ -151,7 +144,6 @@ namespace PointerFinder2::UI {
 
 		void setupEmptyStateView();
 		void setupResultsTableView();
-		void setupBottomPanel();
 
 		bool performAttachment(const Emulators::EmulatorProfile& profile, uint32_t processId);
 		void detachAndReset();
@@ -161,7 +153,6 @@ namespace PointerFinder2::UI {
 		void parseCommandLineArgs(const QStringList& args);
 		void autoAttachOnRestart(uint32_t pid, const QString& targetName);
 
-		void animateProgressBar(int targetValue);
 		void fadeTransitionToWidget(QWidget* targetWidget);
 		void finalizeScanStatus(int resultsCount, qint64 durationMs, bool wasCancelled);
 

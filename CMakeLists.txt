@@ -49,6 +49,13 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/resources" PREFIX "Resources" FIL
 if(WIN32)
     add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${RESOURCES})
 
+    # Add src/ and subsystem roots to include directories to allow clean modular imports
+    target_include_directories(${PROJECT_NAME} PRIVATE 
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/Core"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/UI"
+    )
+
     # Inject compile definitions dynamically into CL.exe and RC.exe
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         VERSION_STRING="${PROJECT_VERSION}"
@@ -107,6 +114,12 @@ if(WIN32)
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${RESOURCES})
     
+    target_include_directories(${PROJECT_NAME} PRIVATE 
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/Core"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/UI"
+    )
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         VERSION_STRING="${PROJECT_VERSION}"
     )
