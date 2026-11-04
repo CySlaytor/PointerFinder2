@@ -63,6 +63,12 @@ namespace PointerFinder2::UI {
         void onCopySelectedAddress();
         void onCopySelectedValue();
 
+        // Dedicated clipboard copy slots for Memory Viewer
+        void onCopyViewerAsRaFormat();
+        void onCopyViewerAsCodeNote();
+        void onCopyViewerAddress();
+        void onCopyViewerValue();
+
         // Panel 3 & Synchronization slots
         void onToggleCodeNotePanelClicked();
         void onFixHierarchyClicked();

@@ -31,6 +31,23 @@ namespace PointerFinder2::Core {
         return true;
     }
 
+    bool ExportService::copyAsRetroAchievementsFormat(const std::vector<PointerPath>& paths,
+                                                      Emulators::IEmulatorManager* manager) {
+        if (paths.empty() || !manager) return false;
+
+        QStringList raStrings;
+        for (const auto& path : paths) {
+            QString trigger = path.toRetroAchievementsString(manager);
+            if (!trigger.isEmpty()) {
+                raStrings.append(trigger);
+            }
+        }
+
+        if (raStrings.isEmpty()) return false;
+        QApplication::clipboard()->setText(raStrings.join("_"));
+        return true;
+    }
+
     bool ExportService::copyAsCodeNote(const PointerPath& path,
                                        const Emulators::IEmulatorManager* manager) {
         CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();

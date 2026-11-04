@@ -1194,13 +1194,23 @@ namespace PointerFinder2::UI {
     void MainWindow::onCopyAsRAFormat() {
         QItemSelectionModel* select = m_tableView->selectionModel();
         QModelIndexList rows = select->selectedRows();
-        if (static_cast<int>(rows.size()) != 1 || !m_currentManager) return;
+        if (rows.empty() || !m_currentManager) return;
 
-        int row = rows.first().row();
         const auto& results = m_resultsManager.getCurrentResults();
-        if (row >= 0 && row < static_cast<int>(results.size())) {
-            if (ExportService::copyAsRetroAchievementsFormat(results[row], m_currentManager.get())) {
+        std::vector<PointerPath> selected;
+        for (const auto& idx : rows) {
+            int row = idx.row();
+            if (row >= 0 && row < static_cast<int>(results.size())) {
+                selected.push_back(results[row]);
+            }
+        }
+
+        if (ExportService::copyAsRetroAchievementsFormat(selected, m_currentManager.get())) {
+            if (selected.size() == 1) {
                 updateStatus("Copied path in RetroAchievements format.");
+            }
+            else {
+                updateStatus(QString("Copied %1 paths in RetroAchievements format.").arg(selected.size()));
             }
         }
     }

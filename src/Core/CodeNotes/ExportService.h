@@ -17,6 +17,9 @@ namespace PointerFinder2::Core {
         static bool copyAsRetroAchievementsFormat(const DataModels::PointerPath& path,
                                                   Emulators::IEmulatorManager* manager);
 
+        static bool copyAsRetroAchievementsFormat(const std::vector<DataModels::PointerPath>& paths,
+                                                  Emulators::IEmulatorManager* manager);
+
         static bool copyAsCodeNote(const DataModels::PointerPath& path,
                                    const Emulators::IEmulatorManager* manager);
     };

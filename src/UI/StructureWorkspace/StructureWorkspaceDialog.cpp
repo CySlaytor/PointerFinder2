@@ -238,11 +238,11 @@ namespace PointerFinder2::UI {
             m_hierarchyWidget->removeDocumentationAtAddress(address, m_currentBaseAddress, m_snapshotMemory, rootArr);
         });
 
-        // Connect clipboard copy signals from Memory Viewer
-        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyAddressTriggered, this, &StructureWorkspaceDialog::onCopySelectedAddress);
-        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyValueTriggered, this, &StructureWorkspaceDialog::onCopySelectedValue);
-        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyRaTriggered, this, &StructureWorkspaceDialog::onCopySelectedAsRaFormat);
-        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyCodeNoteTriggered, this, &StructureWorkspaceDialog::onCopySelectedAsCodeNote);
+        // Connect clipboard copy signals from Memory Viewer directly to dedicated viewer copy slots
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyAddressTriggered, this, &StructureWorkspaceDialog::onCopyViewerAddress);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyValueTriggered, this, &StructureWorkspaceDialog::onCopyViewerValue);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyRaTriggered, this, &StructureWorkspaceDialog::onCopyViewerAsRaFormat);
+        connect(m_memoryViewer, &Widgets::MemoryViewerWidget::copyCodeNoteTriggered, this, &StructureWorkspaceDialog::onCopyViewerAsCodeNote);
 
         // Hierarchy Widget Connections
         connect(m_hierarchyWidget, &StructureHierarchyWidget::addVariableClicked, this, &StructureWorkspaceDialog::onAddVariableClicked);
@@ -650,17 +650,54 @@ namespace PointerFinder2::UI {
                 }
             }
             if (!raStrings.isEmpty()) {
-                QApplication::clipboard()->setText(raStrings.join("\n"));
+                QApplication::clipboard()->setText(raStrings.join("_"));
             }
             return;
         }
 
         // Fallback for Memory Viewer selection
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
-            auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
-            if (pathOpt.has_value()) {
-                ExportService::copyAsRetroAchievementsFormat(pathOpt.value(), m_manager);
+            onCopyViewerAsRaFormat();
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopyViewerAsRaFormat() {
+        if (m_currentViewerSelectedAddress == 0 || !m_manager) return;
+
+        uint32_t rootArrSize = 0;
+        bool rootArr = isRootArray(&rootArrSize);
+
+        // 1. Check if the address directly corresponds to a documented node in the Structure Hierarchy
+        QTreeWidgetItem* matchedItem = nullptr;
+        std::function<void(QTreeWidgetItem*)> findItem = [&](QTreeWidgetItem* item) {
+            if (matchedItem) return;
+            uint32_t addr = m_hierarchyWidget->resolveNodeAddress(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
+            if (addr == m_currentViewerSelectedAddress) {
+                matchedItem = item;
+                return;
             }
+            for (int i = 0; i < item->childCount(); ++i) {
+                findItem(item->child(i));
+            }
+        };
+
+        for (int i = 0; i < m_hierarchyWidget->treeWidget()->topLevelItemCount(); ++i) {
+            findItem(m_hierarchyWidget->treeWidget()->topLevelItem(i));
+            if (matchedItem) break;
+        }
+
+        if (matchedItem) {
+            QString trigger = m_hierarchyWidget->formatRetroAchievementsTrigger(matchedItem, m_currentBaseAddress, rootArr, m_headerComment);
+            if (!trigger.isEmpty()) {
+                QApplication::clipboard()->setText(trigger);
+                return;
+            }
+        }
+
+        // 2. Fallback: resolve path through active structure/array scopes
+        auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
+        if (pathOpt.has_value()) {
+            ExportService::copyAsRetroAchievementsFormat(pathOpt.value(), m_manager);
         }
     }
 
@@ -689,10 +726,48 @@ namespace PointerFinder2::UI {
 
         // Fallback for Memory Viewer selection
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
-            auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
-            if (pathOpt.has_value()) {
-                ExportService::copyAsCodeNote(pathOpt.value(), m_manager);
+            onCopyViewerAsCodeNote();
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopyViewerAsCodeNote() {
+        if (m_currentViewerSelectedAddress == 0 || !m_manager) return;
+
+        uint32_t rootArrSize = 0;
+        bool rootArr = isRootArray(&rootArrSize);
+
+        QTreeWidgetItem* matchedItem = nullptr;
+        std::function<void(QTreeWidgetItem*)> findItem = [&](QTreeWidgetItem* item) {
+            if (matchedItem) return;
+            uint32_t addr = m_hierarchyWidget->resolveNodeAddress(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
+            if (addr == m_currentViewerSelectedAddress) {
+                matchedItem = item;
+                return;
             }
+            for (int i = 0; i < item->childCount(); ++i) {
+                findItem(item->child(i));
+            }
+        };
+
+        for (int i = 0; i < m_hierarchyWidget->treeWidget()->topLevelItemCount(); ++i) {
+            findItem(m_hierarchyWidget->treeWidget()->topLevelItem(i));
+            if (matchedItem) break;
+        }
+
+        if (matchedItem) {
+            auto pathOpt = m_hierarchyWidget->getPathForTreeItem(matchedItem, m_currentBaseAddress, m_snapshotMemory, rootArr);
+            if (pathOpt.has_value()) {
+                CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
+                QString ptrTemplate = m_manager->getPlatformPointerTypeDescription();
+                QString note = CodeNoteHelper::buildCodeNote(pathOpt->offsets, settings, "", matchedItem->text(0), ptrTemplate);
+                QApplication::clipboard()->setText(note);
+                return;
+            }
+        }
+
+        auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
+        if (pathOpt.has_value()) {
+            ExportService::copyAsCodeNote(pathOpt.value(), m_manager);
         }
     }
 
@@ -717,6 +792,12 @@ namespace PointerFinder2::UI {
         }
 
         // Fallback for Memory Viewer selection
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            onCopyViewerAddress();
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopyViewerAddress() {
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
             QString addrStr = m_manager->formatDisplayAddress(m_currentViewerSelectedAddress);
             QApplication::clipboard()->setText("0x" + addrStr);
@@ -749,6 +830,12 @@ namespace PointerFinder2::UI {
         }
 
         // Fallback for Memory Viewer selection
+        if (m_currentViewerSelectedAddress != 0 && m_manager) {
+            onCopyViewerValue();
+        }
+    }
+
+    void StructureWorkspaceDialog::onCopyViewerValue() {
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
             uint32_t dwordVal = m_memoryViewer ? m_memoryViewer->readDwordAt(m_currentViewerSelectedAddress) : 0;
             if (dwordVal == 0) {
@@ -795,21 +882,21 @@ namespace PointerFinder2::UI {
 
         menu.addSeparator();
 
-        // Standardized clipboard copy choices consistent with main results view
-        auto* copyRaAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this, &StructureWorkspaceDialog::onCopySelectedAsRaFormat);
+        // Standardized clipboard copy choices consistent with main results view targeting the active memory viewer address
+        auto* copyRaAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this, &StructureWorkspaceDialog::onCopyViewerAsRaFormat);
         copyRaAct->setProperty("iconPath", ":/icons/copy_ra.svg");
         copyRaAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C));
         copyRaAct->setEnabled(getPathForViewerAddress(address).has_value());
 
-        auto* copyNoteAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Copy Code Note", this, &StructureWorkspaceDialog::onCopySelectedAsCodeNote);
+        auto* copyNoteAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Copy Code Note", this, &StructureWorkspaceDialog::onCopyViewerAsCodeNote);
         copyNoteAct->setProperty("iconPath", ":/icons/copy_note.svg");
         copyNoteAct->setEnabled(getPathForViewerAddress(address).has_value());
 
-        auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, &StructureWorkspaceDialog::onCopySelectedAddress);
+        auto* copyAddrAct = menu.addAction(getThemeIcon(":/icons/copy.svg"), "Copy Address", this, &StructureWorkspaceDialog::onCopyViewerAddress);
         copyAddrAct->setProperty("iconPath", ":/icons/copy.svg");
         copyAddrAct->setShortcut(QKeySequence::Copy);
 
-        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this, &StructureWorkspaceDialog::onCopySelectedValue);
+        auto* copyValAct = menu.addAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy Value", this, &StructureWorkspaceDialog::onCopyViewerValue);
         copyValAct->setProperty("iconPath", ":/icons/copy_ra.svg");
         copyValAct->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
 
