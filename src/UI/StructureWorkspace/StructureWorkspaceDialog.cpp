@@ -110,7 +110,7 @@ namespace PointerFinder2::UI {
         middleLayout->setContentsMargins(0, 0, 0, 0);
         middleLayout->setSpacing(6);
 
-        // Top Header Row for Memory Viewer: Re-dump / Refresh RAM and Snapshot Info
+        // Top Header Row for Memory Viewer: Re-dump / Refresh RAM, Snapshot Info, and Memory View Selector
         auto* viewerTopRow = new QHBoxLayout();
         viewerTopRow->setContentsMargins(0, 0, 0, 0);
         viewerTopRow->setSpacing(6);
@@ -127,23 +127,19 @@ namespace PointerFinder2::UI {
         viewerTopRow->addWidget(m_ramStatusLabel);
         viewerTopRow->addStretch();
 
+        // Memory View Mode Selector positioned in the upper-right corner
+        viewerTopRow->addWidget(new QLabel("Memory View:", m_middleContainer));
+        m_viewModeCombo = new QComboBox(m_middleContainer);
+        m_viewModeCombo->addItems({ "8-bit", "16-bit", "32-bit", "32-bit BE", "Float", "Float BE" });
+        m_viewModeCombo->setCurrentIndex(2);
+        m_viewModeCombo->setFixedHeight(26);
+        m_viewModeCombo->setMinimumWidth(110);
+        viewerTopRow->addWidget(m_viewModeCombo);
+
         middleLayout->addLayout(viewerTopRow);
 
         m_memoryViewer = new Widgets::MemoryViewerWidget(m_middleContainer);
         middleLayout->addWidget(m_memoryViewer, 1);
-
-        // Memory View Mode Selector (positioned at bottom)
-        auto* viewModeRow = new QHBoxLayout();
-        viewModeRow->addWidget(new QLabel("Memory View:", m_middleContainer));
-
-        m_viewModeCombo = new QComboBox(m_middleContainer);
-        m_viewModeCombo->addItems({ "8-bit", "16-bit", "32-bit", "32-bit BE", "Float", "Float BE" });
-        m_viewModeCombo->setCurrentIndex(2);
-        m_viewModeCombo->setFixedHeight(24);
-        m_viewModeCombo->setMinimumWidth(110);
-        viewModeRow->addWidget(m_viewModeCombo);
-        viewModeRow->addStretch();
-        middleLayout->addLayout(viewModeRow);
 
         // Memory Controls Bar (positioned at bottom)
         auto* viewerBottomRow = new QHBoxLayout();
