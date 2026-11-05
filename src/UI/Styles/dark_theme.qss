@@ -245,6 +245,21 @@ QStatusBar QLabel {
     font-size: 11px;
 }
 
+QLabel#offsetPreviewLabel {
+    font-weight: bold;
+    color: #58a6ff;
+    padding: 4px;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    background-color: #161b22;
+}
+
+QLabel#ramStatusLabel,
+QLabel#navHistoryLabel,
+QLabel#statusPermanentLabel {
+    color: #8b949e;
+}
+
 QLabel#emptyStateTitle {
     font-size: 14px;
     font-weight: bold;

@@ -32,42 +32,6 @@ namespace PointerFinder2::UI::Widgets {
         // Setup floating action banner for array definitions
         m_rangeBannerWidget = new QWidget(viewport());
         m_rangeBannerWidget->setObjectName("rangeBannerWidget");
-        m_rangeBannerWidget->setStyleSheet(
-            "#rangeBannerWidget {"
-            "    background-color: #21162E;"
-            "    border: 1px solid #A371F7;"
-            "    border-radius: 5px;"
-            "    padding: 3px 6px;"
-            "}"
-            "QLabel {"
-            "    color: #E2D9F3;"
-            "    font-weight: bold;"
-            "    font-size: 11px;"
-            "}"
-            "QPushButton#defineArrayBtn {"
-            "    background-color: #7928CA;"
-            "    color: #ffffff;"
-            "    border: 1px solid #A371F7;"
-            "    border-radius: 3px;"
-            "    font-weight: bold;"
-            "    font-size: 11px;"
-            "    padding: 2px 10px;"
-            "}"
-            "QPushButton#defineArrayBtn:hover {"
-            "    background-color: #8A3FFC;"
-            "}"
-            "QPushButton#closeBannerBtn {"
-            "    background: transparent;"
-            "    color: #b0a0cc;"
-            "    border: none;"
-            "    font-weight: bold;"
-            "    font-size: 12px;"
-            "    padding: 0 4px;"
-            "}"
-            "QPushButton#closeBannerBtn:hover {"
-            "    color: #ffffff;"
-            "}"
-        );
 
         auto* bannerLayout = new QHBoxLayout(m_rangeBannerWidget);
         bannerLayout->setContentsMargins(6, 2, 6, 2);
@@ -221,6 +185,84 @@ namespace PointerFinder2::UI::Widgets {
         if (!m_hasRangeSelection || m_rangeSpan <= 4) {
             if (m_rangeBannerWidget) m_rangeBannerWidget->hide();
             return;
+        }
+
+        bool isDark = (palette().color(QPalette::Base).lightness() < 128);
+        if (isDark) {
+            m_rangeBannerWidget->setStyleSheet(
+                "#rangeBannerWidget {"
+                "    background-color: #21162E;"
+                "    border: 1px solid #A371F7;"
+                "    border-radius: 5px;"
+                "    padding: 3px 6px;"
+                "}"
+                "QLabel {"
+                "    color: #E2D9F3;"
+                "    font-weight: bold;"
+                "    font-size: 11px;"
+                "}"
+                "QPushButton#defineArrayBtn {"
+                "    background-color: #7928CA;"
+                "    color: #ffffff;"
+                "    border: 1px solid #A371F7;"
+                "    border-radius: 3px;"
+                "    font-weight: bold;"
+                "    font-size: 11px;"
+                "    padding: 2px 10px;"
+                "}"
+                "QPushButton#defineArrayBtn:hover {"
+                "    background-color: #8A3FFC;"
+                "}"
+                "QPushButton#closeBannerBtn {"
+                "    background: transparent;"
+                "    color: #b0a0cc;"
+                "    border: none;"
+                "    font-weight: bold;"
+                "    font-size: 12px;"
+                "    padding: 0 4px;"
+                "}"
+                "QPushButton#closeBannerBtn:hover {"
+                "    color: #ffffff;"
+                "}"
+            );
+        }
+        else {
+            m_rangeBannerWidget->setStyleSheet(
+                "#rangeBannerWidget {"
+                "    background-color: #F3EBFF;"
+                "    border: 1px solid #A371F7;"
+                "    border-radius: 5px;"
+                "    padding: 3px 6px;"
+                "}"
+                "QLabel {"
+                "    color: #4C1D95;"
+                "    font-weight: bold;"
+                "    font-size: 11px;"
+                "}"
+                "QPushButton#defineArrayBtn {"
+                "    background-color: #7928CA;"
+                "    color: #ffffff;"
+                "    border: 1px solid #6B21A8;"
+                "    border-radius: 3px;"
+                "    font-weight: bold;"
+                "    font-size: 11px;"
+                "    padding: 2px 10px;"
+                "}"
+                "QPushButton#defineArrayBtn:hover {"
+                "    background-color: #6B21A8;"
+                "}"
+                "QPushButton#closeBannerBtn {"
+                "    background: transparent;"
+                "    color: #7C3AED;"
+                "    border: none;"
+                "    font-weight: bold;"
+                "    font-size: 12px;"
+                "    padding: 0 4px;"
+                "}"
+                "QPushButton#closeBannerBtn:hover {"
+                "    color: #4C1D95;"
+                "}"
+            );
         }
 
         QString text = QString("Selected: 0x%1 - 0x%2 (%3 bytes / 0x%4)")
@@ -586,6 +628,7 @@ namespace PointerFinder2::UI::Widgets {
                 }
 
                 if (it != m_highlights.end() || activeArray != nullptr) {
+                    bool isDark = (palette().color(QPalette::Base).lightness() < 128);
                     uint32_t baseDisplayAddr = (it != m_highlights.end() && it->second.startAddress != 0) ? it->second.startAddress : addr;
                     QString addrHex = "0x" + QString("%1").arg(baseDisplayAddr, 8, 16, QChar('0')).toUpper();
 
@@ -600,8 +643,8 @@ namespace PointerFinder2::UI::Widgets {
                     QString line3 = "";
                     if (it != m_highlights.end()) {
                         line3 = it->second.isPointer
-                            ? "<span style='color: #FF7B72;'>[Pointer Target]</span>"
-                            : "<span style='color: #79C0FF;'>[Documented Variable]</span>";
+                            ? (isDark ? "<span style='color: #FF7B72;'>[Pointer Target]</span>" : "<span style='color: #B91C1C;'>[Pointer Target]</span>")
+                            : (isDark ? "<span style='color: #79C0FF;'>[Documented Variable]</span>" : "<span style='color: #0369A1;'>[Documented Variable]</span>");
                     }
 
                     QString arrayTag = "";
@@ -613,14 +656,18 @@ namespace PointerFinder2::UI::Widgets {
                         cleanArrName.remove(QRegularExpression(R"(\[\d+\s*bytes\]\s*)", QRegularExpression::CaseInsensitiveOption));
                         cleanArrName = cleanArrName.trimmed();
 
+                        QString tagColor = isDark ? "#D2A8FF" : "#7C3AED";
+
                         if (cleanArrName.isEmpty() || cleanArrName.compare("Array", Qt::CaseInsensitive) == 0 ||
                             cleanArrName.compare("Pointer to Array", Qt::CaseInsensitive) == 0) {
-                            arrayTag = QString("<span style='color: #D2A8FF;'>[Array: (%1 bytes), Offset: +0x%2]</span>")
+                            arrayTag = QString("<span style='color: %1;'>[Array: (%2 bytes), Offset: +0x%3]</span>")
+                                .arg(tagColor)
                                 .arg(activeArray->size)
                                 .arg(QString::number(offsetInArray, 16).toUpper());
                         }
                         else {
-                            arrayTag = QString("<span style='color: #D2A8FF;'>[Array: %1 (%2 bytes), Offset: +0x%3]</span>")
+                            arrayTag = QString("<span style='color: %1;'>[Array: %2 (%3 bytes), Offset: +0x%4]</span>")
+                                .arg(tagColor)
                                 .arg(cleanArrName)
                                 .arg(activeArray->size)
                                 .arg(QString::number(offsetInArray, 16).toUpper());
@@ -761,9 +808,15 @@ namespace PointerFinder2::UI::Widgets {
             return;
         }
 
+        bool isDark = (palette().color(QPalette::Base).lightness() < 128);
+
         QRect headerRect(0, 0, viewport()->width(), m_headerHeight);
-        painter.fillRect(headerRect, QColor(24, 27, 31));
-        painter.setPen(QColor(139, 148, 158));
+        QColor headerBg = isDark ? QColor(24, 27, 31) : QColor(232, 232, 232);
+        QColor headerTextColor = isDark ? QColor(139, 148, 158) : QColor(74, 74, 74);
+        QColor headerDividerColor = isDark ? QColor(48, 54, 61) : QColor(208, 208, 208);
+
+        painter.fillRect(headerRect, headerBg);
+        painter.setPen(headerTextColor);
 
         painter.drawText(m_addrColX, m_headerHeight - 6, "Address");
 
@@ -806,27 +859,29 @@ namespace PointerFinder2::UI::Widgets {
 
         painter.drawText(m_asciiColX, m_headerHeight - 6, "ASCII Text");
 
-        painter.setPen(QColor(48, 54, 61));
+        painter.setPen(headerDividerColor);
         painter.drawLine(0, m_headerHeight - 1, viewport()->width(), m_headerHeight - 1);
 
         int visibleRows = ((viewport()->height() - m_headerHeight) / m_lineHeight) + 1;
         int64_t startRow = verticalScrollBar()->value();
         int64_t endRow = std::min(startRow + visibleRows, totalRows());
 
-        const QColor addrColor = QColor(100, 160, 220);
+        const QColor addrColor = isDark ? QColor(100, 160, 220) : QColor(0, 102, 180);
         const QColor textColor = palette().color(QPalette::Text);
-        const QColor asciiColor = QColor(160, 160, 160);
-        const QColor selectionBorderColor = QColor(245, 130, 32);
-        const QColor selectionBgColor = QColor(245, 130, 32, 60);
+        const QColor asciiColor = isDark ? QColor(160, 160, 160) : QColor(90, 90, 90);
+        const QColor zeroColor = isDark ? QColor(100, 100, 100) : QColor(150, 150, 150);
 
-        const QColor pointerColor = QColor(255, 123, 114);    // Coral/Red
-        const QColor variableColor = QColor(121, 192, 255);   // Cyan/Blue
-        const QColor activeContextBg = QColor(22, 48, 72, 160);
+        const QColor selectionBorderColor = isDark ? QColor(245, 130, 32) : QColor(230, 100, 10);
+        const QColor selectionBgColor = isDark ? QColor(245, 130, 32, 60) : QColor(245, 130, 32, 45);
+
+        const QColor pointerColor = isDark ? QColor(255, 123, 114) : QColor(190, 20, 20);    // Crimson in light mode
+        const QColor variableColor = isDark ? QColor(121, 192, 255) : QColor(9, 105, 218);   // Cobalt blue in light mode
+        const QColor activeContextBg = isDark ? QColor(22, 48, 72, 160) : QColor(210, 232, 255, 180);
 
         // Array styling colors
-        const QColor arrayBgColor = QColor(121, 40, 202, 75);       // Translucent purple background
-        const QColor arrayBorderColor = QColor(163, 113, 247, 180);  // Lavender border
-        const QColor rangeSelectBgColor = QColor(138, 75, 175, 120); // Active Shift+Click range highlight
+        const QColor arrayBgColor = isDark ? QColor(121, 40, 202, 75) : QColor(138, 43, 226, 35);
+        const QColor arrayBorderColor = isDark ? QColor(163, 113, 247, 180) : QColor(138, 43, 226, 120);
+        const QColor rangeSelectBgColor = isDark ? QColor(138, 75, 175, 120) : QColor(160, 100, 220, 70);
 
         for (int64_t r = startRow; r < endRow; ++r) {
             int y = m_headerHeight + static_cast<int>((r - startRow) * m_lineHeight);
@@ -881,7 +936,7 @@ namespace PointerFinder2::UI::Widgets {
                             painter.setPen(it->second.isPointer ? pointerColor : variableColor);
                         }
                         else {
-                            painter.setPen(byteVal == 0 ? QColor(100, 100, 100) : textColor);
+                            painter.setPen(byteVal == 0 ? zeroColor : textColor);
                         }
 
                         painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
@@ -937,7 +992,7 @@ namespace PointerFinder2::UI::Widgets {
                                 painter.setPen(it->second.isPointer ? pointerColor : variableColor);
                             }
                             else {
-                                painter.setPen(byteVal == 0 ? QColor(100, 100, 100) : textColor);
+                                painter.setPen(byteVal == 0 ? zeroColor : textColor);
                             }
                             painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                         }
@@ -1030,7 +1085,7 @@ namespace PointerFinder2::UI::Widgets {
                             painter.setPen(it->second.isPointer ? pointerColor : variableColor);
                         }
                         else {
-                            painter.setPen(rawVal == 0 ? QColor(100, 100, 100) : textColor);
+                            painter.setPen(rawVal == 0 ? zeroColor : textColor);
                         }
 
                         painter.drawText(dx, y + m_charHeight, floatStr);
@@ -1090,7 +1145,7 @@ namespace PointerFinder2::UI::Widgets {
                                 painter.setPen(it->second.isPointer ? pointerColor : variableColor);
                             }
                             else {
-                                painter.setPen(byteVal == 0 ? QColor(100, 100, 100) : textColor);
+                                painter.setPen(byteVal == 0 ? zeroColor : textColor);
                             }
                             painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                         }
