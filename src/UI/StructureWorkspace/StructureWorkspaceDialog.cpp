@@ -135,10 +135,12 @@ namespace PointerFinder2::UI {
 
         // --- Left Panel: Structure Editor ---
         m_hierarchyWidget = new StructureHierarchyWidget(m_mainSplitter);
+        m_hierarchyWidget->setMinimumWidth(200);
         m_mainSplitter->addWidget(m_hierarchyWidget);
 
         // --- Right Panel: Memory Viewer ---
         m_middleContainer = new QWidget(m_mainSplitter);
+        m_middleContainer->setMinimumWidth(250);
         auto* middleLayout = new QVBoxLayout(m_middleContainer);
         middleLayout->setContentsMargins(0, 0, 0, 0);
         middleLayout->setSpacing(6);
@@ -157,6 +159,8 @@ namespace PointerFinder2::UI {
 
         m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
         m_ramStatusLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+        m_ramStatusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        m_ramStatusLabel->setMinimumWidth(0);
         viewerTopRow->addWidget(m_ramStatusLabel);
         viewerTopRow->addStretch();
 
@@ -224,6 +228,7 @@ namespace PointerFinder2::UI {
 
         // --- Panel 3: Code Note Hierarchy Fixer ---
         m_codeNoteEditor = new CodeNoteEditorWidget(m_mainSplitter);
+        m_codeNoteEditor->setMinimumWidth(0);
         m_mainSplitter->addWidget(m_codeNoteEditor);
 
         m_mainSplitter->setCollapsible(0, false);
@@ -1596,7 +1601,7 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onSplitterMoved(int, int index) {
-        if (index == 2 || index == 1) {
+        if (index == 2) {
             QList<int> sizes = m_mainSplitter->sizes();
             if (sizes.size() > 2) {
                 bool visible = (sizes[2] > 0);
@@ -1604,7 +1609,6 @@ namespace PointerFinder2::UI {
                     m_lastCodeNotePanelWidth = sizes[2];
                 }
                 m_addressBar->setCodeNotePanelButtonChecked(visible);
-                saveWorkspaceSettings();
             }
         }
     }
@@ -1684,6 +1688,19 @@ namespace PointerFinder2::UI {
 
         if (settings.contains("splitterState")) {
             m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
+
+            // Sanitize and clamp restored panel sizes to prevent horizontal layout overflow in compact mode
+            QList<int> sizes = m_mainSplitter->sizes();
+            if (sizes.size() >= 3) {
+                int availableWidth = std::max(600, width() - 16);
+                int totalWidth = sizes[0] + sizes[1] + sizes[2];
+                if (totalWidth > availableWidth) {
+                    for (int& s : sizes) {
+                        s = (s * availableWidth) / totalWidth;
+                    }
+                    m_mainSplitter->setSizes(sizes);
+                }
+            }
         }
         else {
             // Default layout sizing favoring Structure Hierarchy over Memory Viewer dead space
