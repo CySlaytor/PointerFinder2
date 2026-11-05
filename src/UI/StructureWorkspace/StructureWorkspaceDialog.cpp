@@ -7,6 +7,8 @@
 #include "Models/CodeNoteSettings.h"
 #include "Models/GlobalSettings.h"
 #include "UI/Common/ThemeManager.h"
+#include "UI/Dialogs/AddPointerDialog.h"
+#include "UI/Dialogs/AddVariableDialog.h"
 
 #include <windows.h>
 #include <algorithm>
@@ -1096,7 +1098,7 @@ namespace PointerFinder2::UI {
             if (m_manager) {
                 uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
                 navigateToAddress(nativeTarget);
-                QString targetStr = m_manager->formatDisplayAddress(nativeTarget);
+                QString targetStr = m_manager ? m_manager->formatDisplayAddress(nativeTarget) : QString::number(nativeTarget, 16).toUpper();
                 showStatusMessage(QString("Followed pointer: navigated to 0x%1 in Memory Viewer").arg(targetStr));
             }
         });
@@ -1464,12 +1466,44 @@ namespace PointerFinder2::UI {
             return;
         }
 
-        bool ok = false;
-        QString defaultDesc = (mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloat || mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE)
-            ? "[Float] Variable"
-            : suggestDefaultType(alignedAddr);
-        QString desc = QInputDialog::getText(this, "Add Variable", "Variable description:", QLineEdit::Normal, defaultDesc, &ok);
-        if (!ok || desc.trimmed().isEmpty()) return;
+        // Determine suggested data type based on active memory view mode and memory heuristics
+        QString defaultType = "32-bit";
+        if (mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloat) {
+            defaultType = "Float";
+        }
+        else if (mode == Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE) {
+            defaultType = "Float BE";
+        }
+        else if (mode == Widgets::MemoryViewerWidget::ViewMode::Mode16Bit) {
+            defaultType = "16-bit";
+        }
+        else if (mode == Widgets::MemoryViewerWidget::ViewMode::Mode8Bit) {
+            defaultType = "8-bit";
+        }
+        else if (mode == Widgets::MemoryViewerWidget::ViewMode::Mode32BitBE) {
+            defaultType = "32-bit BE";
+        }
+        else {
+            QString suggested = suggestDefaultType(alignedAddr);
+            if (suggested.contains("Float", Qt::CaseInsensitive)) {
+                defaultType = "Float";
+            }
+            else if (suggested.contains("16-bit", Qt::CaseInsensitive)) {
+                defaultType = "16-bit";
+            }
+            else if (suggested.contains("8-bit", Qt::CaseInsensitive)) {
+                defaultType = "8-bit";
+            }
+            else if (m_manager && m_manager->getRetroAchievementsPrefix() == "G") {
+                defaultType = "32-bit BE";
+            }
+        }
+
+        AddVariableDialog dialog(defaultType, "Variable", this);
+        if (dialog.exec() != QDialog::Accepted) return;
+
+        QString desc = dialog.getFullDescription();
+        if (desc.trimmed().isEmpty()) return;
 
         auto* scopeNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
         m_hierarchyWidget->insertNodeInScope(scopeNode, match.offset, desc.trimmed(), match.isArrayScope);
@@ -1498,9 +1532,12 @@ namespace PointerFinder2::UI {
         }
 
         QString defaultPtrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
-        bool ok = false;
-        QString ptrDesc = QInputDialog::getText(this, "Add as Pointer", "Pointer description:", QLineEdit::Normal, defaultPtrDesc, &ok);
-        if (!ok || ptrDesc.trimmed().isEmpty()) return;
+        
+        AddPointerDialog dialog("Pointer", this);
+        if (dialog.exec() != QDialog::Accepted) return;
+
+        QString ptrDesc = dialog.getFullDescription(defaultPtrDesc);
+        if (ptrDesc.trimmed().isEmpty()) return;
 
         auto* scopeNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
         m_hierarchyWidget->insertNodeInScope(scopeNode, match.offset, ptrDesc.trimmed(), match.isArrayScope);
