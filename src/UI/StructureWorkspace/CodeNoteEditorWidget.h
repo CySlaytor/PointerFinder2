@@ -34,6 +34,7 @@ namespace PointerFinder2::UI {
     signals:
         void fixHierarchyClicked();
         void hierarchyStyleChanged();
+        void statusMessageRequested(const QString& message);
 
     private slots:
         void onCopyCodeNoteClicked();

@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -49,10 +50,14 @@ namespace PointerFinder2::UI {
             refreshMemorySnapshot();
             loadActiveGameData();
             populateAddressDropdown();
+            updateStatusPermanentInfo();
+            showStatusMessage("Ready");
         }
         else {
             m_ramStatusLabel->setText("Emulator not attached.");
             m_refreshRamBtn->setEnabled(false);
+            updateStatusPermanentInfo();
+            showStatusMessage("Not Attached");
         }
     }
 
@@ -62,6 +67,29 @@ namespace PointerFinder2::UI {
 
     QIcon StructureWorkspaceDialog::getThemeIcon(const QString& resourcePath) const {
         return ThemeManager::getIcon(resourcePath, GlobalSettings::activeTheme);
+    }
+
+    void StructureWorkspaceDialog::showStatusMessage(const QString& message, int /*timeout*/) {
+        if (m_statusLabel) {
+            if (message.startsWith("Status:", Qt::CaseInsensitive)) {
+                m_statusLabel->setText(message);
+            }
+            else {
+                m_statusLabel->setText(QString("Status: %1").arg(message));
+            }
+        }
+    }
+
+    void StructureWorkspaceDialog::updateStatusPermanentInfo() {
+        if (!m_statusPermanentLabel) return;
+        if (m_manager && m_manager->isAttached()) {
+            QString emuName = m_manager->getEmulatorName();
+            QString gameIdStr = m_gameData.isValid ? QString(" | Game ID: %1").arg(m_gameData.gameId) : "";
+            m_statusPermanentLabel->setText(QString("Attached: %1%2").arg(emuName, gameIdStr));
+        }
+        else {
+            m_statusPermanentLabel->setText("Not attached");
+        }
     }
 
     void StructureWorkspaceDialog::keyPressEvent(QKeyEvent* event) {
@@ -91,14 +119,19 @@ namespace PointerFinder2::UI {
 
     void StructureWorkspaceDialog::setupLayout() {
         auto* rootLayout = new QVBoxLayout(this);
-        rootLayout->setContentsMargins(8, 8, 8, 8);
-        rootLayout->setSpacing(6);
+        rootLayout->setContentsMargins(0, 0, 0, 0);
+        rootLayout->setSpacing(0);
+
+        auto* contentWidget = new QWidget(this);
+        auto* contentLayout = new QVBoxLayout(contentWidget);
+        contentLayout->setContentsMargins(8, 8, 8, 4);
+        contentLayout->setSpacing(6);
 
         // Top Toolbar
-        m_addressBar = new DissectAddressBar(this);
-        rootLayout->addWidget(m_addressBar);
+        m_addressBar = new DissectAddressBar(contentWidget);
+        contentLayout->addWidget(m_addressBar);
 
-        m_mainSplitter = new QSplitter(Qt::Horizontal, this);
+        m_mainSplitter = new QSplitter(Qt::Horizontal, contentWidget);
 
         // --- Left Panel: Structure Editor ---
         m_hierarchyWidget = new StructureHierarchyWidget(m_mainSplitter);
@@ -201,7 +234,21 @@ namespace PointerFinder2::UI {
         m_mainSplitter->setStretchFactor(0, 1);
         m_mainSplitter->setStretchFactor(1, 0);
         m_mainSplitter->setStretchFactor(2, 0);
-        rootLayout->addWidget(m_mainSplitter, 1);
+        contentLayout->addWidget(m_mainSplitter, 1);
+
+        rootLayout->addWidget(contentWidget, 1);
+
+        // Dedicated Structure Dissect Status Bar matching main PF2 window
+        m_statusBar = new QStatusBar(this);
+        m_statusBar->setSizeGripEnabled(false);
+
+        m_statusLabel = new QLabel("Status: Ready", this);
+        m_statusPermanentLabel = new QLabel(this);
+        m_statusPermanentLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+
+        m_statusBar->addWidget(m_statusLabel, 1);
+        m_statusBar->addPermanentWidget(m_statusPermanentLabel);
+        rootLayout->addWidget(m_statusBar);
 
         // Memory Viewer Connections
         connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addressSelected, this, &StructureWorkspaceDialog::onAddressSelectedInViewer);
@@ -218,6 +265,7 @@ namespace PointerFinder2::UI {
                 m_navForwardBtn->setEnabled(canForward);
                 if (totalCount > 0) {
                     m_navHistoryLabel->setText(QString("%1/%2").arg(currentIndex).arg(totalCount));
+                    showStatusMessage(QString("Navigated history: step %1 of %2").arg(currentIndex).arg(totalCount));
                 }
                 else {
                     m_navHistoryLabel->setText("0/0");
@@ -232,6 +280,8 @@ namespace PointerFinder2::UI {
             uint32_t rootArrSize = 0;
             bool rootArr = isRootArray(&rootArrSize);
             m_hierarchyWidget->removeDocumentationAtAddress(address, m_currentBaseAddress, m_snapshotMemory, rootArr);
+            QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString::number(address, 16).toUpper();
+            showStatusMessage(QString("Removed documentation at address 0x%1").arg(addrStr));
         });
 
         // Connect clipboard copy signals from Memory Viewer directly to dedicated viewer copy slots
@@ -271,21 +321,122 @@ namespace PointerFinder2::UI {
         // Code Note Panel Connections
         connect(m_codeNoteEditor, &CodeNoteEditorWidget::fixHierarchyClicked, this, &StructureWorkspaceDialog::onFixHierarchyClicked);
         connect(m_codeNoteEditor, &CodeNoteEditorWidget::hierarchyStyleChanged, this, &StructureWorkspaceDialog::onHierarchyStyleChanged);
+        connect(m_codeNoteEditor, &CodeNoteEditorWidget::statusMessageRequested, this, [this](const QString& message) {
+            showStatusMessage(message);
+        });
 
         connect(m_mainSplitter, &QSplitter::splitterMoved, this, &StructureWorkspaceDialog::onSplitterMoved);
     }
 
+    bool StructureWorkspaceDialog::confirmSaveUserTxt() {
+        uint32_t activeAddr = m_currentBaseAddress;
+        if (activeAddr == 0) return false;
+
+        QString addrStr = m_manager ? m_manager->formatDisplayAddress(activeAddr) : QString::number(activeAddr, 16).toUpper();
+        QString noteTitle = "Untitled Note";
+
+        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+            return n.address == activeAddr;
+        });
+        if (it != m_gameData.notes.end() && !it->title.isEmpty()) {
+            noteTitle = it->title;
+        }
+
+        QFileInfo fi(m_gameData.userTxtPath);
+        QString fileName = fi.fileName().isEmpty() ? "User.txt" : fi.fileName();
+
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle("Confirm Save to User.txt");
+        msgBox.setText(QString("Save changes for address 0x%1 to %2?").arg(addrStr, fileName));
+        msgBox.setInformativeText(
+            QString("Structure: %1\nTarget File: %2\n\n"
+                    "This will write your local developer note override to disk. "
+                    "The modified note will take precedence over the server baseline in future sessions.")
+            .arg(noteTitle, fileName)
+        );
+        msgBox.setIcon(QMessageBox::Question);
+
+        QPushButton* saveBtn = msgBox.addButton("Save", QMessageBox::AcceptRole);
+        msgBox.addButton("Cancel", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(saveBtn);
+        msgBox.exec();
+
+        return msgBox.clickedButton() == saveBtn;
+    }
+
+    bool StructureWorkspaceDialog::confirmRevertServer() {
+        uint32_t activeAddr = m_currentBaseAddress;
+        if (activeAddr == 0) return false;
+
+        QString addrStr = m_manager ? m_manager->formatDisplayAddress(activeAddr) : QString::number(activeAddr, 16).toUpper();
+        QString noteTitle = "Untitled Note";
+
+        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+            return n.address == activeAddr;
+        });
+        if (it != m_gameData.notes.end() && !it->title.isEmpty()) {
+            noteTitle = it->title;
+        }
+
+        QFileInfo fi(m_gameData.userTxtPath);
+        QString fileName = fi.fileName().isEmpty() ? "User.txt" : fi.fileName();
+
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle("Confirm Revert to Server");
+        msgBox.setText(QString("Discard local changes and revert address 0x%1 to server note?").arg(addrStr));
+        msgBox.setInformativeText(
+            QString("Structure: %1\nTarget File: %2\n\n"
+                    "Warning: All local overrides for this address will be permanently removed from %2. "
+                    "The structure hierarchy and note text will revert to the server baseline.")
+            .arg(noteTitle, fileName)
+        );
+        msgBox.setIcon(QMessageBox::Warning);
+
+        QPushButton* revertBtn = msgBox.addButton("Revert", QMessageBox::DestructiveRole);
+        QPushButton* cancelBtn = msgBox.addButton("Cancel", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(cancelBtn);
+        msgBox.exec();
+
+        return msgBox.clickedButton() == revertBtn;
+    }
+
+    bool StructureWorkspaceDialog::confirmReset() {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle("Confirm Workspace Reset");
+        msgBox.setText("Reload all game code notes and structures from disk?");
+        msgBox.setInformativeText(
+            "Warning: Any unsaved modifications in the Structure Hierarchy or Code Note Editor "
+            "that have not been saved to User.txt will be discarded.\n\n"
+            "Both Notes.json and User.txt will be reloaded from disk."
+        );
+        msgBox.setIcon(QMessageBox::Warning);
+
+        QPushButton* resetBtn = msgBox.addButton("Reset", QMessageBox::DestructiveRole);
+        QPushButton* cancelBtn = msgBox.addButton("Cancel", QMessageBox::RejectRole);
+        msgBox.setDefaultButton(cancelBtn);
+        msgBox.exec();
+
+        return msgBox.clickedButton() == resetBtn;
+    }
+
     bool StructureWorkspaceDialog::loadActiveGameData() {
         if (!m_manager || !m_manager->isAttached()) return false;
-        return RaStorageService::loadActiveGameData(m_manager->getProcessHandle(), m_gameData);
+        bool loaded = RaStorageService::loadActiveGameData(m_manager->getProcessHandle(), m_gameData);
+        if (loaded) {
+            updateStatusPermanentInfo();
+        }
+        return loaded;
     }
 
     void StructureWorkspaceDialog::populateAddressDropdown(bool autoNavigate) {
         m_addressBar->populateAddressDropdown(m_gameData, m_currentBaseAddress, autoNavigate);
+        updateStatusPermanentInfo();
     }
 
     void StructureWorkspaceDialog::onAddressSelectedFromBar(uint32_t address, bool autoNavigate) {
         selectAddressInUI(address, autoNavigate);
+        QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString::number(address, 16).toUpper();
+        showStatusMessage(QString("Loaded structure for address 0x%1").arg(addrStr));
     }
 
     void StructureWorkspaceDialog::onNewAddressClicked() {
@@ -331,6 +482,9 @@ namespace PointerFinder2::UI {
 
             populateAddressDropdown(true);
             selectAddressInUI(address, true);
+
+            QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString::number(address, 16).toUpper();
+            showStatusMessage(QString("Created new address structure at 0x%1").arg(addrStr));
         }
     }
 
@@ -365,6 +519,8 @@ namespace PointerFinder2::UI {
             updateOffsetPreview();
             updateToolbarButtonStates();
         }
+
+        showStatusMessage(QString("Removed address 0x%1 from address list and User.txt").arg(addrStr));
     }
 
     void StructureWorkspaceDialog::selectAddressInUI(uint32_t address, bool navigate) {
@@ -387,6 +543,7 @@ namespace PointerFinder2::UI {
             navigateToAddress(address);
         }
         updateToolbarButtonStates();
+        updateStatusPermanentInfo();
     }
 
     void StructureWorkspaceDialog::populateTreeFromCodeNote(const QString& noteText) {
@@ -436,14 +593,27 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onSaveUserTxtClicked() {
+        if (!confirmSaveUserTxt()) {
+            return;
+        }
+
         if (saveActiveNoteToUserTxt()) {
             m_addressBar->showSaveFeedback();
+            QString addrStr = m_manager ? m_manager->formatDisplayAddress(m_currentBaseAddress) : QString::number(m_currentBaseAddress, 16).toUpper();
+            showStatusMessage(QString("Structure note for 0x%1 saved to User.txt").arg(addrStr));
+        }
+        else {
+            showStatusMessage("Failed to save structure note to User.txt");
         }
     }
 
     void StructureWorkspaceDialog::onRevertServerClicked() {
         uint32_t activeAddr = m_currentBaseAddress;
         if (activeAddr == 0) return;
+
+        if (!confirmRevertServer()) {
+            return;
+        }
 
         // Capture current memory viewer location and cursor to prevent jumping
         uint32_t savedCursor = (m_currentViewerSelectedAddress != 0) ? m_currentViewerSelectedAddress : m_memoryViewer->getSelectedAddress();
@@ -459,10 +629,20 @@ namespace PointerFinder2::UI {
                 m_memoryViewer->setSelectedAddress(savedCursor, false, false);
                 m_memoryViewer->verticalScrollBar()->setValue(savedScroll);
             }
+
+            QString addrStr = m_manager ? m_manager->formatDisplayAddress(activeAddr) : QString::number(activeAddr, 16).toUpper();
+            showStatusMessage(QString("Changes reverted: restored server note for address 0x%1").arg(addrStr));
+        }
+        else {
+            showStatusMessage("Failed to revert note to server baseline.");
         }
     }
 
     void StructureWorkspaceDialog::onResetClicked() {
+        if (!confirmReset()) {
+            return;
+        }
+
         uint32_t currentAddr = m_currentBaseAddress;
 
         // Capture current memory viewer location and cursor to prevent jumping
@@ -482,6 +662,7 @@ namespace PointerFinder2::UI {
         }
 
         m_addressBar->showResetFeedback();
+        showStatusMessage("Reset completed: reloaded all game code notes from disk.");
     }
 
     void StructureWorkspaceDialog::updateToolbarButtonStates() {
@@ -500,6 +681,9 @@ namespace PointerFinder2::UI {
         default: break;
         }
         saveWorkspaceSettings();
+
+        QString modeName = m_viewModeCombo ? m_viewModeCombo->currentText() : "32-bit";
+        showStatusMessage(QString("Memory View switched to %1").arg(modeName));
     }
 
     void StructureWorkspaceDialog::refreshMemorySnapshot() {
@@ -522,9 +706,12 @@ namespace PointerFinder2::UI {
             bool rootArr = isRootArray(&rootArrSize);
             m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
             updateMemoryHighlights();
+
+            showStatusMessage(QString("Memory dump refreshed successfully (%1 KB)").arg(size / 1024));
         }
         else {
             m_ramStatusLabel->setText("Failed to read memory from emulator.");
+            showStatusMessage("Failed to read memory dump from emulator.");
         }
     }
 
@@ -554,6 +741,10 @@ namespace PointerFinder2::UI {
         if (ok && m_manager) {
             uint32_t nativeAddr = m_manager->unnormalizeAddress(text);
             navigateToAddress(nativeAddr);
+            showStatusMessage(QString("Jumped to address 0x%1 in Memory Viewer").arg(text.toUpper()));
+        }
+        else {
+            showStatusMessage("Invalid address entered for navigation.");
         }
     }
 
@@ -571,6 +762,8 @@ namespace PointerFinder2::UI {
         if (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal)) {
             uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
             navigateToAddress(nativeTarget);
+            QString targetStr = m_manager ? m_manager->formatDisplayAddress(nativeTarget) : QString::number(nativeTarget, 16).toUpper();
+            showStatusMessage(QString("Followed pointer to target address 0x%1").arg(targetStr));
         }
         else {
             onAddVariableClicked();
@@ -647,6 +840,12 @@ namespace PointerFinder2::UI {
             }
             if (!raStrings.isEmpty()) {
                 QApplication::clipboard()->setText(raStrings.join("_"));
+                if (raStrings.size() == 1) {
+                    showStatusMessage("Copied RetroAchievements trigger to clipboard.");
+                }
+                else {
+                    showStatusMessage(QString("Copied %1 RetroAchievements trigger conditions to clipboard.").arg(raStrings.size()));
+                }
             }
             return;
         }
@@ -686,6 +885,7 @@ namespace PointerFinder2::UI {
             QString trigger = m_hierarchyWidget->formatRetroAchievementsTrigger(matchedItem, m_currentBaseAddress, rootArr, m_headerComment);
             if (!trigger.isEmpty()) {
                 QApplication::clipboard()->setText(trigger);
+                showStatusMessage("Copied RetroAchievements trigger to clipboard.");
                 return;
             }
         }
@@ -694,6 +894,10 @@ namespace PointerFinder2::UI {
         auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
         if (pathOpt.has_value()) {
             ExportService::copyAsRetroAchievementsFormat(pathOpt.value(), m_manager);
+            showStatusMessage("Copied RetroAchievements trigger to clipboard.");
+        }
+        else {
+            showStatusMessage("Cannot generate RA trigger: address is outside active structure scopes.");
         }
     }
 
@@ -716,6 +920,12 @@ namespace PointerFinder2::UI {
             }
             if (!noteStrings.isEmpty()) {
                 QApplication::clipboard()->setText(noteStrings.join("\n"));
+                if (noteStrings.size() == 1) {
+                    showStatusMessage("Copied code note to clipboard.");
+                }
+                else {
+                    showStatusMessage(QString("Copied %1 code notes to clipboard.").arg(noteStrings.size()));
+                }
             }
             return;
         }
@@ -757,6 +967,7 @@ namespace PointerFinder2::UI {
                 QString ptrTemplate = m_manager->getPlatformPointerTypeDescription();
                 QString note = CodeNoteHelper::buildCodeNote(pathOpt->offsets, settings, "", matchedItem->text(0), ptrTemplate);
                 QApplication::clipboard()->setText(note);
+                showStatusMessage("Copied code note to clipboard.");
                 return;
             }
         }
@@ -764,6 +975,10 @@ namespace PointerFinder2::UI {
         auto pathOpt = getPathForViewerAddress(m_currentViewerSelectedAddress);
         if (pathOpt.has_value()) {
             ExportService::copyAsCodeNote(pathOpt.value(), m_manager);
+            showStatusMessage("Copied code note to clipboard.");
+        }
+        else {
+            showStatusMessage("Cannot generate code note: address is outside active structure scopes.");
         }
     }
 
@@ -783,6 +998,12 @@ namespace PointerFinder2::UI {
             }
             if (!addrStrings.isEmpty()) {
                 QApplication::clipboard()->setText(addrStrings.join("\n"));
+                if (addrStrings.size() == 1) {
+                    showStatusMessage(QString("Copied address %1 to clipboard.").arg(addrStrings.first()));
+                }
+                else {
+                    showStatusMessage(QString("Copied %1 addresses to clipboard.").arg(addrStrings.size()));
+                }
             }
             return;
         }
@@ -797,6 +1018,7 @@ namespace PointerFinder2::UI {
         if (m_currentViewerSelectedAddress != 0 && m_manager) {
             QString addrStr = m_manager->formatDisplayAddress(m_currentViewerSelectedAddress);
             QApplication::clipboard()->setText("0x" + addrStr);
+            showStatusMessage(QString("Copied address 0x%1 to clipboard.").arg(addrStr));
         }
     }
 
@@ -821,6 +1043,12 @@ namespace PointerFinder2::UI {
             }
             if (!valueStrings.isEmpty()) {
                 QApplication::clipboard()->setText(valueStrings.join("\n"));
+                if (valueStrings.size() == 1) {
+                    showStatusMessage(QString("Copied value %1 to clipboard.").arg(valueStrings.first()));
+                }
+                else {
+                    showStatusMessage(QString("Copied %1 values to clipboard.").arg(valueStrings.size()));
+                }
             }
             return;
         }
@@ -838,7 +1066,9 @@ namespace PointerFinder2::UI {
                 auto valOpt = StructureAnalyzer::readMemoryDword(m_currentViewerSelectedAddress, m_manager, m_snapshotMemory);
                 if (valOpt.has_value()) dwordVal = valOpt.value();
             }
-            QApplication::clipboard()->setText("0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper());
+            QString valHex = "0x" + QString("%1").arg(dwordVal, 8, 16, QChar('0')).toUpper();
+            QApplication::clipboard()->setText(valHex);
+            showStatusMessage(QString("Copied value %1 to clipboard.").arg(valHex));
         }
     }
 
@@ -861,6 +1091,8 @@ namespace PointerFinder2::UI {
             if (m_manager) {
                 uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
                 navigateToAddress(nativeTarget);
+                QString targetStr = m_manager->formatDisplayAddress(nativeTarget);
+                showStatusMessage(QString("Followed pointer: navigated to 0x%1 in Memory Viewer").arg(targetStr));
             }
         });
         followPtrAct->setProperty("iconPath", ":/icons/follow_pointer.svg");
@@ -872,6 +1104,8 @@ namespace PointerFinder2::UI {
                 uint32_t rootArrSize = 0;
                 bool rootArr = isRootArray(&rootArrSize);
                 m_hierarchyWidget->removeDocumentationAtAddress(address, m_currentBaseAddress, m_snapshotMemory, rootArr);
+                QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString::number(address, 16).toUpper();
+                showStatusMessage(QString("Removed documentation at address 0x%1").arg(addrStr));
             });
             removeDocAct->setProperty("iconPath", ":/icons/delete.svg");
         }
@@ -919,6 +1153,9 @@ namespace PointerFinder2::UI {
                 m_gameData.notes.push_back(newNote);
                 populateAddressDropdown();
                 selectAddressInUI(newAddr);
+
+                QString newAddrStr = m_manager ? m_manager->formatDisplayAddress(newAddr) : QString::number(newAddr, 16).toUpper();
+                showStatusMessage(QString("Created new address structure at 0x%1").arg(newAddrStr));
             }
         });
         newAddrAct->setProperty("iconPath", ":/icons/bookmark_add.svg");
@@ -958,6 +1195,9 @@ namespace PointerFinder2::UI {
             }
         }
 
+        QString startStr = m_manager ? m_manager->formatDisplayAddress(startAddress) : QString::number(startAddress, 16).toUpper();
+        QString endStr = m_manager ? m_manager->formatDisplayAddress(startAddress + byteCount - 1) : QString::number(startAddress + byteCount - 1, 16).toUpper();
+
         if (targetNode) {
             // Standardized array formatting: ++0x78=[128 bytes] Pointer to Array
             QString arrayFormatText = QString("[%1 bytes] Pointer to Array").arg(byteCount);
@@ -972,6 +1212,8 @@ namespace PointerFinder2::UI {
             m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
             syncTreeToCodeNoteText();
             updateMemoryHighlights();
+
+            showStatusMessage(QString("Defined array: [0x%1 - 0x%2] (%3 bytes)").arg(startStr, endStr, QString::number(byteCount)));
         }
         else {
             auto match = findBestScopeForAddress(startAddress);
@@ -987,6 +1229,8 @@ namespace PointerFinder2::UI {
                 m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
                 syncTreeToCodeNoteText();
                 updateMemoryHighlights();
+
+                showStatusMessage(QString("Defined array: [0x%1 - 0x%2] (%3 bytes)").arg(startStr, endStr, QString::number(byteCount)));
             }
             else {
                 // If range is outside known scopes, offer to create a new Root Array Structure at this address
@@ -1017,6 +1261,8 @@ namespace PointerFinder2::UI {
                     m_gameData.notes.push_back(newNote);
                     populateAddressDropdown();
                     selectAddressInUI(normalizedAddr);
+
+                    showStatusMessage(QString("Created Root Array Structure at 0x%1 (%2 bytes)").arg(displayAddrStr).arg(byteCount));
                 }
             }
         }
@@ -1032,6 +1278,8 @@ namespace PointerFinder2::UI {
             uint32_t resolved = m_hierarchyWidget->resolveNodeAddress(current, m_currentBaseAddress, m_snapshotMemory, rootArr);
             if (resolved != 0) {
                 navigateToAddress(resolved);
+                QString targetStr = m_manager ? m_manager->formatDisplayAddress(resolved) : QString::number(resolved, 16).toUpper();
+                showStatusMessage(QString("Navigated to 0x%1 in Memory Viewer").arg(targetStr));
                 return;
             }
         }
@@ -1042,9 +1290,13 @@ namespace PointerFinder2::UI {
             if (dwordVal != 0 && m_manager && m_manager->isValidPointerTarget(dwordVal)) {
                 uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(dwordVal, 16));
                 navigateToAddress(nativeTarget);
+                QString targetStr = m_manager ? m_manager->formatDisplayAddress(nativeTarget) : QString::number(nativeTarget, 16).toUpper();
+                showStatusMessage(QString("Followed pointer: navigated to 0x%1 in Memory Viewer").arg(targetStr));
                 return;
             }
         }
+
+        showStatusMessage("No pointer target could be resolved.");
     }
 
     void StructureWorkspaceDialog::onTreeSelectionChanged() {
@@ -1222,6 +1474,10 @@ namespace PointerFinder2::UI {
         m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
         syncTreeToCodeNoteText();
         updateMemoryHighlights();
+
+        QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
+        QString prefix = match.isArrayScope ? "|" : ((match.offset < 0) ? "-" : "+");
+        showStatusMessage(QString("Variable added: %1 at offset %2%3").arg(desc.trimmed(), prefix, "0x" + offsetHex));
     }
 
     void StructureWorkspaceDialog::onAddPointerClicked() {
@@ -1250,11 +1506,19 @@ namespace PointerFinder2::UI {
         syncTreeToCodeNoteText();
         updateMemoryHighlights();
 
+        QString offsetHex = QString("%1").arg(std::abs(match.offset), 2, 16, QChar('0')).toUpper();
+        QString prefix = match.isArrayScope ? "|" : ((match.offset < 0) ? "-" : "+");
+
         // Directly navigate into the new pointer's target in RAM
         auto valOpt = StructureAnalyzer::readMemoryDword(alignedAddr, m_manager, m_snapshotMemory);
         if (valOpt.has_value() && m_manager && m_manager->isValidPointerTarget(valOpt.value())) {
             uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
             navigateToAddress(nativeTarget);
+            QString targetStr = m_manager ? m_manager->formatDisplayAddress(nativeTarget) : QString::number(nativeTarget, 16).toUpper();
+            showStatusMessage(QString("Pointer added: %1 at offset %2%3 -> Target: 0x%4").arg(ptrDesc.trimmed(), prefix, "0x" + offsetHex, targetStr));
+        }
+        else {
+            showStatusMessage(QString("Pointer added: %1 at offset %2%3").arg(ptrDesc.trimmed(), prefix, "0x" + offsetHex));
         }
     }
 
@@ -1284,6 +1548,7 @@ namespace PointerFinder2::UI {
             }
         }
 
+        int countDeleted = itemsToDelete.size();
         for (auto* item : itemsToDelete) {
             delete item;
         }
@@ -1294,6 +1559,8 @@ namespace PointerFinder2::UI {
         updateOffsetPreview();
         syncTreeToCodeNoteText();
         updateMemoryHighlights();
+
+        showStatusMessage(QString("Removed %1 node(s) from structure hierarchy").arg(countDeleted));
     }
 
     void StructureWorkspaceDialog::onTreeDataChanged() {
@@ -1315,6 +1582,7 @@ namespace PointerFinder2::UI {
             sizes[2] = 0;
             m_mainSplitter->setSizes(sizes);
             m_addressBar->setCodeNotePanelButtonChecked(false);
+            showStatusMessage("Code note panel collapsed.");
         }
         else {
             int restoreWidth = (m_lastCodeNotePanelWidth > 60) ? m_lastCodeNotePanelWidth : 330;
@@ -1322,6 +1590,7 @@ namespace PointerFinder2::UI {
             sizes[2] = restoreWidth;
             m_mainSplitter->setSizes(sizes);
             m_addressBar->setCodeNotePanelButtonChecked(true);
+            showStatusMessage("Code note panel expanded.");
         }
         saveWorkspaceSettings();
     }
@@ -1353,6 +1622,7 @@ namespace PointerFinder2::UI {
             m_hierarchyWidget->clearTree();
             m_headerComment.clear();
             m_isSyncing = false;
+            showStatusMessage("Cleared structure hierarchy.");
             return;
         }
 
@@ -1377,6 +1647,8 @@ namespace PointerFinder2::UI {
 
         saveWorkspaceSettings();
         m_isSyncing = false;
+
+        showStatusMessage(QString("Hierarchy fixed and reformatted (%1 top-level node(s)).").arg(mergedTree.size()));
     }
 
     void StructureWorkspaceDialog::syncTreeToCodeNoteText() {

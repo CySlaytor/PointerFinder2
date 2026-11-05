@@ -147,6 +147,8 @@ namespace PointerFinder2::UI {
         m_copyCodeNoteBtn->setText("✓ Copied!");
         m_copyCodeNoteBtn->setEnabled(false);
 
+        emit statusMessageRequested("Copied code note text to clipboard.");
+
         QTimer::singleShot(1500, this, [this, origText]() {
             m_copyCodeNoteBtn->setText(origText);
             m_copyCodeNoteBtn->setEnabled(true);

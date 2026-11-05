@@ -20,6 +20,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSplitter>
+#include <QStatusBar>
 
 namespace PointerFinder2::UI {
 
@@ -32,6 +33,9 @@ namespace PointerFinder2::UI {
         ~StructureWorkspaceDialog() override;
 
         void refreshMemorySnapshot();
+
+    public slots:
+        void showStatusMessage(const QString& message, int timeout = 0);
 
     protected:
         void keyPressEvent(QKeyEvent* event) override;
@@ -106,6 +110,11 @@ namespace PointerFinder2::UI {
         // Panel 3: Code Note Hierarchy Fixer Component
         CodeNoteEditorWidget* m_codeNoteEditor = nullptr;
 
+        // Dedicated Structure Dissect Status Bar
+        QStatusBar* m_statusBar = nullptr;
+        QLabel* m_statusLabel = nullptr;
+        QLabel* m_statusPermanentLabel = nullptr;
+
         using RaCodeNote = Core::RaCodeNote;
         using RaGameData = Core::RaGameData;
         using CodeNoteNode = Core::CodeNoteNode;
@@ -124,6 +133,12 @@ namespace PointerFinder2::UI {
         void setupLayout();
         void loadWorkspaceSettings();
         void saveWorkspaceSettings();
+        void updateStatusPermanentInfo();
+
+        // Confirmation Dialogs
+        bool confirmSaveUserTxt();
+        bool confirmRevertServer();
+        bool confirmReset();
 
         // RA Data Pipeline
         bool loadActiveGameData();
