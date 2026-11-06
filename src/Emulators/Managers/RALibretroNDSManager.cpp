@@ -162,7 +162,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
-    QString RALibretroNDSManager::getPlatformPointerTypeDescription() const {
+    QString RALibretroNDSManager::getPlatformPointerTypeDescription(uint32_t) const {
         return "[24-bit] Pointer";
     }
 

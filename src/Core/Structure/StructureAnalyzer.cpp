@@ -112,7 +112,7 @@ namespace PointerFinder2::Core {
 
         uint32_t rawVal = valOpt.value();
         if (rawVal != 0 && manager && manager->isValidPointerTarget(rawVal)) {
-            return manager->getPlatformPointerTypeDescription();
+            return manager->getPlatformPointerTypeDescription(rawVal);
         }
 
         float fVal;

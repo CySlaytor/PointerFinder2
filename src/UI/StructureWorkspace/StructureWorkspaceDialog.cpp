@@ -1531,7 +1531,13 @@ namespace PointerFinder2::UI {
             return;
         }
 
-        QString defaultPtrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+        uint32_t dwordVal = 0;
+        auto valOpt = StructureAnalyzer::readMemoryDword(alignedAddr, m_manager, m_snapshotMemory);
+        if (valOpt.has_value()) {
+            dwordVal = valOpt.value();
+        }
+
+        QString defaultPtrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription(dwordVal) : "[32-bit] Pointer";
         
         AddPointerDialog dialog("Pointer", this);
         if (dialog.exec() != QDialog::Accepted) return;
@@ -1552,7 +1558,6 @@ namespace PointerFinder2::UI {
         QString prefix = match.isArrayScope ? "|" : ((match.offset < 0) ? "-" : "+");
 
         // Directly navigate into the new pointer's target in RAM
-        auto valOpt = StructureAnalyzer::readMemoryDword(alignedAddr, m_manager, m_snapshotMemory);
         if (valOpt.has_value() && m_manager && m_manager->isValidPointerTarget(valOpt.value())) {
             uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
             navigateToAddress(nativeTarget);

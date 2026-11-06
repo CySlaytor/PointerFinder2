@@ -120,7 +120,13 @@ namespace PointerFinder2::UI {
         }
         else {
             if (desc.isEmpty()) desc = "New Structure";
-            QString ptrType = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+            uint32_t addr = getAddress();
+            uint32_t dwordVal = 0;
+            if (m_manager && m_manager->isAttached() && addr != 0) {
+                auto valOpt = m_manager->readUInt32(addr);
+                if (valOpt.has_value()) dwordVal = valOpt.value();
+            }
+            QString ptrType = m_manager ? m_manager->getPlatformPointerTypeDescription(dwordVal) : "[32-bit] Pointer";
             m_previewLabel->setText(QString("Generated Header: %1 to %2").arg(ptrType, desc));
         }
     }
@@ -157,7 +163,13 @@ namespace PointerFinder2::UI {
         }
         else {
             if (desc.isEmpty()) desc = "New Structure";
-            QString ptrType = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+            uint32_t addr = getAddress();
+            uint32_t dwordVal = 0;
+            if (m_manager && m_manager->isAttached() && addr != 0) {
+                auto valOpt = m_manager->readUInt32(addr);
+                if (valOpt.has_value()) dwordVal = valOpt.value();
+            }
+            QString ptrType = m_manager ? m_manager->getPlatformPointerTypeDescription(dwordVal) : "[32-bit] Pointer";
             return QString("%1 to %2").arg(ptrType, desc);
         }
     }

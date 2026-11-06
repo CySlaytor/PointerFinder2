@@ -153,7 +153,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
-    QString RALibretroGBAManager::getPlatformPointerTypeDescription() const {
+    QString RALibretroGBAManager::getPlatformPointerTypeDescription(uint32_t) const {
         return "[32-bit] Pointer";
     }
 

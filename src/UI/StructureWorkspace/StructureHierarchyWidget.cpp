@@ -791,7 +791,7 @@ namespace PointerFinder2::UI {
         std::reverse(lineage.begin(), lineage.end());
 
         QString sizePrefix = "X";
-        QString pointerMask = "";
+        QString defaultPointerMask = "";
         QString raPrefix = m_manager->getRetroAchievementsPrefix();
         QString emuName = m_manager->getEmulatorName();
 
@@ -800,12 +800,30 @@ namespace PointerFinder2::UI {
         }
         else if (raPrefix == "G") {
             sizePrefix = "G";
-            pointerMask = "&536870911"; // 0x1FFFFFFF mask
+            defaultPointerMask = "&536870911"; // 0x1FFFFFFF mask
         }
         else if (emuName.contains("PPSSPP", Qt::CaseInsensitive)) {
             sizePrefix = "X";
-            pointerMask = "&33554431";  // 0x01FFFFFF mask
+            defaultPointerMask = "&33554431";  // 0x01FFFFFF mask
         }
+
+        bool isPs2 = (raPrefix == "X" && emuName.contains("PCSX2", Qt::CaseInsensitive));
+
+        auto extractMaskFromText = [](const QString& text) -> QString {
+            static const QRegularExpression maskRx(R"(\&\s*(?:0x([0-9a-fA-F]+)|(\d+)))");
+            auto match = maskRx.match(text);
+            if (match.hasMatch()) {
+                if (!match.captured(1).isEmpty()) {
+                    bool ok = false;
+                    uint32_t val = match.captured(1).toUInt(&ok, 16);
+                    if (ok) return QString("&%1").arg(val);
+                }
+                else if (!match.captured(2).isEmpty()) {
+                    return QString("&%1").arg(match.captured(2));
+                }
+            }
+            return "";
+        };
 
         bool rootIsPointer = false;
         if (!rootArr) {
@@ -819,11 +837,25 @@ namespace PointerFinder2::UI {
         struct StepInfo {
             bool isIndirect = true;
             uint32_t value = 0;
+            QString mask = "";
         };
         std::vector<StepInfo> steps;
 
         if (rootIsPointer) {
-            steps.push_back({ true, currentBaseAddress });
+            QString mask = extractMaskFromText(headerComment);
+            if (mask.isEmpty()) {
+                if (isPs2 && m_manager->isAttached()) {
+                    auto [normAddr, _] = m_manager->normalizeAddressForRead(currentBaseAddress);
+                    auto dwordOpt = m_manager->readUInt32(normAddr);
+                    if (dwordOpt.has_value() && (dwordOpt.value() >> 28) == 0x2) {
+                        mask = "&536870911";
+                    }
+                }
+                else {
+                    mask = defaultPointerMask;
+                }
+            }
+            steps.push_back({ true, currentBaseAddress, mask });
         }
 
         uint32_t accumulatedOffset = 0;
@@ -837,7 +869,20 @@ namespace PointerFinder2::UI {
             if (isStatic) {
                 currentStaticAddr += static_cast<uint32_t>(offset);
                 if (isPtr) {
-                    steps.push_back({ true, currentStaticAddr });
+                    QString mask = extractMaskFromText(node->text(0));
+                    if (mask.isEmpty()) {
+                        if (isPs2 && m_manager->isAttached()) {
+                            auto [normAddr, _] = m_manager->normalizeAddressForRead(currentStaticAddr);
+                            auto dwordOpt = m_manager->readUInt32(normAddr);
+                            if (dwordOpt.has_value() && (dwordOpt.value() >> 28) == 0x2) {
+                                mask = "&536870911";
+                            }
+                        }
+                        else {
+                            mask = defaultPointerMask;
+                        }
+                    }
+                    steps.push_back({ true, currentStaticAddr, mask });
                     isStatic = false;
                     accumulatedOffset = 0;
                 }
@@ -845,7 +890,23 @@ namespace PointerFinder2::UI {
             else {
                 accumulatedOffset += static_cast<uint32_t>(offset);
                 if (isPtr && !isLast) {
-                    steps.push_back({ true, accumulatedOffset });
+                    QString mask = extractMaskFromText(node->text(0));
+                    if (mask.isEmpty()) {
+                        if (isPs2 && m_manager->isAttached()) {
+                            uint32_t nodeAddr = const_cast<StructureHierarchyWidget*>(this)->resolveNodeAddress(node, currentBaseAddress, {}, rootArr);
+                            if (nodeAddr != 0) {
+                                auto [normAddr, _] = m_manager->normalizeAddressForRead(nodeAddr);
+                                auto dwordOpt = m_manager->readUInt32(normAddr);
+                                if (dwordOpt.has_value() && (dwordOpt.value() >> 28) == 0x2) {
+                                    mask = "&536870911";
+                                }
+                            }
+                        }
+                        else {
+                            mask = defaultPointerMask;
+                        }
+                    }
+                    steps.push_back({ true, accumulatedOffset, mask });
                     accumulatedOffset = 0;
                 }
             }
@@ -866,10 +927,10 @@ namespace PointerFinder2::UI {
                 : QString("%1").arg(step.value, 8, 16, QChar('0')).toLower();
 
             if (i == 0) {
-                sb.append(QString("I:0x%1%2%3").arg(sizePrefix, addrStr, pointerMask));
+                sb.append(QString("I:0x%1%2%3").arg(sizePrefix, addrStr, step.mask));
             }
             else {
-                sb.append(QString("_I:0x%1%2%3").arg(sizePrefix, addrStr, pointerMask));
+                sb.append(QString("_I:0x%1%2%3").arg(sizePrefix, addrStr, step.mask));
             }
         }
 

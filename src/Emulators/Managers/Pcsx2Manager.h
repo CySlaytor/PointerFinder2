@@ -33,7 +33,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         bool areAddressesEquivalent(uint32_t addr1, uint32_t addr2) const override;
         DataModels::AppSettings getDefaultSettings() const override;
         int64_t getIndexForStateDump(uint32_t address) const override;
-        QString getPlatformPointerTypeDescription() const override;
+        QString getPlatformPointerTypeDescription(uint32_t pointerValue = 0) const override;
 
     private:
         uintptr_t m_ps2MemoryBaseInPC = 0;

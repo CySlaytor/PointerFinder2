@@ -71,9 +71,15 @@ namespace PointerFinder2::UI {
 
         if (name.startsWith("Pointer to ", Qt::CaseInsensitive)) {
             QString tag = platformPointerType;
-            int spaceIdx = tag.indexOf(' ');
-            if (spaceIdx != -1) {
-                tag = tag.left(spaceIdx);
+            int bracketEnd = tag.indexOf(']');
+            if (bracketEnd != -1) {
+                tag = tag.left(bracketEnd + 1);
+            }
+            else {
+                int spaceIdx = tag.indexOf(' ');
+                if (spaceIdx != -1) {
+                    tag = tag.left(spaceIdx);
+                }
             }
             return QString("%1 %2").arg(tag, name);
         }

@@ -122,8 +122,8 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
-    QString PpssppManager::getPlatformPointerTypeDescription() const {
-        return "[32-bit] Pointer";
+    QString PpssppManager::getPlatformPointerTypeDescription(uint32_t) const {
+        return "[32-bit & 0x1FFFFFF] Pointer";
     }
 
     uintptr_t PpssppManager::findPspRamBaseBySize() {

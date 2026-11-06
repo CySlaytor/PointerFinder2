@@ -157,7 +157,10 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         return -1;
     }
 
-    QString Pcsx2Manager::getPlatformPointerTypeDescription() const {
+    QString Pcsx2Manager::getPlatformPointerTypeDescription(uint32_t pointerValue) const {
+        if ((pointerValue >> 28) == 0x2) {
+            return "[32-bit & 0x1FFFFFFF] Pointer";
+        }
         return "[32-bit] Pointer";
     }
 
