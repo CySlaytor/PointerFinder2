@@ -27,6 +27,7 @@ namespace PointerFinder2::UI {
 
     void DissectAddressBar::updateThemeIcons() {
         m_newAddressBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
+        m_cloneStrideBtn->setIcon(getThemeIcon(":/icons/copy.svg"));
         m_deleteAddressBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
         m_saveUserBtn->setIcon(getThemeIcon(":/icons/save.svg"));
         m_revertServerBtn->setIcon(getThemeIcon(":/icons/undo.svg"));
@@ -107,6 +108,14 @@ namespace PointerFinder2::UI {
         m_newAddressBtn->setDefault(false);
         topToolbar->addWidget(m_newAddressBtn);
 
+        m_cloneStrideBtn = new QPushButton("Clone Stride...", this);
+        m_cloneStrideBtn->setIcon(getThemeIcon(":/icons/copy.svg"));
+        m_cloneStrideBtn->setToolTip("Batch clone this structure across sequential memory strides (e.g. Levels, Slots)");
+        m_cloneStrideBtn->setFixedHeight(26);
+        m_cloneStrideBtn->setAutoDefault(false);
+        m_cloneStrideBtn->setDefault(false);
+        topToolbar->addWidget(m_cloneStrideBtn);
+
         m_deleteAddressBtn = new QPushButton("Remove Address", this);
         m_deleteAddressBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
         m_deleteAddressBtn->setToolTip("Delete this manually created address from the list and User.txt");
@@ -155,6 +164,7 @@ namespace PointerFinder2::UI {
         topToolbar->addWidget(m_toggleCodeNoteBtn);
 
         connect(m_newAddressBtn, &QPushButton::clicked, this, &DissectAddressBar::newAddressClicked);
+        connect(m_cloneStrideBtn, &QPushButton::clicked, this, &DissectAddressBar::cloneStrideClicked);
         connect(m_deleteAddressBtn, &QPushButton::clicked, this, &DissectAddressBar::deleteAddressClicked);
         connect(m_addressSelectCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &DissectAddressBar::onAddressComboChanged);
         connect(m_addressSearchEdit, &QLineEdit::textChanged, this, &DissectAddressBar::onAddressSearchTextChanged);
@@ -295,6 +305,7 @@ namespace PointerFinder2::UI {
         }
         m_revertServerBtn->setEnabled(canRevert);
         m_deleteAddressBtn->setEnabled(canDelete);
+        m_cloneStrideBtn->setEnabled(activeAddr != 0 && gameData.isValid);
     }
 
     void DissectAddressBar::setCodeNotePanelButtonChecked(bool checked) {

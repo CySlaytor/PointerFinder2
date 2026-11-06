@@ -9,6 +9,7 @@
 #include "UI/Common/ThemeManager.h"
 #include "UI/Dialogs/AddPointerDialog.h"
 #include "UI/Dialogs/AddVariableDialog.h"
+#include "UI/Dialogs/CloneStrideDialog.h"
 
 #include <windows.h>
 #include <algorithm>
@@ -362,6 +363,7 @@ namespace PointerFinder2::UI {
 
         // Address Bar Connections
         connect(m_addressBar, &DissectAddressBar::newAddressClicked, this, &StructureWorkspaceDialog::onNewAddressClicked);
+        connect(m_addressBar, &DissectAddressBar::cloneStrideClicked, this, &StructureWorkspaceDialog::onCloneStrideClicked);
         connect(m_addressBar, &DissectAddressBar::deleteAddressClicked, this, &StructureWorkspaceDialog::onDeleteAddressClicked);
         connect(m_addressBar, &DissectAddressBar::addressSelected, this, &StructureWorkspaceDialog::onAddressSelectedFromBar);
         connect(m_addressBar, &DissectAddressBar::saveUserTxtClicked, this, &StructureWorkspaceDialog::onSaveUserTxtClicked);
@@ -442,9 +444,19 @@ namespace PointerFinder2::UI {
         QFileInfo fi(m_gameData.userTxtPath);
         QString fileName = fi.fileName().isEmpty() ? "User.txt" : fi.fileName();
 
+        int modifiedOrLocalCount = 0;
+        for (const auto& n : m_gameData.notes) {
+            if (n.isModified || n.isLocalOnly) modifiedOrLocalCount++;
+        }
+
         QMessageBox msgBox(this);
         msgBox.setWindowTitle("Confirm Save to User.txt");
-        msgBox.setText(QString("Save changes for address 0x%1 to %2?").arg(addrStr, fileName));
+        if (modifiedOrLocalCount > 1) {
+            msgBox.setText(QString("Save all %1 pending local/modified code notes to %2?").arg(modifiedOrLocalCount).arg(fileName));
+        } else {
+            msgBox.setText(QString("Save changes for address 0x%1 to %2?").arg(addrStr, fileName));
+        }
+
         msgBox.setInformativeText(
             QString("Structure: %1\nTarget File: %2\n\n"
                     "This will write your local developer note override to disk. "
@@ -585,6 +597,67 @@ namespace PointerFinder2::UI {
         }
     }
 
+    void StructureWorkspaceDialog::onCloneStrideClicked() {
+        uint32_t activeAddr = m_currentBaseAddress;
+        if (activeAddr == 0 || !m_gameData.isValid) return;
+
+        QString currentNote = m_codeNoteEditor ? m_codeNoteEditor->toPlainText() : "";
+        if (currentNote.trimmed().isEmpty()) {
+            auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+                return n.address == activeAddr;
+            });
+            if (it != m_gameData.notes.end()) {
+                currentNote = it->noteText;
+            }
+        }
+
+        CloneStrideDialog dialog(m_manager, activeAddr, currentNote, this);
+        if (dialog.exec() != QDialog::Accepted) return;
+
+        auto generated = dialog.getGeneratedNotes();
+        if (generated.empty()) return;
+
+        int addedCount = 0;
+        int updatedCount = 0;
+
+        for (const auto& g : generated) {
+            auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+                return n.address == g.address;
+            });
+
+            if (it != m_gameData.notes.end()) {
+                it->noteText = g.noteText;
+                it->title = g.title;
+                it->isModified = !it->isLocalOnly;
+                updatedCount++;
+            }
+            else {
+                RaCodeNote newNote;
+                newNote.address = g.address;
+                newNote.addressHex = QString("0x%1").arg(g.address, 8, 16, QChar('0')).toUpper();
+                newNote.noteText = g.noteText;
+                newNote.title = g.title;
+                newNote.author = "Local";
+                newNote.isModified = false;
+                newNote.isLocalOnly = true;
+                m_gameData.notes.push_back(newNote);
+                addedCount++;
+            }
+        }
+
+        populateAddressDropdown(false);
+        updateToolbarButtonStates();
+
+        // Switch to the next generated note in sequence so the developer can immediately inspect it in Memory Viewer
+        uint32_t nextInspectAddr = (generated.size() > 1) ? generated[1].address : generated[0].address;
+        selectAddressInUI(nextInspectAddr, true);
+
+        showStatusMessage(QString("Batch cloned %1 sequential note(s) (%2 new, %3 updated). Click 'Reset' to discard or 'Save to User.txt' to commit.")
+            .arg(generated.size())
+            .arg(addedCount)
+            .arg(updatedCount));
+    }
+
     void StructureWorkspaceDialog::onDeleteAddressClicked() {
         uint32_t activeAddr = m_currentBaseAddress;
         if (activeAddr == 0) return;
@@ -674,9 +747,28 @@ namespace PointerFinder2::UI {
         uint32_t savedCursor = (m_currentViewerSelectedAddress != 0) ? m_currentViewerSelectedAddress : m_memoryViewer->getSelectedAddress();
         int savedScroll = m_memoryViewer->verticalScrollBar()->value();
 
+        // 1. Sync active editor text into active address first
         QString currentNote = m_codeNoteEditor->toPlainText();
-        bool ok = RaStorageService::saveActiveNoteToUserTxt(m_gameData, activeAddr, currentNote);
-        if (ok) {
+        auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(), [&](const RaCodeNote& n) {
+            return n.address == activeAddr;
+        });
+        if (it != m_gameData.notes.end()) {
+            it->noteText = currentNote;
+            it->title = RaStorageService::extractTitleFromNote(currentNote);
+            it->isModified = !it->isLocalOnly;
+        }
+
+        // 2. Persist all local overrides and newly created/cloned notes into User.txt
+        bool anyFailed = false;
+        for (const auto& note : m_gameData.notes) {
+            if (note.isLocalOnly || note.isModified) {
+                if (!RaStorageService::saveActiveNoteToUserTxt(m_gameData, note.address, note.noteText)) {
+                    anyFailed = true;
+                }
+            }
+        }
+
+        if (!anyFailed) {
             populateAddressDropdown(false);
             updateToolbarButtonStates();
 
@@ -685,8 +777,9 @@ namespace PointerFinder2::UI {
                 m_memoryViewer->setSelectedAddress(savedCursor, false, false);
                 m_memoryViewer->verticalScrollBar()->setValue(savedScroll);
             }
+            return true;
         }
-        return ok;
+        return false;
     }
 
     void StructureWorkspaceDialog::onSaveUserTxtClicked() {

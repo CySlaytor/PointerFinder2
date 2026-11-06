@@ -8,6 +8,7 @@
 #include "UI/Widgets/MemoryViewerWidget.h"
 #include "CodeNoteEditorWidget.h"
 #include "DissectAddressBar.h"
+#include "UI/Dialogs/CloneStrideDialog.h"
 #include "UI/Dialogs/NewAddressDialog.h"
 #include "StructureHierarchyWidget.h"
 
@@ -60,6 +61,7 @@ namespace PointerFinder2::UI {
 
         // RA Game Data & Dissection slots
         void onNewAddressClicked();
+        void onCloneStrideClicked();
         void onDeleteAddressClicked();
         void onAddressSelectedFromBar(uint32_t address, bool autoNavigate);
         void onSaveUserTxtClicked();

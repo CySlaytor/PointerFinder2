@@ -80,6 +80,7 @@ namespace PointerFinder2::UI {
     signals:
         void addressSelected(uint32_t address, bool autoNavigate);
         void newAddressClicked();
+        void cloneStrideClicked();
         void deleteAddressClicked();
         void saveUserTxtClicked();
         void revertServerClicked();
@@ -96,6 +97,7 @@ namespace PointerFinder2::UI {
         AddressFilterProxyModel* m_addressProxyModel = nullptr;
         QLineEdit* m_addressSearchEdit = nullptr;
         QPushButton* m_newAddressBtn = nullptr;
+        QPushButton* m_cloneStrideBtn = nullptr;
         QPushButton* m_deleteAddressBtn = nullptr;
         QPushButton* m_saveUserBtn = nullptr;
         QPushButton* m_revertServerBtn = nullptr;
