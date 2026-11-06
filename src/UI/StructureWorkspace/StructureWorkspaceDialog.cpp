@@ -40,13 +40,14 @@ namespace PointerFinder2::UI {
         : QDialog(parent), m_manager(manager) {
         setWindowTitle("Pointer Finder 2.0 - Dissect Structure");
         resize(1300, 750);
-        setMinimumSize(920, 520);
+        setMinimumSize(1140, 560);
 
         setWindowFlags(Qt::Window | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
 
         setupLayout();
         updateViewModeComboForEmulator();
         loadWorkspaceSettings();
+        updateMinimumWindowSize();
 
         if (m_manager && m_manager->isAttached()) {
             m_hierarchyWidget->setEmulatorManager(m_manager);
@@ -120,6 +121,10 @@ namespace PointerFinder2::UI {
         QDialog::keyPressEvent(event);
     }
 
+    void StructureWorkspaceDialog::resizeEvent(QResizeEvent* event) {
+        QDialog::resizeEvent(event);
+    }
+
     void StructureWorkspaceDialog::setupLayout() {
         auto* rootLayout = new QVBoxLayout(this);
         rootLayout->setContentsMargins(0, 0, 0, 0);
@@ -138,7 +143,7 @@ namespace PointerFinder2::UI {
 
         // --- Left Panel: Structure Editor ---
         m_hierarchyWidget = new StructureHierarchyWidget(m_mainSplitter);
-        m_hierarchyWidget->setMinimumWidth(260);
+        m_hierarchyWidget->setMinimumWidth(280);
         m_mainSplitter->addWidget(m_hierarchyWidget);
 
         // --- Right Panel: Memory Viewer ---
@@ -166,11 +171,17 @@ namespace PointerFinder2::UI {
         m_ramStatusLabel->setMinimumWidth(0);
         viewerTopRow->addWidget(m_ramStatusLabel);
 
-        viewerTopRow->addStretch();
+        viewerTopRow->addStretch(1);
+
+        // Synchronized combo box container to ensure identical widths and dynamic adaptation
+        m_selectorsContainer = new QWidget(m_middleContainer);
+        auto* selectorsLayout = new QHBoxLayout(m_selectorsContainer);
+        selectorsLayout->setContentsMargins(0, 0, 0, 0);
+        selectorsLayout->setSpacing(4);
 
         // Display Mode Selector (always visible, enabled only when Float mode is active)
-        m_floatDisplayLabel = new QLabel("Display:", m_middleContainer);
-        m_floatDisplayCombo = new QComboBox(m_middleContainer);
+        m_floatDisplayLabel = new QLabel("Display:", m_selectorsContainer);
+        m_floatDisplayCombo = new QComboBox(m_selectorsContainer);
         m_floatDisplayCombo->addItems({
             "Raw Float",
             "Time (Seconds)",
@@ -180,19 +191,29 @@ namespace PointerFinder2::UI {
             "Time (Milliseconds)"
         });
         m_floatDisplayCombo->setFixedHeight(26);
-        m_floatDisplayCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        m_floatDisplayCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        m_floatDisplayCombo->setMinimumContentsLength(6);
+        m_floatDisplayCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_floatDisplayCombo->setMinimumWidth(95);
         m_floatDisplayLabel->setEnabled(false);
         m_floatDisplayCombo->setEnabled(false);
-        viewerTopRow->addWidget(m_floatDisplayLabel);
-        viewerTopRow->addWidget(m_floatDisplayCombo);
+        selectorsLayout->addWidget(m_floatDisplayLabel);
+        selectorsLayout->addWidget(m_floatDisplayCombo, 1);
+
+        selectorsLayout->addSpacing(4);
 
         // Memory View Mode Selector (consistently right-aligned at the far right)
-        m_viewModeLabel = new QLabel("Memory View:", m_middleContainer);
-        m_viewModeCombo = new QComboBox(m_middleContainer);
+        m_viewModeLabel = new QLabel("Memory View:", m_selectorsContainer);
+        m_viewModeCombo = new QComboBox(m_selectorsContainer);
         m_viewModeCombo->setFixedHeight(26);
-        m_viewModeCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-        viewerTopRow->addWidget(m_viewModeLabel);
-        viewerTopRow->addWidget(m_viewModeCombo);
+        m_viewModeCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        m_viewModeCombo->setMinimumContentsLength(6);
+        m_viewModeCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_viewModeCombo->setMinimumWidth(95);
+        selectorsLayout->addWidget(m_viewModeLabel);
+        selectorsLayout->addWidget(m_viewModeCombo, 1);
+
+        viewerTopRow->addWidget(m_selectorsContainer, 2);
 
         middleLayout->addLayout(viewerTopRow);
 
@@ -253,7 +274,7 @@ namespace PointerFinder2::UI {
 
         // --- Panel 3: Code Note Hierarchy Fixer ---
         m_codeNoteEditor = new CodeNoteEditorWidget(m_mainSplitter);
-        m_codeNoteEditor->setMinimumWidth(0);
+        m_codeNoteEditor->setMinimumWidth(320);
         m_mainSplitter->addWidget(m_codeNoteEditor);
 
         m_mainSplitter->setCollapsible(0, false);
@@ -403,6 +424,21 @@ namespace PointerFinder2::UI {
 
         m_viewModeCombo->blockSignals(false);
         onViewModeChanged();
+    }
+
+    void StructureWorkspaceDialog::updateMinimumWindowSize() {
+        int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
+        QList<int> sizes = m_mainSplitter ? m_mainSplitter->sizes() : QList<int>();
+        bool codeNoteVisible = (sizes.size() > 2 && sizes[2] > 0);
+
+        if (codeNoteVisible) {
+            int minW = std::max(1140, 280 + contentW32 + 320 + 30);
+            setMinimumSize(minW, 560);
+        }
+        else {
+            int minW = std::max(820, 280 + contentW32 + 20);
+            setMinimumSize(minW, 560);
+        }
     }
 
     bool StructureWorkspaceDialog::confirmSaveUserTxt() {
@@ -1728,6 +1764,7 @@ namespace PointerFinder2::UI {
 
         if (sizes[2] > 0) {
             m_lastCodeNotePanelWidth = sizes[2];
+            m_codeNoteEditor->setMinimumWidth(0);
             sizes[2] = 0;
             // Distribute available space evenly (50/50) between Panel 1 and Panel 2 in compact mode
             int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
@@ -1736,13 +1773,24 @@ namespace PointerFinder2::UI {
             sizes[1] = totalAvailable - half;
             m_mainSplitter->setSizes(sizes);
             m_addressBar->setCodeNotePanelButtonChecked(false);
+            updateMinimumWindowSize();
             showStatusMessage("Code note panel collapsed.");
         }
         else {
-            int restoreWidth = (m_lastCodeNotePanelWidth > 60) ? m_lastCodeNotePanelWidth : 350;
+            int restoreWidth = (m_lastCodeNotePanelWidth >= 320) ? m_lastCodeNotePanelWidth : 350;
             int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
+
+            // Expand window if currently smaller than healthy 3-panel minimum
+            int minHealthyWidth = std::max(1140, 280 + contentW32 + 320 + 30);
+            if (width() < minHealthyWidth) {
+                resize(minHealthyWidth, height());
+            }
+
+            m_codeNoteEditor->setMinimumWidth(320);
+            updateMinimumWindowSize();
+
             int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
-            int remainingForPanel0 = std::max(260, totalAvailable - contentW32 - restoreWidth);
+            int remainingForPanel0 = std::max(280, totalAvailable - contentW32 - restoreWidth);
             sizes[0] = remainingForPanel0;
             sizes[1] = contentW32;
             sizes[2] = restoreWidth;
@@ -1759,8 +1807,13 @@ namespace PointerFinder2::UI {
                 bool visible = (sizes[2] > 0);
                 if (visible) {
                     m_lastCodeNotePanelWidth = sizes[2];
+                    m_codeNoteEditor->setMinimumWidth(320);
+                }
+                else {
+                    m_codeNoteEditor->setMinimumWidth(0);
                 }
                 m_addressBar->setCodeNotePanelButtonChecked(visible);
+                updateMinimumWindowSize();
             }
         }
     }
@@ -1829,37 +1882,53 @@ namespace PointerFinder2::UI {
         QSettings settings(iniPath, QSettings::IniFormat);
         settings.beginGroup("DissectStructure");
 
+        // Clean up legacy byte-gibberish keys if present from older versions
         if (settings.contains("geometry")) {
-            restoreGeometry(settings.value("geometry").toByteArray());
+            settings.remove("geometry");
+        }
+        if (settings.contains("splitterState")) {
+            settings.remove("splitterState");
         }
 
-        m_lastCodeNotePanelWidth = settings.value("lastCodeNoteWidth", 350).toInt();
+        int savedWidth = settings.value("windowWidth", 1300).toInt();
+        int savedHeight = settings.value("windowHeight", 750).toInt();
+        bool isMax = settings.value("isMaximized", false).toBool();
 
         int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
 
-        if (settings.contains("splitterState")) {
-            m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
+        m_lastCodeNotePanelWidth = settings.value("lastCodeNotePanelWidth", 350).toInt();
+        if (m_lastCodeNotePanelWidth < 60) {
+            m_lastCodeNotePanelWidth = 350;
+        }
 
-            // If an older session saved an oversized Panel 2 with dead space, clamp it flush to the 32-bit content width
-            QList<int> sizes = m_mainSplitter->sizes();
-            if (sizes.size() >= 3 && sizes[1] > contentW32 + 10) {
-                int excess = sizes[1] - contentW32;
-                sizes[1] = contentW32;
-                if (sizes[2] > 0) {
-                    sizes[0] += excess / 2;
-                    sizes[2] += excess - (excess / 2);
-                }
-                else {
-                    sizes[0] += excess;
-                }
-                m_mainSplitter->setSizes(sizes);
-            }
+        bool panelVisible = settings.value("codeNotePanelVisible", true).toBool();
+
+        int hWidth = settings.value("panelHierarchyWidth", 340).toInt();
+        int mWidth = settings.value("panelMemoryViewWidth", contentW32).toInt();
+        int cWidth = settings.value("panelCodeNoteWidth", 350).toInt();
+
+        // Enforce healthy minimums
+        hWidth = std::max(280, hWidth);
+        mWidth = std::max(contentW32, mWidth);
+        if (panelVisible) {
+            cWidth = std::max(320, cWidth);
+            m_codeNoteEditor->setMinimumWidth(320);
         }
         else {
-            // Default clean layout: Panel 2 takes exactly its 32-bit content width with zero gap
-            int availableWidth = std::max(1100, width() - 16);
-            int sideW = std::max(280, (availableWidth - contentW32) / 2);
-            m_mainSplitter->setSizes({ sideW, contentW32, sideW });
+            cWidth = 0;
+            m_codeNoteEditor->setMinimumWidth(0);
+        }
+
+        // Apply clean window size
+        int minHealthyWidth = panelVisible ? std::max(1140, 280 + contentW32 + 320 + 30) : std::max(820, 280 + contentW32 + 20);
+        savedWidth = std::max(savedWidth, minHealthyWidth);
+        savedHeight = std::max(savedHeight, 560);
+        resize(savedWidth, savedHeight);
+
+        m_mainSplitter->setSizes({ hWidth, mWidth, cWidth });
+
+        if (isMax) {
+            showMaximized();
         }
 
         QString savedModeText = settings.value("viewModeText", "").toString();
@@ -1893,10 +1962,7 @@ namespace PointerFinder2::UI {
         m_codeNoteEditor->setStyle(style);
         m_codeNoteEditor->setIndentDescriptions(settings.value("indentDescriptions", true).toBool());
 
-        QList<int> sizes = m_mainSplitter->sizes();
-        if (sizes.size() > 2) {
-            m_addressBar->setCodeNotePanelButtonChecked(sizes[2] > 0);
-        }
+        m_addressBar->setCodeNotePanelButtonChecked(panelVisible);
 
         settings.endGroup();
 
@@ -1910,12 +1976,23 @@ namespace PointerFinder2::UI {
         QSettings settings(iniPath, QSettings::IniFormat);
         settings.beginGroup("DissectStructure");
 
-        settings.setValue("geometry", saveGeometry());
-        settings.setValue("splitterState", m_mainSplitter->saveState());
-        settings.setValue("lastCodeNotePanelWidth", m_lastCodeNotePanelWidth);
+        // Save window geometry as clean integers
+        settings.setValue("isMaximized", isMaximized());
+        if (!isMaximized()) {
+            settings.setValue("windowWidth", width());
+            settings.setValue("windowHeight", height());
+        }
 
+        // Save splitter panel sizes as clean integers
         QList<int> sizes = m_mainSplitter->sizes();
-        settings.setValue("codeNotePanelVisible", (sizes.size() > 2 && sizes[2] > 0));
+        if (sizes.size() >= 3) {
+            settings.setValue("panelHierarchyWidth", sizes[0]);
+            settings.setValue("panelMemoryViewWidth", sizes[1]);
+            settings.setValue("panelCodeNoteWidth", sizes[2]);
+            settings.setValue("codeNotePanelVisible", sizes[2] > 0);
+        }
+
+        settings.setValue("lastCodeNotePanelWidth", m_lastCodeNotePanelWidth);
 
         settings.setValue("viewMode", m_viewModeCombo ? m_viewModeCombo->currentIndex() : 2);
         settings.setValue("viewModeText", m_viewModeCombo ? m_viewModeCombo->currentText() : "32-bit");

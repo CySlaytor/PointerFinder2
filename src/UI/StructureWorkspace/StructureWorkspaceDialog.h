@@ -39,6 +39,7 @@ namespace PointerFinder2::UI {
 
     protected:
         void keyPressEvent(QKeyEvent* event) override;
+        void resizeEvent(QResizeEvent* event) override;
 
     private slots:
         void onAddressSelectedInViewer(uint32_t address);
@@ -105,6 +106,7 @@ namespace PointerFinder2::UI {
         QLabel* m_ramStatusLabel = nullptr;
 
         // Memory View Mode & Float Timer Display Controls
+        QWidget* m_selectorsContainer = nullptr;
         QLabel* m_viewModeLabel = nullptr;
         QComboBox* m_viewModeCombo = nullptr;
         QLabel* m_floatDisplayLabel = nullptr;
@@ -136,6 +138,7 @@ namespace PointerFinder2::UI {
 
         void setupLayout();
         void updateViewModeComboForEmulator();
+        void updateMinimumWindowSize();
         void loadWorkspaceSettings();
         void saveWorkspaceSettings();
         void updateStatusPermanentInfo();
