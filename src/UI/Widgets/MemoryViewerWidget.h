@@ -25,6 +25,15 @@ namespace PointerFinder2::UI::Widgets {
             ModeFloatBE
         };
 
+        enum class FloatDisplayMode {
+            Raw,
+            TimeSeconds,
+            TimeFrames60,
+            TimeFrames50,
+            TimeCentiseconds,
+            TimeMilliseconds
+        };
+
         struct HighlightInfo {
             QString label;
             QString name;
@@ -57,6 +66,9 @@ namespace PointerFinder2::UI::Widgets {
         ViewMode getViewMode() const { return m_viewMode; }
         void setViewMode(ViewMode mode);
 
+        FloatDisplayMode getFloatDisplayMode() const { return m_floatDisplayMode; }
+        void setFloatDisplayMode(FloatDisplayMode mode);
+
         void setHighlightedAddresses(const std::unordered_map<uint32_t, HighlightInfo>& highlights);
         void clearHighlights();
 
@@ -86,6 +98,7 @@ namespace PointerFinder2::UI::Widgets {
         bool hasData() const { return !m_memoryData.empty(); }
         uint32_t getMemoryBase() const { return m_memoryBaseAddress; }
         size_t getMemorySize() const { return m_memoryData.size(); }
+        int getContentWidth32Bit() const;
 
     signals:
         void addressSelected(uint32_t address);
@@ -122,6 +135,7 @@ namespace PointerFinder2::UI::Widgets {
         uint32_t m_memoryBaseAddress = 0;
         bool m_isBigEndian = false;
         ViewMode m_viewMode = ViewMode::Mode32Bit;
+        FloatDisplayMode m_floatDisplayMode = FloatDisplayMode::Raw;
 
         std::unordered_map<uint32_t, HighlightInfo> m_highlights;
         std::vector<DefinedArrayInfo> m_definedArrays;
@@ -165,6 +179,7 @@ namespace PointerFinder2::UI::Widgets {
         void updateRangeBanner();
         int64_t totalRows() const;
         uint32_t addressAtPosition(const QPoint& pos) const;
+        QString formatFloatString(float fVal, uint32_t rawVal) const;
     };
 
 }

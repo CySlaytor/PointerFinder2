@@ -80,6 +80,8 @@ namespace PointerFinder2::UI {
     }
 
     void StructureHierarchyWidget::setupLayout() {
+        setMinimumWidth(280);
+
         auto* leftLayout = new QVBoxLayout(this);
         leftLayout->setContentsMargins(0, 0, 0, 0);
         leftLayout->setSpacing(6);
@@ -155,7 +157,7 @@ namespace PointerFinder2::UI {
         m_addVariableBtn->setAutoDefault(false);
         m_addVariableBtn->setDefault(false);
 
-        m_addPointerBtn = new QPushButton("Add as Pointer", this);
+        m_addPointerBtn = new QPushButton("Add Pointer", this);
         m_addPointerBtn->setToolTip("Add pointer at selected address (Shortcut: P)");
         m_addPointerBtn->setIcon(getThemeIcon(":/icons/attach.svg"));
         m_addPointerBtn->setFixedHeight(26);

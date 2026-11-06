@@ -45,6 +45,7 @@ namespace PointerFinder2::UI {
         setWindowFlags(Qt::Window | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
 
         setupLayout();
+        updateViewModeComboForEmulator();
         loadWorkspaceSettings();
 
         if (m_manager && m_manager->isAttached()) {
@@ -137,12 +138,11 @@ namespace PointerFinder2::UI {
 
         // --- Left Panel: Structure Editor ---
         m_hierarchyWidget = new StructureHierarchyWidget(m_mainSplitter);
-        m_hierarchyWidget->setMinimumWidth(200);
+        m_hierarchyWidget->setMinimumWidth(260);
         m_mainSplitter->addWidget(m_hierarchyWidget);
 
         // --- Right Panel: Memory Viewer ---
         m_middleContainer = new QWidget(m_mainSplitter);
-        m_middleContainer->setMinimumWidth(250);
         auto* middleLayout = new QVBoxLayout(m_middleContainer);
         middleLayout->setContentsMargins(0, 0, 0, 0);
         middleLayout->setSpacing(6);
@@ -150,10 +150,11 @@ namespace PointerFinder2::UI {
         // Top Header Row for Memory Viewer: Re-dump / Refresh RAM, Snapshot Info, and Memory View Selector
         auto* viewerTopRow = new QHBoxLayout();
         viewerTopRow->setContentsMargins(0, 0, 0, 0);
-        viewerTopRow->setSpacing(6);
+        viewerTopRow->setSpacing(5);
 
-        m_refreshRamBtn = new QPushButton("Re-dump / Refresh RAM", m_middleContainer);
+        m_refreshRamBtn = new QPushButton("Refresh RAM", m_middleContainer);
         m_refreshRamBtn->setIcon(getThemeIcon(":/icons/refresh.svg"));
+        m_refreshRamBtn->setToolTip("Re-dump / Refresh RAM from active emulator");
         m_refreshRamBtn->setFixedHeight(26);
         m_refreshRamBtn->setAutoDefault(false);
         m_refreshRamBtn->setDefault(false);
@@ -164,21 +165,43 @@ namespace PointerFinder2::UI {
         m_ramStatusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         m_ramStatusLabel->setMinimumWidth(0);
         viewerTopRow->addWidget(m_ramStatusLabel);
+
         viewerTopRow->addStretch();
 
-        // Memory View Mode Selector positioned in the upper-right corner
-        viewerTopRow->addWidget(new QLabel("Memory View:", m_middleContainer));
+        // Display Mode Selector (always visible, enabled only when Float mode is active)
+        m_floatDisplayLabel = new QLabel("Display:", m_middleContainer);
+        m_floatDisplayCombo = new QComboBox(m_middleContainer);
+        m_floatDisplayCombo->addItems({
+            "Raw Float",
+            "Time (Seconds)",
+            "Time (Frames 60Hz)",
+            "Time (Frames 50Hz)",
+            "Time (Centiseconds)",
+            "Time (Milliseconds)"
+        });
+        m_floatDisplayCombo->setFixedHeight(26);
+        m_floatDisplayCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        m_floatDisplayLabel->setEnabled(false);
+        m_floatDisplayCombo->setEnabled(false);
+        viewerTopRow->addWidget(m_floatDisplayLabel);
+        viewerTopRow->addWidget(m_floatDisplayCombo);
+
+        // Memory View Mode Selector (consistently right-aligned at the far right)
+        m_viewModeLabel = new QLabel("Memory View:", m_middleContainer);
         m_viewModeCombo = new QComboBox(m_middleContainer);
-        m_viewModeCombo->addItems({ "8-bit", "16-bit", "32-bit", "32-bit BE", "Float", "Float BE" });
-        m_viewModeCombo->setCurrentIndex(2);
         m_viewModeCombo->setFixedHeight(26);
-        m_viewModeCombo->setMinimumWidth(110);
+        m_viewModeCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        viewerTopRow->addWidget(m_viewModeLabel);
         viewerTopRow->addWidget(m_viewModeCombo);
 
         middleLayout->addLayout(viewerTopRow);
 
         m_memoryViewer = new Widgets::MemoryViewerWidget(m_middleContainer);
         middleLayout->addWidget(m_memoryViewer, 1);
+
+        // Enforce the 32-bit content width floor so the splitter cannot shrink Panel 2 past its grid
+        int contentWidth32 = m_memoryViewer->getContentWidth32Bit();
+        m_middleContainer->setMinimumWidth(contentWidth32);
 
         // Memory Controls Bar (positioned at bottom)
         auto* viewerBottomRow = new QHBoxLayout();
@@ -237,10 +260,10 @@ namespace PointerFinder2::UI {
         m_mainSplitter->setCollapsible(1, false);
         m_mainSplitter->setCollapsible(2, true);
 
-        // Prioritize horizontal space for Structure Hierarchy while keeping Memory Viewer sized to content
+        // Keep Panel 2 locked to its 32-bit content width (stretch factor 0) while letting Panels 0 & 2 absorb window resizing
         m_mainSplitter->setStretchFactor(0, 1);
         m_mainSplitter->setStretchFactor(1, 0);
-        m_mainSplitter->setStretchFactor(2, 0);
+        m_mainSplitter->setStretchFactor(2, 1);
         contentLayout->addWidget(m_mainSplitter, 1);
 
         rootLayout->addWidget(contentWidget, 1);
@@ -315,6 +338,7 @@ namespace PointerFinder2::UI {
         connect(m_goToAddressBtn, &QPushButton::clicked, this, &StructureWorkspaceDialog::onGoToAddressClicked);
         connect(m_goToAddressEdit, &QLineEdit::returnPressed, this, &StructureWorkspaceDialog::onGoToAddressClicked);
         connect(m_viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onViewModeChanged);
+        connect(m_floatDisplayCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &StructureWorkspaceDialog::onFloatDisplayModeChanged);
 
         // Address Bar Connections
         connect(m_addressBar, &DissectAddressBar::newAddressClicked, this, &StructureWorkspaceDialog::onNewAddressClicked);
@@ -333,6 +357,52 @@ namespace PointerFinder2::UI {
         });
 
         connect(m_mainSplitter, &QSplitter::splitterMoved, this, &StructureWorkspaceDialog::onSplitterMoved);
+    }
+
+    void StructureWorkspaceDialog::updateViewModeComboForEmulator() {
+        if (!m_viewModeCombo) return;
+
+        bool isBE = (m_manager && m_manager->getRetroAchievementsPrefix() == "G");
+        QString currentText = m_viewModeCombo->currentText();
+
+        m_viewModeCombo->blockSignals(true);
+        m_viewModeCombo->clear();
+
+        if (isBE) {
+            m_viewModeCombo->addItems({ "8-bit", "16-bit", "32-bit BE", "Float BE" });
+        }
+        else {
+            m_viewModeCombo->addItems({ "8-bit", "16-bit", "32-bit", "Float" });
+        }
+
+        int targetIdx = m_viewModeCombo->findText(currentText);
+        if (targetIdx != -1) {
+            m_viewModeCombo->setCurrentIndex(targetIdx);
+        }
+        else {
+            if (currentText == "Float" && isBE) {
+                targetIdx = m_viewModeCombo->findText("Float BE");
+            }
+            else if (currentText == "Float BE" && !isBE) {
+                targetIdx = m_viewModeCombo->findText("Float");
+            }
+            else if (currentText == "32-bit" && isBE) {
+                targetIdx = m_viewModeCombo->findText("32-bit BE");
+            }
+            else if (currentText == "32-bit BE" && !isBE) {
+                targetIdx = m_viewModeCombo->findText("32-bit");
+            }
+
+            if (targetIdx != -1) {
+                m_viewModeCombo->setCurrentIndex(targetIdx);
+            }
+            else {
+                m_viewModeCombo->setCurrentIndex(2); // Default to 32-bit / 32-bit BE
+            }
+        }
+
+        m_viewModeCombo->blockSignals(false);
+        onViewModeChanged();
     }
 
     bool StructureWorkspaceDialog::confirmSaveUserTxt() {
@@ -461,7 +531,7 @@ namespace PointerFinder2::UI {
                 return n.address == address;
             });
 
-            if (it != m_gameData.notes.end()) {
+            if (it != m_gameData.notes.begin() && it != m_gameData.notes.end()) {
                 auto reply = QMessageBox::question(
                     this,
                     "Address Exists",
@@ -677,20 +747,53 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onViewModeChanged() {
-        int id = m_viewModeCombo ? m_viewModeCombo->currentIndex() : 2;
-        switch (id) {
-        case 0: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode8Bit); break;
-        case 1: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode16Bit); break;
-        case 2: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode32Bit); break;
-        case 3: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode32BitBE); break;
-        case 4: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::ModeFloat); break;
-        case 5: m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE); break;
+        QString text = m_viewModeCombo ? m_viewModeCombo->currentText() : "32-bit";
+
+        if (text == "8-bit") {
+            m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode8Bit);
+        }
+        else if (text == "16-bit") {
+            m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode16Bit);
+        }
+        else if (text == "32-bit") {
+            m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode32Bit);
+        }
+        else if (text == "32-bit BE") {
+            m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::Mode32BitBE);
+        }
+        else if (text == "Float") {
+            m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::ModeFloat);
+        }
+        else if (text == "Float BE") {
+            m_memoryViewer->setViewMode(Widgets::MemoryViewerWidget::ViewMode::ModeFloatBE);
+        }
+
+        bool isFloat = (text == "Float" || text == "Float BE");
+        if (m_floatDisplayLabel) m_floatDisplayLabel->setEnabled(isFloat);
+        if (m_floatDisplayCombo) m_floatDisplayCombo->setEnabled(isFloat);
+
+        showStatusMessage(QString("Memory View switched to %1").arg(text));
+    }
+
+    void StructureWorkspaceDialog::onFloatDisplayModeChanged() {
+        if (!m_floatDisplayCombo || !m_memoryViewer) return;
+
+        int idx = m_floatDisplayCombo->currentIndex();
+        Widgets::MemoryViewerWidget::FloatDisplayMode mode = Widgets::MemoryViewerWidget::FloatDisplayMode::Raw;
+
+        switch (idx) {
+        case 0: mode = Widgets::MemoryViewerWidget::FloatDisplayMode::Raw; break;
+        case 1: mode = Widgets::MemoryViewerWidget::FloatDisplayMode::TimeSeconds; break;
+        case 2: mode = Widgets::MemoryViewerWidget::FloatDisplayMode::TimeFrames60; break;
+        case 3: mode = Widgets::MemoryViewerWidget::FloatDisplayMode::TimeFrames50; break;
+        case 4: mode = Widgets::MemoryViewerWidget::FloatDisplayMode::TimeCentiseconds; break;
+        case 5: mode = Widgets::MemoryViewerWidget::FloatDisplayMode::TimeMilliseconds; break;
         default: break;
         }
-        saveWorkspaceSettings();
 
-        QString modeName = m_viewModeCombo ? m_viewModeCombo->currentText() : "32-bit";
-        showStatusMessage(QString("Memory View switched to %1").arg(modeName));
+        m_memoryViewer->setFloatDisplayMode(mode);
+
+        showStatusMessage(QString("Float display format set to %1").arg(m_floatDisplayCombo->currentText()));
     }
 
     void StructureWorkspaceDialog::refreshMemorySnapshot() {
@@ -1625,21 +1728,28 @@ namespace PointerFinder2::UI {
 
         if (sizes[2] > 0) {
             m_lastCodeNotePanelWidth = sizes[2];
-            sizes[0] += sizes[2]; // Reallocate space to Structure Hierarchy
             sizes[2] = 0;
+            // Distribute available space evenly (50/50) between Panel 1 and Panel 2 in compact mode
+            int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
+            int half = totalAvailable / 2;
+            sizes[0] = half;
+            sizes[1] = totalAvailable - half;
             m_mainSplitter->setSizes(sizes);
             m_addressBar->setCodeNotePanelButtonChecked(false);
             showStatusMessage("Code note panel collapsed.");
         }
         else {
-            int restoreWidth = (m_lastCodeNotePanelWidth > 60) ? m_lastCodeNotePanelWidth : 330;
-            sizes[0] = std::max(100, sizes[0] - restoreWidth);
+            int restoreWidth = (m_lastCodeNotePanelWidth > 60) ? m_lastCodeNotePanelWidth : 350;
+            int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
+            int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
+            int remainingForPanel0 = std::max(260, totalAvailable - contentW32 - restoreWidth);
+            sizes[0] = remainingForPanel0;
+            sizes[1] = contentW32;
             sizes[2] = restoreWidth;
             m_mainSplitter->setSizes(sizes);
             m_addressBar->setCodeNotePanelButtonChecked(true);
             showStatusMessage("Code note panel expanded.");
         }
-        saveWorkspaceSettings();
     }
 
     void StructureWorkspaceDialog::onSplitterMoved(int, int index) {
@@ -1656,7 +1766,6 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onHierarchyStyleChanged() {
-        saveWorkspaceSettings();
     }
 
     void StructureWorkspaceDialog::onFixHierarchyClicked() {
@@ -1691,7 +1800,6 @@ namespace PointerFinder2::UI {
         updateOffsetPreview();
         updateMemoryHighlights();
 
-        saveWorkspaceSettings();
         m_isSyncing = false;
 
         showStatusMessage(QString("Hierarchy fixed and reformatted (%1 top-level node(s)).").arg(mergedTree.size()));
@@ -1711,7 +1819,6 @@ namespace PointerFinder2::UI {
             m_codeNoteEditor->setCursorPosition(cursorPos);
         }
 
-        saveWorkspaceSettings();
         m_isSyncing = false;
     }
 
@@ -1726,36 +1833,61 @@ namespace PointerFinder2::UI {
             restoreGeometry(settings.value("geometry").toByteArray());
         }
 
-        m_lastCodeNotePanelWidth = settings.value("lastCodeNoteWidth", 330).toInt();
+        m_lastCodeNotePanelWidth = settings.value("lastCodeNoteWidth", 350).toInt();
+
+        int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
 
         if (settings.contains("splitterState")) {
             m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
 
-            // Sanitize and clamp restored panel sizes to prevent horizontal layout overflow in compact mode
+            // If an older session saved an oversized Panel 2 with dead space, clamp it flush to the 32-bit content width
             QList<int> sizes = m_mainSplitter->sizes();
-            if (sizes.size() >= 3) {
-                int availableWidth = std::max(600, width() - 16);
-                int totalWidth = sizes[0] + sizes[1] + sizes[2];
-                if (totalWidth > availableWidth) {
-                    for (int& s : sizes) {
-                        s = (s * availableWidth) / totalWidth;
-                    }
-                    m_mainSplitter->setSizes(sizes);
+            if (sizes.size() >= 3 && sizes[1] > contentW32 + 10) {
+                int excess = sizes[1] - contentW32;
+                sizes[1] = contentW32;
+                if (sizes[2] > 0) {
+                    sizes[0] += excess / 2;
+                    sizes[2] += excess - (excess / 2);
                 }
+                else {
+                    sizes[0] += excess;
+                }
+                m_mainSplitter->setSizes(sizes);
             }
         }
         else {
-            // Default layout sizing favoring Structure Hierarchy over Memory Viewer dead space
-            m_mainSplitter->setSizes({ 500, 540, m_lastCodeNotePanelWidth });
+            // Default clean layout: Panel 2 takes exactly its 32-bit content width with zero gap
+            int availableWidth = std::max(1100, width() - 16);
+            int sideW = std::max(280, (availableWidth - contentW32) / 2);
+            m_mainSplitter->setSizes({ sideW, contentW32, sideW });
         }
 
-        int viewModeId = settings.value("viewMode", 2).toInt();
-        if (m_viewModeCombo && viewModeId >= 0 && viewModeId < m_viewModeCombo->count()) {
-            m_viewModeCombo->blockSignals(true);
-            m_viewModeCombo->setCurrentIndex(viewModeId);
-            m_viewModeCombo->blockSignals(false);
+        QString savedModeText = settings.value("viewModeText", "").toString();
+        if (!savedModeText.isEmpty() && m_viewModeCombo) {
+            int idx = m_viewModeCombo->findText(savedModeText);
+            if (idx != -1) {
+                m_viewModeCombo->blockSignals(true);
+                m_viewModeCombo->setCurrentIndex(idx);
+                m_viewModeCombo->blockSignals(false);
+            }
+        }
+        else {
+            int viewModeId = settings.value("viewMode", 2).toInt();
+            if (m_viewModeCombo && viewModeId >= 0 && viewModeId < m_viewModeCombo->count()) {
+                m_viewModeCombo->blockSignals(true);
+                m_viewModeCombo->setCurrentIndex(viewModeId);
+                m_viewModeCombo->blockSignals(false);
+            }
         }
         onViewModeChanged();
+
+        int floatModeId = settings.value("floatDisplayMode", 0).toInt();
+        if (m_floatDisplayCombo && floatModeId >= 0 && floatModeId < m_floatDisplayCombo->count()) {
+            m_floatDisplayCombo->blockSignals(true);
+            m_floatDisplayCombo->setCurrentIndex(floatModeId);
+            m_floatDisplayCombo->blockSignals(false);
+            onFloatDisplayModeChanged();
+        }
 
         QString style = settings.value("hierarchyStyle", "Plusses (+)").toString();
         m_codeNoteEditor->setStyle(style);
@@ -1786,6 +1918,9 @@ namespace PointerFinder2::UI {
         settings.setValue("codeNotePanelVisible", (sizes.size() > 2 && sizes[2] > 0));
 
         settings.setValue("viewMode", m_viewModeCombo ? m_viewModeCombo->currentIndex() : 2);
+        settings.setValue("viewModeText", m_viewModeCombo ? m_viewModeCombo->currentText() : "32-bit");
+        settings.setValue("floatDisplayMode", m_floatDisplayCombo ? m_floatDisplayCombo->currentIndex() : 0);
+
         settings.setValue("hierarchyStyle", m_codeNoteEditor->getStyle());
         settings.setValue("indentDescriptions", m_codeNoteEditor->isIndentDescriptions());
 

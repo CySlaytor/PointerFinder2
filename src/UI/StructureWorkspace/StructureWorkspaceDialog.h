@@ -52,6 +52,7 @@ namespace PointerFinder2::UI {
         void onRefreshRamClicked();
         void onGoToAddressClicked();
         void onViewModeChanged();
+        void onFloatDisplayModeChanged();
 
         // RA Game Data & Dissection slots
         void onNewAddressClicked();
@@ -103,8 +104,11 @@ namespace PointerFinder2::UI {
         QPushButton* m_refreshRamBtn = nullptr;
         QLabel* m_ramStatusLabel = nullptr;
 
-        // Memory View Mode Combo
+        // Memory View Mode & Float Timer Display Controls
+        QLabel* m_viewModeLabel = nullptr;
         QComboBox* m_viewModeCombo = nullptr;
+        QLabel* m_floatDisplayLabel = nullptr;
+        QComboBox* m_floatDisplayCombo = nullptr;
         Widgets::MemoryViewerWidget* m_memoryViewer = nullptr;
 
         // Panel 3: Code Note Hierarchy Fixer Component
@@ -131,6 +135,7 @@ namespace PointerFinder2::UI {
         QString m_headerComment;
 
         void setupLayout();
+        void updateViewModeComboForEmulator();
         void loadWorkspaceSettings();
         void saveWorkspaceSettings();
         void updateStatusPermanentInfo();

@@ -59,6 +59,16 @@ namespace PointerFinder2::UI::Widgets {
 
     MemoryViewerWidget::~MemoryViewerWidget() = default;
 
+    int MemoryViewerWidget::getContentWidth32Bit() const {
+        QFontMetrics fm(m_monoFont);
+        int charW = fm.horizontalAdvance('0');
+        int addrW = charW * 8 + 10;
+        int hexW = (4 * (charW * 8)) + (3 * (charW * 2)); // Exactly 4 dwords of 8 hex digits for 32-bit mode
+        int asciiX = 10 + addrW + 10 + hexW + 15;
+        // Exact pixel boundary: end of ASCII text + scrollbar width + outer frame border
+        return asciiX + (16 * charW) + 12;
+    }
+
     void MemoryViewerWidget::updateMetrics() {
         QFontMetrics fm(m_monoFont);
         m_charWidth = fm.horizontalAdvance('0');
@@ -140,6 +150,13 @@ namespace PointerFinder2::UI::Widgets {
             updateMetrics();
             updateScrollBars();
             updateRangeBanner();
+            viewport()->update();
+        }
+    }
+
+    void MemoryViewerWidget::setFloatDisplayMode(FloatDisplayMode mode) {
+        if (m_floatDisplayMode != mode) {
+            m_floatDisplayMode = mode;
             viewport()->update();
         }
     }
@@ -402,7 +419,7 @@ namespace PointerFinder2::UI::Widgets {
         // 1. If this is a new navigation step, record the PREVIOUS state before scrolling
         if (recordHistory && !m_isNavigatingHistory && m_selectedAddress != 0) {
             if (m_navHistoryIndex >= 0 && m_navHistoryIndex < static_cast<int>(m_navHistory.size())) {
-                m_navHistory[m_navHistoryIndex] = { m_selectedAddress, currentRow, m_hasSelection };
+                m_navHistory[m_navHistoryIndex] = { m_selectedAddress, verticalScrollBar()->value(), m_hasSelection };
             }
         }
 
@@ -798,6 +815,109 @@ namespace PointerFinder2::UI::Widgets {
         QAbstractScrollArea::keyPressEvent(event);
     }
 
+    QString MemoryViewerWidget::formatFloatString(float fVal, uint32_t rawVal) const {
+        if (m_floatDisplayMode == FloatDisplayMode::Raw) {
+            if (rawVal == 0) {
+                return "0.0";
+            }
+            else if (std::isnan(fVal)) {
+                return "NaN";
+            }
+            else if (std::isinf(fVal)) {
+                return (fVal > 0) ? "+Inf" : "-Inf";
+            }
+            else if (std::abs(fVal) >= 1e7f || (std::abs(fVal) < 1e-4f && std::abs(fVal) > 0.0f)) {
+                return QString::number(fVal, 'e', 2);
+            }
+            else {
+                QString floatStr = QString::number(fVal, 'f', (std::abs(fVal) >= 100.0f) ? 2 : 3);
+                if (floatStr.contains('.')) {
+                    while (floatStr.endsWith('0') && !floatStr.endsWith(".0")) {
+                        floatStr.chop(1);
+                    }
+                }
+                return floatStr;
+            }
+        }
+
+        // Float timer representation mode
+        if (rawVal == 0) {
+            return "00:00.00";
+        }
+        if (std::isnan(fVal)) {
+            return "NaN";
+        }
+        if (std::isinf(fVal)) {
+            return (fVal > 0) ? "+Inf" : "-Inf";
+        }
+
+        double totalSeconds = 0.0;
+        switch (m_floatDisplayMode) {
+        case FloatDisplayMode::TimeSeconds:
+            totalSeconds = static_cast<double>(fVal);
+            break;
+        case FloatDisplayMode::TimeFrames60:
+            totalSeconds = static_cast<double>(fVal) / 60.0;
+            break;
+        case FloatDisplayMode::TimeFrames50:
+            totalSeconds = static_cast<double>(fVal) / 50.0;
+            break;
+        case FloatDisplayMode::TimeCentiseconds:
+            totalSeconds = static_cast<double>(fVal) / 100.0;
+            break;
+        case FloatDisplayMode::TimeMilliseconds:
+            totalSeconds = static_cast<double>(fVal) / 1000.0;
+            break;
+        default:
+            totalSeconds = static_cast<double>(fVal);
+            break;
+        }
+
+        // Fall back to compact scientific notation if the float is unreasonably large (e.g. pointer/data misinterpreted as float)
+        if (std::abs(totalSeconds) >= 360000.0 || (std::abs(totalSeconds) < 1e-4 && std::abs(totalSeconds) > 0.0)) {
+            if (std::abs(totalSeconds) < 1e-4) return "00:00.00";
+            return QString::number(fVal, 'e', 2);
+        }
+
+        bool isNeg = (totalSeconds < 0.0);
+        double absSec = std::abs(totalSeconds);
+
+        int hours = static_cast<int>(absSec / 3600.0);
+        double rem = absSec - (hours * 3600.0);
+        int minutes = static_cast<int>(rem / 60.0);
+        double secs = rem - (minutes * 60.0);
+        int isecs = static_cast<int>(secs);
+        int centis = static_cast<int>((secs - isecs) * 100.0 + 0.5);
+
+        if (centis >= 100) {
+            centis = 0;
+            isecs++;
+            if (isecs >= 60) {
+                isecs = 0;
+                minutes++;
+                if (minutes >= 60) {
+                    minutes = 0;
+                    hours++;
+                }
+            }
+        }
+
+        if (hours > 0) {
+            return QString("%1%2:%3:%4")
+                .arg(isNeg ? "-" : "")
+                .arg(hours)
+                .arg(minutes, 2, 10, QChar('0'))
+                .arg(isecs, 2, 10, QChar('0'));
+        }
+        else {
+            return QString("%1%2:%3.%4")
+                .arg(isNeg ? "-" : "")
+                .arg(minutes, 2, 10, QChar('0'))
+                .arg(isecs, 2, 10, QChar('0'))
+                .arg(centis, 2, 10, QChar('0'));
+        }
+    }
+
     void MemoryViewerWidget::paintEvent(QPaintEvent*) {
         QPainter painter(viewport());
         painter.setFont(m_monoFont);
@@ -1058,27 +1178,7 @@ namespace PointerFinder2::UI::Widgets {
                         float fVal = 0.0f;
                         std::memcpy(&fVal, &rawVal, sizeof(float));
 
-                        QString floatStr;
-                        if (rawVal == 0) {
-                            floatStr = "0.0";
-                        }
-                        else if (std::isnan(fVal)) {
-                            floatStr = "NaN";
-                        }
-                        else if (std::isinf(fVal)) {
-                            floatStr = (fVal > 0) ? "+Inf" : "-Inf";
-                        }
-                        else if (std::abs(fVal) >= 1e7f || (std::abs(fVal) < 1e-4f && std::abs(fVal) > 0.0f)) {
-                            floatStr = QString::number(fVal, 'e', 2);
-                        }
-                        else {
-                            floatStr = QString::number(fVal, 'f', (std::abs(fVal) >= 100.0f) ? 2 : 3);
-                            if (floatStr.contains('.')) {
-                                while (floatStr.endsWith('0') && !floatStr.endsWith(".0")) {
-                                    floatStr.chop(1);
-                                }
-                            }
-                        }
+                        QString floatStr = formatFloatString(fVal, rawVal);
 
                         auto it = m_highlights.find(dwordAddr);
                         if (it != m_highlights.end()) {
