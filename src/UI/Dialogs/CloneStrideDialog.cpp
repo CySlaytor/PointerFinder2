@@ -120,7 +120,8 @@ namespace PointerFinder2::UI {
         // Row 0: Base Address & Stride
         formGrid->addWidget(new QLabel("Start Base Address (Hex):", this), 0, 0);
         m_baseAddressEdit = new QLineEdit(this);
-        QString baseStr = m_manager ? m_manager->formatDisplayAddress(m_currentAddress) : QString::number(m_currentAddress, 16).toUpper();
+        // Ensure initial address is in clean RA-mapped format
+        QString baseStr = QString("%1").arg(m_currentAddress, 8, 16, QChar('0')).toUpper();
         m_baseAddressEdit->setText(baseStr);
         m_baseAddressEdit->setFixedWidth(120);
         formGrid->addWidget(m_baseAddressEdit, 0, 1);
@@ -131,7 +132,7 @@ namespace PointerFinder2::UI {
         m_strideSpin->setRange(1, 0x100000);
         m_strideSpin->setValue(static_cast<int>(detectedStride));
         m_strideSpin->setFixedWidth(90);
-        m_strideHexLabel = new QLabel(QString("(+0x%1)").arg(detectedStride, 2, 16, QChar('0')).toUpper(), this);
+        m_strideHexLabel = new QLabel(QString("(+0x%1)").arg(QString::number(detectedStride, 16).toUpper()), this);
         m_strideHexLabel->setStyleSheet("color: #58A6FF; font-weight: bold; font-family: Consolas;");
         strideLayout->addWidget(m_strideSpin);
         strideLayout->addWidget(m_strideHexLabel);
@@ -240,7 +241,21 @@ namespace PointerFinder2::UI {
         bool ok = false;
         uint32_t parsed = clean.toUInt(&ok, 16);
         if (!ok) return m_currentAddress;
-        return m_manager ? m_manager->unnormalizeAddress(QString::number(parsed, 16)) : parsed;
+
+        // If the entered address is an unnormalized emulator address (e.g. PCSX2 0x20463A54),
+        // normalize it back into the clean RA-mapped address space (0x00463A54)
+        if (m_manager) {
+            uint32_t ramStart = m_manager->getMainMemoryStart();
+            uint32_t ramSize = m_manager->getMainMemorySize();
+            if (parsed >= ramStart && parsed < ramStart + ramSize) {
+                QString displayStr = m_manager->formatDisplayAddress(parsed);
+                bool normOk = false;
+                uint32_t normAddr = displayStr.toUInt(&normOk, 16);
+                if (normOk) return normAddr;
+            }
+        }
+
+        return parsed;
     }
 
     QString CloneStrideDialog::formatTitle(int index, uint32_t offsetBytes, const QString& customName) const {
@@ -255,8 +270,8 @@ namespace PointerFinder2::UI {
         tmpl.replace("{INDEX:02}", idx02Str);
         tmpl.replace("{INDEX}", idxStr);
 
-        // Replace offset placeholder
-        QString offHex = QString("+0x%1").arg(offsetBytes, 2, 16, QChar('0')).toUpper();
+        // Replace offset placeholder with clean lowercase 0x and uppercase hex digits
+        QString offHex = QString("+0x%1").arg(QString("%1").arg(offsetBytes, 2, 16, QChar('0')).toUpper());
         tmpl.replace("{OFFSET}", offHex);
 
         // Replace name placeholder
@@ -278,7 +293,7 @@ namespace PointerFinder2::UI {
         if (m_isUpdatingTable) return;
 
         uint32_t stride = static_cast<uint32_t>(m_strideSpin->value());
-        m_strideHexLabel->setText(QString("(+0x%1)").arg(stride, 2, 16, QChar('0')).toUpper());
+        m_strideHexLabel->setText(QString("(+0x%1)").arg(QString::number(stride, 16).toUpper()));
 
         rebuildTableRows();
     }
@@ -303,8 +318,9 @@ namespace PointerFinder2::UI {
             uint32_t rowAddr = baseAddr + (i * stride);
             uint32_t offBytes = i * stride;
 
-            QString addrStr = m_manager ? m_manager->formatDisplayAddress(rowAddr) : QString::number(rowAddr, 16).toUpper().rightJustified(8, '0');
-            QString offStr = (i == 0) ? "+0x00" : QString("+0x%1").arg(offBytes, 2, 16, QChar('0')).toUpper();
+            // Retain clean 8-character RA-mapped address format (e.g. 0x00463A54)
+            QString addrStr = QString("%1").arg(rowAddr, 8, 16, QChar('0')).toUpper();
+            QString offStr = (i == 0) ? "+0x00" : QString("+0x%1").arg(QString("%1").arg(offBytes, 2, 16, QChar('0')).toUpper());
 
             // Column 0: Index #
             auto* idxItem = new QTableWidgetItem(QString::number(i + 1));
