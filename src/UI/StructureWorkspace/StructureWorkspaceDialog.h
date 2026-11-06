@@ -29,6 +29,9 @@ namespace PointerFinder2::UI {
     class StructureWorkspaceDialog : public QDialog {
         Q_OBJECT
     public:
+        static constexpr int DEFAULT_WINDOW_WIDTH = 1300;
+        static constexpr int DEFAULT_WINDOW_HEIGHT = 750;
+
         explicit StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent = nullptr);
         ~StructureWorkspaceDialog() override;
 
@@ -138,7 +141,6 @@ namespace PointerFinder2::UI {
 
         void setupLayout();
         void updateViewModeComboForEmulator();
-        void updateMinimumWindowSize();
         void loadWorkspaceSettings();
         void saveWorkspaceSettings();
         void updateStatusPermanentInfo();

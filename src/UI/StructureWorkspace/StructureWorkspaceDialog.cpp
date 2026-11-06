@@ -39,15 +39,14 @@ namespace PointerFinder2::UI {
     StructureWorkspaceDialog::StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent)
         : QDialog(parent), m_manager(manager) {
         setWindowTitle("Pointer Finder 2.0 - Dissect Structure");
-        resize(1300, 750);
-        setMinimumSize(1140, 560);
+        resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+        setMinimumSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
 
         setWindowFlags(Qt::Window | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
 
         setupLayout();
         updateViewModeComboForEmulator();
         loadWorkspaceSettings();
-        updateMinimumWindowSize();
 
         if (m_manager && m_manager->isAttached()) {
             m_hierarchyWidget->setEmulatorManager(m_manager);
@@ -424,21 +423,6 @@ namespace PointerFinder2::UI {
 
         m_viewModeCombo->blockSignals(false);
         onViewModeChanged();
-    }
-
-    void StructureWorkspaceDialog::updateMinimumWindowSize() {
-        int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
-        QList<int> sizes = m_mainSplitter ? m_mainSplitter->sizes() : QList<int>();
-        bool codeNoteVisible = (sizes.size() > 2 && sizes[2] > 0);
-
-        if (codeNoteVisible) {
-            int minW = std::max(1140, 280 + contentW32 + 320 + 30);
-            setMinimumSize(minW, 560);
-        }
-        else {
-            int minW = std::max(820, 280 + contentW32 + 20);
-            setMinimumSize(minW, 560);
-        }
     }
 
     bool StructureWorkspaceDialog::confirmSaveUserTxt() {
@@ -1766,28 +1750,20 @@ namespace PointerFinder2::UI {
             m_lastCodeNotePanelWidth = sizes[2];
             m_codeNoteEditor->setMinimumWidth(0);
             sizes[2] = 0;
-            // Distribute available space evenly (50/50) between Panel 1 and Panel 2 in compact mode
+            // Distribute available space evenly (50/50) between Panel 0 and Panel 1 in compact mode
             int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
             int half = totalAvailable / 2;
             sizes[0] = half;
             sizes[1] = totalAvailable - half;
             m_mainSplitter->setSizes(sizes);
             m_addressBar->setCodeNotePanelButtonChecked(false);
-            updateMinimumWindowSize();
             showStatusMessage("Code note panel collapsed.");
         }
         else {
             int restoreWidth = (m_lastCodeNotePanelWidth >= 320) ? m_lastCodeNotePanelWidth : 350;
             int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
 
-            // Expand window if currently smaller than healthy 3-panel minimum
-            int minHealthyWidth = std::max(1140, 280 + contentW32 + 320 + 30);
-            if (width() < minHealthyWidth) {
-                resize(minHealthyWidth, height());
-            }
-
             m_codeNoteEditor->setMinimumWidth(320);
-            updateMinimumWindowSize();
 
             int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
             int remainingForPanel0 = std::max(280, totalAvailable - contentW32 - restoreWidth);
@@ -1813,7 +1789,6 @@ namespace PointerFinder2::UI {
                     m_codeNoteEditor->setMinimumWidth(0);
                 }
                 m_addressBar->setCodeNotePanelButtonChecked(visible);
-                updateMinimumWindowSize();
             }
         }
     }
@@ -1882,30 +1857,22 @@ namespace PointerFinder2::UI {
         QSettings settings(iniPath, QSettings::IniFormat);
         settings.beginGroup("DissectStructure");
 
-        // Clean up legacy byte-gibberish keys if present from older versions
-        if (settings.contains("geometry")) {
-            settings.remove("geometry");
-        }
-        if (settings.contains("splitterState")) {
-            settings.remove("splitterState");
-        }
-
-        int savedWidth = settings.value("windowWidth", 1300).toInt();
-        int savedHeight = settings.value("windowHeight", 750).toInt();
+        int savedWidth = settings.value("windowWidth", DEFAULT_WINDOW_WIDTH).toInt();
+        int savedHeight = settings.value("windowHeight", DEFAULT_WINDOW_HEIGHT).toInt();
         bool isMax = settings.value("isMaximized", false).toBool();
 
         int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
 
         m_lastCodeNotePanelWidth = settings.value("lastCodeNotePanelWidth", 350).toInt();
-        if (m_lastCodeNotePanelWidth < 60) {
+        if (m_lastCodeNotePanelWidth < 320) {
             m_lastCodeNotePanelWidth = 350;
         }
 
         bool panelVisible = settings.value("codeNotePanelVisible", true).toBool();
 
-        int hWidth = settings.value("panelHierarchyWidth", 340).toInt();
+        int hWidth = settings.value("panelHierarchyWidth", 380).toInt();
         int mWidth = settings.value("panelMemoryViewWidth", contentW32).toInt();
-        int cWidth = settings.value("panelCodeNoteWidth", 350).toInt();
+        int cWidth = settings.value("panelCodeNoteWidth", 380).toInt();
 
         // Enforce healthy minimums
         hWidth = std::max(280, hWidth);
@@ -1919,10 +1886,9 @@ namespace PointerFinder2::UI {
             m_codeNoteEditor->setMinimumWidth(0);
         }
 
-        // Apply clean window size
-        int minHealthyWidth = panelVisible ? std::max(1140, 280 + contentW32 + 320 + 30) : std::max(820, 280 + contentW32 + 20);
-        savedWidth = std::max(savedWidth, minHealthyWidth);
-        savedHeight = std::max(savedHeight, 560);
+        // Apply clean window size bounded by default window size
+        savedWidth = std::max(savedWidth, DEFAULT_WINDOW_WIDTH);
+        savedHeight = std::max(savedHeight, DEFAULT_WINDOW_HEIGHT);
         resize(savedWidth, savedHeight);
 
         m_mainSplitter->setSizes({ hWidth, mWidth, cWidth });
@@ -1979,8 +1945,8 @@ namespace PointerFinder2::UI {
         // Save window geometry as clean integers
         settings.setValue("isMaximized", isMaximized());
         if (!isMaximized()) {
-            settings.setValue("windowWidth", width());
-            settings.setValue("windowHeight", height());
+            settings.setValue("windowWidth", std::max(width(), DEFAULT_WINDOW_WIDTH));
+            settings.setValue("windowHeight", std::max(height(), DEFAULT_WINDOW_HEIGHT));
         }
 
         // Save splitter panel sizes as clean integers
