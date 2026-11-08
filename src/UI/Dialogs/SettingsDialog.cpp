@@ -180,13 +180,14 @@ void SettingsDialog::setupCodeNotesTab() {
 void SettingsDialog::onCodeNoteHelpClicked() {
     QDialog helpDialog(this);
     helpDialog.setWindowTitle("Recommended Code Note Structure");
-    helpDialog.resize(620, 600);
+    helpDialog.resize(620, 560);
     helpDialog.setWindowFlags(helpDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     auto* layout = new QVBoxLayout(&helpDialog);
-    layout->setSpacing(8);
+    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setSpacing(6);
 
-    auto* titleLabel = new QLabel("<b>Why Hierarchical Indentation Matters</b>", &helpDialog);
+    auto* titleLabel = new QLabel("<b>Hierarchical Code Note Standards</b>", &helpDialog);
     titleLabel->setStyleSheet("font-size: 13px;");
     layout->addWidget(titleLabel);
 
@@ -204,28 +205,19 @@ void SettingsDialog::onCodeNoteHelpClicked() {
 
     auto* descLabel = new QLabel(
         QString(
-            "<p style='line-height: 130%%; margin: 0;'>RetroAchievements QA and Code Review (CR) teams strongly encourage adopting "
-            "standardized "
-            "hierarchical code note formatting for all new sets and updates:</p>"
-            "<ul style='margin-top: 8px; margin-bottom: 8px; margin-left: -22px; line-height: 135%%;'>"
-            "<li style='margin-bottom: 7px;'><b>Older Sets of Inactive Developers:</b> Many legacy achievement sets were created years ago "
-            "by "
-            "developers who have long since become inactive, long before modern code note conventions were established. "
-            "When these older sets require maintenance, logic upgrades, or bug fixes, current developers and reviewers "
-            "must spend considerable time reverse-engineering flat, unformatted lists of offsets. Following this structure "
-            "ensures sets remain transparent and maintainable by anyone in the future.</li>"
-            "<li style='margin-bottom: 7px;'><b>Pointers (%1) vs. Enums (%2):</b> While dots were previously used for indirection, "
-            "using plusses (%1) exclusively for pointer jumps and dots (%2) exclusively for value "
-            "enumerations provides an immediate visual distinction between structural memory offsets and variable states.</li>"
-            "<li style='margin-bottom: 7px;'><b>Leveling Up Enums:</b> Dots are used to level up enumerations directly under their "
-            "respective variable "
-            "at the current pointer level (e.g., %3 directly beneath %4), making complex "
-            "structures intuitive to read.</li>"
-            "<li style='margin-bottom: 7px;'><b>Explicit Pointer Annotations:</b> It is recommended to use %5 followed by %6 "
-            "or %7 depending on the platform architecture.</li>"
-            "<li style='margin-bottom: 4px;'><b>Why Pipelines (%8) Were Reallocated:</b> Using %8 as a pointer delimiter has been retired. "
-            "Pipelines are now reserved exclusively to document <b>Array structures</b> and indexed element offsets "
-            "(e.g., %9).</li>"
+            "<p style='line-height: 125%; margin: 0; padding: 0;'>RetroAchievements QA and Code Review (CR) teams encourage adopting "
+            "standardized hierarchical code note formatting for all new sets and updates:</p>"
+            "<ul style='margin-top: 4px; margin-bottom: 4px; margin-left: -28px; padding-left: 0; line-height: 130%;'>"
+            "<li style='margin-bottom: 5px;'><b>Structure and Maintainability:</b> Consistent indentation and clear offset chains keep "
+            "multi-level pointer notes transparent and easy to review, maintain, or update across achievement sets.</li>"
+            "<li style='margin-bottom: 5px;'><b>Pointers (%1) vs. Enums (%2):</b> Plusses (%1) are now used exclusively for pointer indirection jumps, "
+            "while dots (%2) are now used exclusively for value enumerations, establishing an immediate visual distinction between structural memory offsets and variable states.</li>"
+            "<li style='margin-bottom: 5px;'><b>Indenting Enums:</b> Value enumerations now level up with dots matching the nesting depth of their parent variable "
+            "(e.g., %3 directly beneath %4), keeping complex bitfield and state structures intuitive to read.</li>"
+            "<li style='margin-bottom: 5px;'><b>Pointer Type Annotations:</b> Use %5 followed by an explicit pointer template such as %6 "
+            "or %7 according to the platform architecture.</li>"
+            "<li style='margin-bottom: 2px;'><b>Pipelines (%8) for Array Elements:</b> Pipelines are now reserved exclusively for documenting "
+            "<b>array structures</b> and indexed element offsets (e.g., %9).</li>"
             "</ul>")
             .arg(codeBadge("+"), codeBadge("."), codeBadge("...0x00=Idle"), codeBadge("++0x28"))
             .arg(codeBadge("="), codeBadge("[32-bit] Pointer"), codeBadge("[24-bit] Pointer"))
@@ -238,7 +230,7 @@ void SettingsDialog::onCodeNoteHelpClicked() {
 
     auto* exampleEdit = new QPlainTextEdit(&helpDialog);
     exampleEdit->setReadOnly(true);
-    exampleEdit->setMinimumHeight(240);
+    exampleEdit->setMinimumHeight(210);
     QFont monoFont("Consolas", 9);
     monoFont.setStyleHint(QFont::Monospace);
     exampleEdit->setFont(monoFont);
