@@ -11,6 +11,7 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QSettings>
 #include <QStyledItemDelegate>
 #include <QTreeWidgetItemIterator>
@@ -36,7 +37,7 @@ class NonEditableColumnDelegate : public QStyledItemDelegate {
     }
 };
 
-// Extracts bracketed size/mask specifiers into a dedicated string and returns the clean description
+// Extracts bracketed size/mask specifiers into a dedicated clean string (without brackets) and returns the clean description
 void parseSizeAndDescription(const QString& rawDesc, QString& outSize, QString& outCleanDesc) {
     QString trimmed = rawDesc.trimmed();
     outSize.clear();
@@ -51,11 +52,18 @@ void parseSizeAndDescription(const QString& rawDesc, QString& outSize, QString& 
             R"((\d+-bit|\d+\s*x\s*\d+\s*bytes|\d+\s*bytes|float|double|byte|bit\d*|pointer|\&|lower|upper|mbf))",
             QRegularExpression::CaseInsensitiveOption);
         if (sizePatternRx.match(tag).hasMatch()) {
-            outSize = "[" + tag + "]";
+            outSize = tag; // Clean representation without brackets
             outCleanDesc = match.captured(2).trimmed();
         }
     }
 }
+
+// 24 standard RAIntegration memory data types in exact ordered sequence
+static const QStringList StandardRATypes = {
+    "Bit0",     "Bit1",       "Bit2",       "Bit3",     "Bit4",     "Bit5",       "Bit6",        "Bit7",
+    "Lower4",   "Upper4",     "8-bit",      "16-bit",   "24-bit",   "32-bit",     "16-bit BE",   "24-bit BE",
+    "32-bit BE","BitCount",   "Float",      "Float BE", "Double32", "Double32 BE","MBF32",       "MBF32 LE"
+};
 } // namespace
 
 StructureHierarchyWidget::StructureHierarchyWidget(QWidget* parent) : QWidget(parent) { setupLayout(); }
@@ -73,6 +81,7 @@ void StructureHierarchyWidget::updateThemeIcons() {
     m_addPointerBtn->setIcon(getThemeIcon(":/icons/attach.svg"));
     m_followPointerBtn->setIcon(getThemeIcon(":/icons/follow_pointer.svg"));
     m_removeNodeBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
+    m_toggleMetadataBtn->setIcon(getThemeIcon(":/icons/converter.svg"));
 
     m_treeCopyRaAction->setIcon(getThemeIcon(":/icons/copy_ra.svg"));
     m_treeCopyNoteAction->setIcon(getThemeIcon(":/icons/copy_note.svg"));
@@ -112,12 +121,39 @@ void StructureHierarchyWidget::clearTree() {
         m_structureTree->clear();
         m_structureTree->blockSignals(false);
     }
+    if (m_metadataTree) {
+        m_metadataTree->blockSignals(true);
+        m_metadataTree->clear();
+        m_metadataTree->blockSignals(false);
+    }
+}
+
+QTreeWidgetItem* StructureHierarchyWidget::getTwinItem(QTreeWidgetItem* item) const {
+    if (!item)
+        return nullptr;
+    return static_cast<QTreeWidgetItem*>(item->data(0, Qt::UserRole + 10).value<void*>());
+}
+
+void StructureHierarchyWidget::setTwinItems(QTreeWidgetItem* leftItem, QTreeWidgetItem* rightItem) {
+    if (!leftItem || !rightItem)
+        return;
+    leftItem->setData(0, Qt::UserRole + 10, QVariant::fromValue(static_cast<void*>(rightItem)));
+    rightItem->setData(0, Qt::UserRole + 10, QVariant::fromValue(static_cast<void*>(leftItem)));
+}
+
+bool StructureHierarchyWidget::isPointerItem(QTreeWidgetItem* item) const {
+    if (!item)
+        return false;
+    QTreeWidgetItem* meta = (item->treeWidget() == m_metadataTree) ? item : getTwinItem(item);
+    QString sizeText = meta ? meta->text(META_COL_SIZE) : "";
+    return (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+            sizeText.contains("Pointer", Qt::CaseInsensitive) || sizeText.contains("&"));
 }
 
 int StructureHierarchyWidget::getColumnMinWidth(int column) const {
     switch (column) {
     case COL_NAME:
-        return 50;
+        return 120;
     case COL_SIZE:
         return 65;
     case COL_OFFSET:
@@ -130,23 +166,81 @@ int StructureHierarchyWidget::getColumnMinWidth(int column) const {
     }
 }
 
+void StructureHierarchyWidget::setMetadataVisible(bool visible) {
+    if (!m_metadataTree || !m_innerSplitter)
+        return;
+
+    m_toggleMetadataBtn->blockSignals(true);
+    m_toggleMetadataBtn->setChecked(visible);
+    m_toggleMetadataBtn->blockSignals(false);
+
+    QList<int> sizes = m_innerSplitter->sizes();
+    if (visible) {
+        // Position vertical scrollbar strictly on the far right of the metadata grid
+        m_structureTree->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_metadataTree->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+        int restoreW = (m_lastMetadataWidth >= 200) ? m_lastMetadataWidth : 320;
+        m_metadataTree->setVisible(true);
+        if (sizes.size() >= 2) {
+            sizes[1] = restoreW;
+            sizes[0] = std::max(120, m_innerSplitter->width() - restoreW - m_innerSplitter->handleWidth());
+            m_innerSplitter->setSizes(sizes);
+        }
+    } else {
+        // Position vertical scrollbar on the far right of the full-width structure tree
+        m_structureTree->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        m_metadataTree->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+        if (sizes.size() >= 2 && sizes[1] > 0) {
+            m_lastMetadataWidth = sizes[1];
+        }
+        m_metadataTree->setVisible(false);
+        if (sizes.size() >= 2) {
+            sizes[0] = m_innerSplitter->width();
+            sizes[1] = 0;
+            m_innerSplitter->setSizes(sizes);
+        }
+    }
+    saveColumnSettings();
+}
+
+bool StructureHierarchyWidget::isMetadataVisible() const {
+    return m_metadataTree && m_metadataTree->isVisible();
+}
+
+void StructureHierarchyWidget::onToggleMetadataClicked() {
+    setMetadataVisible(m_toggleMetadataBtn->isChecked());
+}
+
 void StructureHierarchyWidget::saveColumnSettings() {
-    if (!m_structureTree)
+    if (!m_metadataTree)
         return;
 
     QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DissectStructure");
-    settings.setValue("colWidthName", m_structureTree->columnWidth(COL_NAME));
-    settings.setValue("colWidthSize", m_structureTree->columnWidth(COL_SIZE));
-    settings.setValue("colWidthOffset", m_structureTree->columnWidth(COL_OFFSET));
-    settings.setValue("colWidthResolved", m_structureTree->columnWidth(COL_RESOLVED));
-    settings.setValue("colWidthPointerVal", m_structureTree->columnWidth(COL_VALUE));
+    settings.setValue("colWidthName", m_structureTree ? m_structureTree->columnWidth(0) : 386);
+    settings.setValue("colWidthSize", m_metadataTree->columnWidth(META_COL_SIZE));
+    settings.setValue("colWidthOffset", m_metadataTree->columnWidth(META_COL_OFFSET));
+    settings.setValue("colWidthResolved", m_metadataTree->columnWidth(META_COL_RESOLVED));
+    settings.setValue("colWidthPointerVal", m_metadataTree->columnWidth(META_COL_VALUE));
+    settings.setValue("metadataColumnsVisible", isMetadataVisible());
+    settings.setValue("lastMetadataWidth", m_lastMetadataWidth);
+
+    // Save human-readable integer splitter sizes rather than binary byte arrays
+    if (m_innerSplitter) {
+        QList<int> splitterSizes = m_innerSplitter->sizes();
+        int splitLeft = (splitterSizes.size() >= 1) ? splitterSizes[0] : 386;
+        int splitRight = (splitterSizes.size() >= 2 && splitterSizes[1] > 0) ? splitterSizes[1] : m_lastMetadataWidth;
+        settings.setValue("hierarchySplitterLeft", splitLeft);
+        settings.setValue("hierarchySplitterRight", splitRight);
+    }
     settings.endGroup();
 }
 
 void StructureHierarchyWidget::loadColumnSettings() {
-    if (!m_structureTree)
+    if (!m_metadataTree)
         return;
 
     QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
@@ -159,41 +253,51 @@ void StructureHierarchyWidget::loadColumnSettings() {
     int wOffset = settings.value("colWidthOffset", 65).toInt();
     int wResolved = settings.value("colWidthResolved", 88).toInt();
     int wValue = settings.value("colWidthPointerVal", 90).toInt();
+    bool metaVisible = settings.value("metadataColumnsVisible", true).toBool();
+    m_lastMetadataWidth = settings.value("lastMetadataWidth", 320).toInt();
+
+    int splitLeft = settings.value("hierarchySplitterLeft", 386).toInt();
+    int splitRight = settings.value("hierarchySplitterRight", 320).toInt();
+    if (splitRight >= 200) {
+        m_lastMetadataWidth = splitRight;
+    }
+
+    if (m_innerSplitter) {
+        if (metaVisible) {
+            m_innerSplitter->setSizes({splitLeft, splitRight});
+        } else {
+            m_innerSplitter->setSizes({splitLeft + splitRight, 0});
+        }
+    }
     settings.endGroup();
 
     m_isAdjustingColumns = true;
-    m_structureTree->setColumnWidth(COL_NAME, std::max(getColumnMinWidth(COL_NAME), wName));
-    m_structureTree->setColumnWidth(COL_SIZE, std::max(getColumnMinWidth(COL_SIZE), wSize));
-    m_structureTree->setColumnWidth(COL_OFFSET, std::max(getColumnMinWidth(COL_OFFSET), wOffset));
-    m_structureTree->setColumnWidth(COL_RESOLVED, std::max(getColumnMinWidth(COL_RESOLVED), wResolved));
-    m_structureTree->setColumnWidth(COL_VALUE, std::max(getColumnMinWidth(COL_VALUE), wValue));
+    if (m_structureTree) {
+        m_structureTree->setColumnWidth(0, std::max(getColumnMinWidth(COL_NAME), wName));
+    }
+    m_metadataTree->setColumnWidth(META_COL_SIZE, std::max(getColumnMinWidth(COL_SIZE), wSize));
+    m_metadataTree->setColumnWidth(META_COL_OFFSET, std::max(getColumnMinWidth(COL_OFFSET), wOffset));
+    m_metadataTree->setColumnWidth(META_COL_RESOLVED, std::max(getColumnMinWidth(COL_RESOLVED), wResolved));
+    m_metadataTree->setColumnWidth(META_COL_VALUE, std::max(getColumnMinWidth(COL_VALUE), wValue));
     m_isAdjustingColumns = false;
+
+    setMetadataVisible(metaVisible);
 }
 
 void StructureHierarchyWidget::adjustColumnWidths() {
-    if (m_isAdjustingColumns || !m_structureTree)
+    if (m_isAdjustingColumns || !m_structureTree || !m_metadataTree)
         return;
 
     m_isAdjustingColumns = true;
+    int w1 = std::max(getColumnMinWidth(COL_SIZE), m_metadataTree->columnWidth(META_COL_SIZE));
+    int w2 = std::max(getColumnMinWidth(COL_OFFSET), m_metadataTree->columnWidth(META_COL_OFFSET));
+    int w3 = std::max(getColumnMinWidth(COL_RESOLVED), m_metadataTree->columnWidth(META_COL_RESOLVED));
+    int w4 = std::max(getColumnMinWidth(COL_VALUE), m_metadataTree->columnWidth(META_COL_VALUE));
 
-    int totalAvailableWidth = m_structureTree->viewport()->width();
-    int w1 = std::max(getColumnMinWidth(COL_SIZE), m_structureTree->columnWidth(COL_SIZE));
-    int w2 = std::max(getColumnMinWidth(COL_OFFSET), m_structureTree->columnWidth(COL_OFFSET));
-    int w3 = std::max(getColumnMinWidth(COL_RESOLVED), m_structureTree->columnWidth(COL_RESOLVED));
-    int w4 = std::max(getColumnMinWidth(COL_VALUE), m_structureTree->columnWidth(COL_VALUE));
-
-    int nonNameWidth = w1 + w2 + w3 + w4;
-    int minNameWidth = getColumnMinWidth(COL_NAME);
-
-    // Dynamically scale Description / Name so that columns 1-4 remain fully visible on screen
-    int targetNameWidth = std::max(minNameWidth, totalAvailableWidth - nonNameWidth);
-
-    m_structureTree->setColumnWidth(COL_NAME, targetNameWidth);
-    m_structureTree->setColumnWidth(COL_SIZE, w1);
-    m_structureTree->setColumnWidth(COL_OFFSET, w2);
-    m_structureTree->setColumnWidth(COL_RESOLVED, w3);
-    m_structureTree->setColumnWidth(COL_VALUE, w4);
-
+    m_metadataTree->setColumnWidth(META_COL_SIZE, w1);
+    m_metadataTree->setColumnWidth(META_COL_OFFSET, w2);
+    m_metadataTree->setColumnWidth(META_COL_RESOLVED, w3);
+    m_metadataTree->setColumnWidth(META_COL_VALUE, w4);
     m_isAdjustingColumns = false;
 }
 
@@ -209,51 +313,139 @@ void StructureHierarchyWidget::setupLayout() {
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(6);
 
-    m_structureTree = new QTreeWidget(this);
-    m_structureTree->setColumnCount(5);
-    m_structureTree->setHeaderLabels({"Description / Name", "Size", "Offset", "Resolved RAM", "Pointer Val"});
+    // Integrated Dual-Synchronized Splitter inside Structure Hierarchy Widget
+    m_innerSplitter = new QSplitter(Qt::Horizontal, this);
+    m_innerSplitter->setChildrenCollapsible(false);
+
+    // 1. Left Hierarchy Tree: Houses Description / Name without scrollbar clutter
+    m_structureTree = new QTreeWidget(m_innerSplitter);
+    m_structureTree->setColumnCount(1);
+    m_structureTree->setHeaderLabels({"Description / Name"});
     m_structureTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_structureTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+    m_structureTree->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_structureTree->setAlternatingRowColors(true);
+    m_structureTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_structureTree->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
+    m_structureTree->setItemDelegate(new NonEditableColumnDelegate(m_structureTree));
+    m_structureTree->setUniformRowHeights(true);
 
-    m_structureTree->header()->setSectionResizeMode(COL_NAME, QHeaderView::Interactive);
-    m_structureTree->header()->setSectionResizeMode(COL_SIZE, QHeaderView::Interactive);
-    m_structureTree->header()->setSectionResizeMode(COL_OFFSET, QHeaderView::Interactive);
-    m_structureTree->header()->setSectionResizeMode(COL_RESOLVED, QHeaderView::Interactive);
-    m_structureTree->header()->setSectionResizeMode(COL_VALUE, QHeaderView::Interactive);
+    // 2. Right Metadata Grid: Houses pinned Size, Offset, Resolved RAM, and Pointer Val with horizontal scrollbar
+    m_metadataTree = new QTreeWidget(m_innerSplitter);
+    m_metadataTree->setColumnCount(4);
+    m_metadataTree->setHeaderLabels({"Size", "Offset", "Resolved RAM", "Pointer Val"});
+    m_metadataTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_metadataTree->setRootIsDecorated(false);
+    m_metadataTree->setIndentation(0);
+    m_metadataTree->header()->setStretchLastSection(false);
+    m_metadataTree->header()->setMinimumSectionSize(50);
+    m_metadataTree->header()->setSectionResizeMode(META_COL_SIZE, QHeaderView::Interactive);
+    m_metadataTree->header()->setSectionResizeMode(META_COL_OFFSET, QHeaderView::Interactive);
+    m_metadataTree->header()->setSectionResizeMode(META_COL_RESOLVED, QHeaderView::Interactive);
+    m_metadataTree->header()->setSectionResizeMode(META_COL_VALUE, QHeaderView::Interactive);
+    m_metadataTree->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_metadataTree->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_metadataTree->setAlternatingRowColors(true);
+    m_metadataTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_metadataTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_metadataTree->setUniformRowHeights(true);
 
-    // Disable stretchLastSection so Pointer Val is not stretched or collapsed to 0 on window shrink
-    m_structureTree->header()->setStretchLastSection(false);
-    m_structureTree->header()->setMinimumSectionSize(50);
-    m_structureTree->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_innerSplitter->addWidget(m_structureTree);
+    m_innerSplitter->addWidget(m_metadataTree);
+    m_innerSplitter->setStretchFactor(0, 1);
+    m_innerSplitter->setStretchFactor(1, 0);
 
-    // Load persisted column widths or apply defaults
-    loadColumnSettings();
+    leftLayout->addWidget(m_innerSplitter, 1);
+
+    // Lockstep Vertical Scrolling Synchronization
+    connect(m_structureTree->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (m_isSyncingScroll)
+            return;
+        m_isSyncingScroll = true;
+        m_metadataTree->verticalScrollBar()->setValue(value);
+        m_isSyncingScroll = false;
+    });
+    connect(m_metadataTree->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+        if (m_isSyncingScroll)
+            return;
+        m_isSyncingScroll = true;
+        m_structureTree->verticalScrollBar()->setValue(value);
+        m_isSyncingScroll = false;
+    });
+
+    // Lockstep Expansion & Collapse Synchronization
+    connect(m_structureTree, &QTreeWidget::itemExpanded, this, [this](QTreeWidgetItem* item) {
+        if (m_isSyncingExpand)
+            return;
+        m_isSyncingExpand = true;
+        if (auto* twin = getTwinItem(item)) {
+            twin->setExpanded(true);
+        }
+        m_isSyncingExpand = false;
+    });
+    connect(m_structureTree, &QTreeWidget::itemCollapsed, this, [this](QTreeWidgetItem* item) {
+        if (m_isSyncingExpand)
+            return;
+        m_isSyncingExpand = true;
+        if (auto* twin = getTwinItem(item)) {
+            twin->setExpanded(false);
+        }
+        m_isSyncingExpand = false;
+    });
+
+    // Lockstep Multi-Selection Synchronization
+    connect(m_structureTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
+        if (m_isSyncingSelection)
+            return;
+        m_isSyncingSelection = true;
+        m_metadataTree->blockSignals(true);
+        m_metadataTree->clearSelection();
+        for (auto* item : m_structureTree->selectedItems()) {
+            if (auto* twin = getTwinItem(item)) {
+                twin->setSelected(true);
+            }
+        }
+        m_metadataTree->blockSignals(false);
+        m_isSyncingSelection = false;
+        emit treeSelectionChanged();
+    });
+    connect(m_metadataTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
+        if (m_isSyncingSelection)
+            return;
+        m_isSyncingSelection = true;
+        m_structureTree->blockSignals(true);
+        m_structureTree->clearSelection();
+        for (auto* item : m_metadataTree->selectedItems()) {
+            if (auto* twin = getTwinItem(item)) {
+                twin->setSelected(true);
+            }
+        }
+        m_structureTree->blockSignals(false);
+        m_isSyncingSelection = false;
+        emit treeSelectionChanged();
+    });
 
     // Enforce individual column minimum widths during manual resize and auto-save adjustments
-    connect(m_structureTree->header(), &QHeaderView::sectionResized, this,
+    connect(m_metadataTree->header(), &QHeaderView::sectionResized, this,
             [this](int logicalIndex, int /*oldSize*/, int newSize) {
                 if (m_isAdjustingColumns)
                     return;
 
-                int minWidth = getColumnMinWidth(logicalIndex);
+                int minWidth = getColumnMinWidth(logicalIndex + 1);
                 if (newSize < minWidth) {
                     m_isAdjustingColumns = true;
-                    m_structureTree->setColumnWidth(logicalIndex, minWidth);
+                    m_metadataTree->setColumnWidth(logicalIndex, minWidth);
                     m_isAdjustingColumns = false;
                 }
 
                 saveColumnSettings();
             });
 
-    m_structureTree->setAlternatingRowColors(true);
-    // Enable multi-selection like a standard file explorer / tree view
-    m_structureTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_structureTree->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
-
-    // Enforce strict non-editability on all columns except Description / Name
-    m_structureTree->setItemDelegate(new NonEditableColumnDelegate(m_structureTree));
+    connect(m_innerSplitter, &QSplitter::splitterMoved, this, [this]() { saveColumnSettings(); });
 
     // Install event filter on m_structureTree to handle navigation and hierarchy shortcuts (Enter, F, V, P, Delete, X)
     m_structureTree->installEventFilter(this);
+    m_metadataTree->installEventFilter(this);
 
     // Setup actions and keyboard shortcuts for Structure Hierarchy
     m_treeCopyRaAction = new QAction(getThemeIcon(":/icons/copy_ra.svg"), "Copy as RetroAchievements Format", this);
@@ -279,14 +471,18 @@ void StructureHierarchyWidget::setupLayout() {
     m_structureTree->addAction(m_treeCopyAddressAction);
     m_structureTree->addAction(m_treeCopyValueAction);
 
+    m_metadataTree->addAction(m_treeCopyRaAction);
+    m_metadataTree->addAction(m_treeCopyNoteAction);
+    m_metadataTree->addAction(m_treeCopyAddressAction);
+    m_metadataTree->addAction(m_treeCopyValueAction);
+
     // Hook Delete key to remove selected hierarchy node(s)
     auto* removeKeyAction = new QAction(this);
     removeKeyAction->setShortcut(QKeySequence::Delete);
     removeKeyAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     connect(removeKeyAction, &QAction::triggered, this, &StructureHierarchyWidget::removeNodeClicked);
     m_structureTree->addAction(removeKeyAction);
-
-    leftLayout->addWidget(m_structureTree, 1);
+    m_metadataTree->addAction(removeKeyAction);
 
     m_offsetPreviewLabel = new QLabel("Select an address in Memory Viewer to calculate relative offset.", this);
     m_offsetPreviewLabel->setStyleSheet("font-weight: bold; color: #58A6FF; padding: 4px; border: 1px solid #30363D; border-radius: 4px;");
@@ -323,31 +519,48 @@ void StructureHierarchyWidget::setupLayout() {
     m_removeNodeBtn->setAutoDefault(false);
     m_removeNodeBtn->setDefault(false);
 
+    m_toggleMetadataBtn = new QPushButton("Metadata", this);
+    m_toggleMetadataBtn->setToolTip("Show/Hide Metadata Columns (Size, Offset, Resolved RAM, Pointer Val)");
+    m_toggleMetadataBtn->setIcon(getThemeIcon(":/icons/converter.svg"));
+    m_toggleMetadataBtn->setCheckable(true);
+    m_toggleMetadataBtn->setChecked(true);
+    m_toggleMetadataBtn->setFixedHeight(26);
+    m_toggleMetadataBtn->setAutoDefault(false);
+    m_toggleMetadataBtn->setDefault(false);
+
     treeButtonsRow->addWidget(m_addVariableBtn, 1);
     treeButtonsRow->addWidget(m_addPointerBtn, 1);
     treeButtonsRow->addWidget(m_followPointerBtn, 1);
     treeButtonsRow->addWidget(m_removeNodeBtn, 1);
+    treeButtonsRow->addWidget(m_toggleMetadataBtn, 1);
     leftLayout->addLayout(treeButtonsRow);
+
+    // Load persisted column widths and metadata visibility
+    loadColumnSettings();
 
     connect(m_structureTree, &QTreeWidget::itemDoubleClicked, this, &StructureHierarchyWidget::onTreeItemDoubleClicked);
     connect(m_structureTree, &QTreeWidget::customContextMenuRequested, this, &StructureHierarchyWidget::onTreeCustomContextMenu);
     connect(m_structureTree, &QTreeWidget::itemChanged, this, &StructureHierarchyWidget::onTreeItemChanged);
-    connect(m_structureTree, &QTreeWidget::itemSelectionChanged, this, &StructureHierarchyWidget::treeSelectionChanged);
+
+    connect(m_metadataTree, &QTreeWidget::itemDoubleClicked, this, &StructureHierarchyWidget::onMetadataItemDoubleClicked);
+    connect(m_metadataTree, &QTreeWidget::customContextMenuRequested, this, &StructureHierarchyWidget::onMetadataCustomContextMenu);
 
     connect(m_addVariableBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::addVariableClicked);
     connect(m_addPointerBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::addPointerClicked);
     connect(m_followPointerBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::followPointerClicked);
     connect(m_removeNodeBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::removeNodeClicked);
+    connect(m_toggleMetadataBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::onToggleMetadataClicked);
 }
 
 bool StructureHierarchyWidget::eventFilter(QObject* obj, QEvent* event) {
-    if (obj == m_structureTree && event->type() == QEvent::KeyPress) {
+    if ((obj == m_structureTree || obj == m_metadataTree) && event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
 
         // Do not intercept hotkeys if an item cell editor is actively open
         QWidget* focusW = QApplication::focusWidget();
-        bool isEditing =
-            focusW && (focusW != m_structureTree) && (focusW != m_structureTree->viewport()) && m_structureTree->isAncestorOf(focusW);
+        bool isEditing = focusW && (focusW != m_structureTree) && (focusW != m_structureTree->viewport()) &&
+                         (focusW != m_metadataTree) && (focusW != m_metadataTree->viewport()) &&
+                         (m_structureTree->isAncestorOf(focusW) || m_metadataTree->isAncestorOf(focusW));
 
         if (!isEditing) {
             if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_F) {
@@ -377,14 +590,20 @@ bool StructureHierarchyWidget::eventFilter(QObject* obj, QEvent* event) {
 
 void StructureHierarchyWidget::populateFromNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
     m_structureTree->blockSignals(true);
+    m_metadataTree->blockSignals(true);
     m_structureTree->clear();
+    m_metadataTree->clear();
+
     populateTreeFromHierarchyNodes(nodes);
+
     m_structureTree->expandAll();
+    m_metadataTree->expandAll();
     m_structureTree->blockSignals(false);
+    m_metadataTree->blockSignals(false);
 }
 
 void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
-                                                              QTreeWidgetItem* parentItem) {
+                                                              QTreeWidgetItem* parentItem, QTreeWidgetItem* metaParentItem) {
     QRegularExpression offsetRx("^((?:\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+)(?:([=\\s\\|]+)(.*))?$");
 
     for (const auto& node : nodes) {
@@ -417,12 +636,16 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
             QString cleanDesc;
             parseSizeAndDescription(desc, sizeStr, cleanDesc);
 
-            auto* newItem = new QTreeWidgetItem(parentItem ? parentItem : m_structureTree->invisibleRootItem());
-            newItem->setText(COL_NAME, cleanDesc);
-            newItem->setText(COL_SIZE, sizeStr);
-            newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
-            QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
+            // Left Tree Item: Clean Description / Name
+            auto* leftItem = new QTreeWidgetItem(parentItem ? parentItem : m_structureTree->invisibleRootItem());
+            leftItem->setText(0, cleanDesc);
+            leftItem->setFlags(leftItem->flags() | Qt::ItemIsEditable);
 
+            // Right Grid Item: Pinned Size, Offset, Resolved RAM, Pointer Val
+            auto* rightItem = new QTreeWidgetItem(metaParentItem ? metaParentItem : m_metadataTree->invisibleRootItem());
+            rightItem->setText(META_COL_SIZE, sizeStr);
+
+            QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
             QString displayOffset;
             if (isArrayChild) {
                 displayOffset = "|+" + (offsetVal < 0 ? QString("-") : QString("")) + "0x" + offsetHex;
@@ -432,13 +655,25 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
                 displayOffset = (offsetVal < 0 ? "-0x" : "+0x") + offsetHex;
             }
 
-            newItem->setText(COL_OFFSET, displayOffset);
-            newItem->setData(1, Qt::UserRole, offsetVal);
-            newItem->setData(2, Qt::UserRole, offsetVal);
-            newItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
-            newItem->setData(2, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
-            newItem->setData(1, Qt::UserRole + 3, isArrayElem);
-            newItem->setData(2, Qt::UserRole + 3, isArrayElem);
+            rightItem->setText(META_COL_OFFSET, displayOffset);
+
+            // Bidirectional $O(1)$ Twin Linking
+            setTwinItems(leftItem, rightItem);
+
+            // Backwards-compatible data role storage
+            leftItem->setData(1, Qt::UserRole, offsetVal);
+            leftItem->setData(2, Qt::UserRole, offsetVal);
+            leftItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
+            leftItem->setData(2, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
+            leftItem->setData(1, Qt::UserRole + 3, isArrayElem);
+            leftItem->setData(2, Qt::UserRole + 3, isArrayElem);
+
+            rightItem->setData(1, Qt::UserRole, offsetVal);
+            rightItem->setData(2, Qt::UserRole, offsetVal);
+            rightItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
+            rightItem->setData(2, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
+            rightItem->setData(1, Qt::UserRole + 3, isArrayElem);
+            rightItem->setData(2, Qt::UserRole + 3, isArrayElem);
 
             QStringList notes;
             for (const auto& child : node->children) {
@@ -451,8 +686,8 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
                 }
             }
             if (!notes.empty()) {
-                newItem->setData(0, Qt::UserRole + 2, notes);
-                newItem->setToolTip(0, notes.join("\n"));
+                leftItem->setData(0, Qt::UserRole + 2, notes);
+                leftItem->setToolTip(0, notes.join("\n"));
             }
 
             std::vector<std::shared_ptr<CodeNoteNode>> pointerChildren;
@@ -467,7 +702,7 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
             }
 
             if (!pointerChildren.empty()) {
-                populateTreeFromHierarchyNodes(pointerChildren, newItem);
+                populateTreeFromHierarchyNodes(pointerChildren, leftItem, rightItem);
             }
         }
     }
@@ -482,6 +717,7 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
     if (!item || !m_manager || currentBaseAddress == 0)
         return 0;
 
+    // Resolve base from emulator manager
     uint32_t base = m_manager->unnormalizeAddress(QString::number(currentBaseAddress, 16));
     if (base == 0)
         return 0;
@@ -495,8 +731,12 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
         }
     }
 
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    if (!hierItem)
+        return 0;
+
     std::vector<QTreeWidgetItem*> lineage;
-    QTreeWidgetItem* curr = item;
+    QTreeWidgetItem* curr = hierItem;
     while (curr) {
         lineage.push_back(curr);
         curr = curr->parent();
@@ -508,8 +748,7 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
         int32_t offset = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt() : node->data(1, Qt::UserRole).toInt();
         currentAddress += static_cast<uint32_t>(offset);
 
-        if (node != item && (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive) ||
-                             node->text(1).contains("Pointer", Qt::CaseInsensitive))) {
+        if (node != hierItem && isPointerItem(node)) {
             auto ptrVal = readMemoryDword(currentAddress, snapshotMemory);
             if (ptrVal.has_value() && m_manager && m_manager->isValidPointerTarget(ptrVal.value())) {
                 currentAddress = m_manager->unnormalizeAddress(QString::number(ptrVal.value(), 16));
@@ -528,6 +767,7 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
 
     // Block tree signals during internal address and pointer calculations to prevent spurious itemChanged events
     m_structureTree->blockSignals(true);
+    m_metadataTree->blockSignals(true);
 
     uint32_t base = m_manager->unnormalizeAddress(QString::number(currentBaseAddress, 16));
 
@@ -542,11 +782,15 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
     }
 
     std::function<void(QTreeWidgetItem*, uint32_t, bool)> updateNode = [&](QTreeWidgetItem* node, uint32_t parentBase, bool parentValid) {
+        QTreeWidgetItem* meta = getTwinItem(node);
+
         if (!parentValid || parentBase == 0) {
-            node->setText(COL_RESOLVED, "N/A");
-            node->setText(COL_VALUE, "N/A");
-            node->setForeground(COL_RESOLVED, QColor(140, 140, 140));
-            node->setForeground(COL_VALUE, QColor(140, 140, 140));
+            if (meta) {
+                meta->setText(META_COL_RESOLVED, "N/A");
+                meta->setText(META_COL_VALUE, "N/A");
+                meta->setForeground(META_COL_RESOLVED, QColor(140, 140, 140));
+                meta->setForeground(META_COL_VALUE, QColor(140, 140, 140));
+            }
 
             for (int i = 0; i < node->childCount(); ++i) {
                 updateNode(node->child(i), 0, false);
@@ -558,8 +802,10 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
         uint32_t resolved = parentBase + static_cast<uint32_t>(offset);
 
         QString displayAddr = m_manager->formatDisplayAddress(resolved);
-        node->setText(COL_RESOLVED, "0x" + displayAddr);
-        node->setForeground(COL_RESOLVED, palette().color(QPalette::Text));
+        if (meta) {
+            meta->setText(META_COL_RESOLVED, "0x" + displayAddr);
+            meta->setForeground(META_COL_RESOLVED, palette().color(QPalette::Text));
+        }
 
         auto valOpt = readMemoryDword(resolved, snapshotMemory);
         uint32_t nextBase = 0;
@@ -568,11 +814,12 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
         if (valOpt.has_value()) {
             uint32_t rawVal = valOpt.value();
             QString valHex = QString("%1").arg(rawVal, 8, 16, QChar('0')).toUpper();
-            node->setText(COL_VALUE, "0x" + valHex);
-            node->setForeground(COL_VALUE, palette().color(QPalette::Text));
+            if (meta) {
+                meta->setText(META_COL_VALUE, "0x" + valHex);
+                meta->setForeground(META_COL_VALUE, palette().color(QPalette::Text));
+            }
 
-            if (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive) ||
-                node->text(1).contains("Pointer", Qt::CaseInsensitive)) {
+            if (isPointerItem(node)) {
                 if (rawVal != 0 && m_manager->isValidPointerTarget(rawVal)) {
                     nextBase = m_manager->unnormalizeAddress(QString::number(rawVal, 16));
                     nextValid = true;
@@ -583,8 +830,10 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
                 }
             }
         } else {
-            node->setText(COL_VALUE, "N/A");
-            node->setForeground(COL_VALUE, QColor(140, 140, 140));
+            if (meta) {
+                meta->setText(META_COL_VALUE, "N/A");
+                meta->setForeground(META_COL_VALUE, QColor(140, 140, 140));
+            }
             nextValid = false;
             node->setData(0, Qt::UserRole + 4, 0);
         }
@@ -599,6 +848,7 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
     }
 
     m_structureTree->blockSignals(false);
+    m_metadataTree->blockSignals(false);
 }
 
 void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candidateScopes, uint32_t currentBaseAddress,
@@ -606,7 +856,9 @@ void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candid
     std::function<void(QTreeWidgetItem*, int)> collect = [&](QTreeWidgetItem* item, int depth) {
         uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
         QString desc = item->text(0).trimmed();
-        QString sizeTag = item->text(1).trimmed();
+        QTreeWidgetItem* meta = getTwinItem(item);
+        QString sizeTag = meta ? meta->text(META_COL_SIZE).trimmed() : "";
+
         static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
         auto match = arrayTagRx.match(desc);
         if (!match.hasMatch()) {
@@ -656,10 +908,10 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
             uint32_t nativeAddr = m_manager->unnormalizeAddress(QString::number(resolved, 16));
             Widgets::MemoryViewerWidget::HighlightInfo info;
 
-            // Extract clean name by removing redundant size/format tag like [32-bit], [Float], etc.
-            QString sizeTag = item->text(COL_SIZE).trimmed();
+            QTreeWidgetItem* meta = getTwinItem(item);
+            QString sizeTag = meta ? meta->text(META_COL_SIZE).trimmed() : "";
             if (sizeTag.isEmpty()) {
-                sizeTag = item->text(COL_NAME).trimmed();
+                sizeTag = item->text(0).trimmed();
             }
 
             uint32_t varSize = 4;
@@ -681,13 +933,12 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
                 varSize = 4;
             }
 
-            info.name = item->text(COL_NAME).trimmed();
-            info.offset = item->text(COL_OFFSET).trimmed();
+            info.name = item->text(0).trimmed();
+            info.offset = meta ? meta->text(META_COL_OFFSET).trimmed() : "";
             info.label = info.name + " (" + info.offset + ")";
             info.startAddress = nativeAddr;
             info.size = varSize;
-            info.isPointer = (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive) ||
-                              item->text(1).contains("Pointer", Qt::CaseInsensitive));
+            info.isPointer = isPointerItem(item);
             info.isChildOfActive = (activeItem && (item == activeItem || item->parent() == activeItem));
 
             for (uint32_t b = 0; b < varSize; ++b) {
@@ -696,8 +947,9 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
         }
 
         // Identify defined array boundaries across the hierarchy
-        QString desc = item->text(COL_NAME).trimmed();
-        QString sizeTagStr = item->text(COL_SIZE).trimmed();
+        QString desc = item->text(0).trimmed();
+        QTreeWidgetItem* meta = getTwinItem(item);
+        QString sizeTagStr = meta ? meta->text(META_COL_SIZE).trimmed() : "";
         static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
         auto arrayMatch = arrayTagRx.match(desc);
         if (!arrayMatch.hasMatch()) {
@@ -750,7 +1002,10 @@ void StructureHierarchyWidget::updateOffsetPreview(uint32_t selectedAddr, const 
         QString scopeName;
         auto* node = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
         if (node) {
-            scopeName = node->text(COL_NAME) + " (" + node->text(COL_OFFSET) + ")";
+            QTreeWidgetItem* hierItem = (node->treeWidget() == m_metadataTree) ? getTwinItem(node) : node;
+            QTreeWidgetItem* metaItem = (node->treeWidget() == m_metadataTree) ? node : getTwinItem(node);
+            QString offStr = metaItem ? metaItem->text(META_COL_OFFSET) : "";
+            scopeName = (hierItem ? hierItem->text(0) : "") + " (" + offStr + ")";
         } else if (match.isArrayScope) {
             scopeName = headerComment.isEmpty() ? "Root Array" : headerComment.trimmed();
         } else {
@@ -774,12 +1029,15 @@ void StructureHierarchyWidget::updateOffsetPreview(uint32_t selectedAddr, const 
 
 void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description,
                                                  bool isArrayElement) {
+    QTreeWidgetItem* hierParent = parentScope ? ((parentScope->treeWidget() == m_metadataTree) ? getTwinItem(parentScope) : parentScope) : nullptr;
+    QTreeWidgetItem* metaParent = hierParent ? getTwinItem(hierParent) : nullptr;
+
     QTreeWidget* tree = m_structureTree;
-    int childCount = parentScope ? parentScope->childCount() : tree->topLevelItemCount();
+    int childCount = hierParent ? hierParent->childCount() : tree->topLevelItemCount();
 
     int insertIndex = childCount;
     for (int i = 0; i < childCount; ++i) {
-        QTreeWidgetItem* existing = parentScope ? parentScope->child(i) : tree->topLevelItem(i);
+        QTreeWidgetItem* existing = hierParent ? hierParent->child(i) : tree->topLevelItem(i);
         int32_t existingOffset = existing->data(2, Qt::UserRole).isValid() ? existing->data(2, Qt::UserRole).toInt()
                                                                            : existing->data(1, Qt::UserRole).toInt();
         if (existingOffset > offset) {
@@ -792,16 +1050,19 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
     QString cleanDesc;
     parseSizeAndDescription(description, sizeStr, cleanDesc);
 
-    auto* newItem = new QTreeWidgetItem();
-    newItem->setText(COL_NAME, cleanDesc);
-    newItem->setText(COL_SIZE, sizeStr);
-    newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
+    auto* leftItem = new QTreeWidgetItem();
+    leftItem->setText(0, cleanDesc);
+    leftItem->setFlags(leftItem->flags() | Qt::ItemIsEditable);
+
+    auto* rightItem = new QTreeWidgetItem();
+    rightItem->setText(META_COL_SIZE, sizeStr);
+
     QString sign = (offset < 0) ? "-" : "";
     QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
 
-    bool parentIsArrayElem = parentScope && (parentScope->data(2, Qt::UserRole + 3).isValid()
-                                                 ? parentScope->data(2, Qt::UserRole + 3).toBool()
-                                                 : parentScope->data(1, Qt::UserRole + 3).toBool());
+    bool parentIsArrayElem = hierParent && (hierParent->data(2, Qt::UserRole + 3).isValid()
+                                                ? hierParent->data(2, Qt::UserRole + 3).toBool()
+                                                : hierParent->data(1, Qt::UserRole + 3).toBool());
 
     // Standardized array offset display (|0x.. without redundant '+')
     QString displayOffset;
@@ -813,22 +1074,37 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
         displayOffset = (offset < 0 ? "-0x" : "+0x") + offsetHex;
     }
 
-    newItem->setText(COL_OFFSET, displayOffset);
-    newItem->setData(1, Qt::UserRole, offset);
-    newItem->setData(2, Qt::UserRole, offset);
-    newItem->setData(1, Qt::UserRole + 1, "="); // Default delimiter
-    newItem->setData(2, Qt::UserRole + 1, "=");
-    newItem->setData(1, Qt::UserRole + 3, isArrayElement);
-    newItem->setData(2, Qt::UserRole + 3, isArrayElement);
+    rightItem->setText(META_COL_OFFSET, displayOffset);
 
-    if (parentScope) {
-        parentScope->insertChild(insertIndex, newItem);
-        parentScope->setExpanded(true);
+    setTwinItems(leftItem, rightItem);
+
+    leftItem->setData(1, Qt::UserRole, offset);
+    leftItem->setData(2, Qt::UserRole, offset);
+    leftItem->setData(1, Qt::UserRole + 1, "="); // Default delimiter
+    leftItem->setData(2, Qt::UserRole + 1, "=");
+    leftItem->setData(1, Qt::UserRole + 3, isArrayElement);
+    leftItem->setData(2, Qt::UserRole + 3, isArrayElement);
+
+    rightItem->setData(1, Qt::UserRole, offset);
+    rightItem->setData(2, Qt::UserRole, offset);
+    rightItem->setData(1, Qt::UserRole + 1, "=");
+    rightItem->setData(2, Qt::UserRole + 1, "=");
+    rightItem->setData(1, Qt::UserRole + 3, isArrayElement);
+    rightItem->setData(2, Qt::UserRole + 3, isArrayElement);
+
+    if (hierParent) {
+        hierParent->insertChild(insertIndex, leftItem);
+        hierParent->setExpanded(true);
+        if (metaParent) {
+            metaParent->insertChild(insertIndex, rightItem);
+            metaParent->setExpanded(true);
+        }
     } else {
-        tree->insertTopLevelItem(insertIndex, newItem);
+        tree->insertTopLevelItem(insertIndex, leftItem);
+        m_metadataTree->insertTopLevelItem(insertIndex, rightItem);
     }
 
-    tree->setCurrentItem(newItem);
+    tree->setCurrentItem(leftItem);
 }
 
 void StructureHierarchyWidget::removeDocumentationAtAddress(uint32_t address, uint32_t currentBaseAddress,
@@ -855,7 +1131,11 @@ void StructureHierarchyWidget::removeDocumentationAtAddress(uint32_t address, ui
     }
 
     if (targetItem) {
+        QTreeWidgetItem* meta = getTwinItem(targetItem);
         delete targetItem;
+        if (meta) {
+            delete meta;
+        }
         emit treeDataChanged();
     }
 }
@@ -889,13 +1169,21 @@ QString StructureHierarchyWidget::generateCodeNoteFromTree(bool useUnicode, bool
                 offsetStr = (offset < 0 ? QString("-") : QString("+")) + "0x" + offsetHex;
             }
 
-            QString sizeStr = item->text(COL_SIZE).trimmed();
-            QString descStr = item->text(COL_NAME).trimmed();
+            QTreeWidgetItem* meta = getTwinItem(item);
+            QString sizeStr = meta ? meta->text(META_COL_SIZE).trimmed() : "";
+            QString descStr = item->text(0).trimmed();
+
+            // Seamlessly wrap in brackets for RetroAchievements QA/CR standards compliance
+            QString sizeWithBrackets;
+            if (!sizeStr.isEmpty()) {
+                sizeWithBrackets = sizeStr.startsWith('[') ? sizeStr : ("[" + sizeStr + "]");
+            }
+
             QString fullDesc;
-            if (!sizeStr.isEmpty() && !descStr.isEmpty()) {
-                fullDesc = sizeStr + " " + descStr;
-            } else if (!sizeStr.isEmpty()) {
-                fullDesc = sizeStr;
+            if (!sizeWithBrackets.isEmpty() && !descStr.isEmpty()) {
+                fullDesc = sizeWithBrackets + " " + descStr;
+            } else if (!sizeWithBrackets.isEmpty()) {
+                fullDesc = sizeWithBrackets;
             } else {
                 fullDesc = descStr;
             }
@@ -940,8 +1228,12 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
     if (!item || currentBaseAddress == 0)
         return std::nullopt;
 
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    if (!hierItem)
+        return std::nullopt;
+
     std::vector<QTreeWidgetItem*> lineage;
-    for (QTreeWidgetItem* curr = item; curr != nullptr; curr = curr->parent()) {
+    for (QTreeWidgetItem* curr = hierItem; curr != nullptr; curr = curr->parent()) {
         lineage.push_back(curr);
     }
     std::reverse(lineage.begin(), lineage.end());
@@ -973,7 +1265,7 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
         }
     }
 
-    path.finalAddress = const_cast<StructureHierarchyWidget*>(this)->resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
+    path.finalAddress = const_cast<StructureHierarchyWidget*>(this)->resolveNodeAddress(hierItem, currentBaseAddress, snapshotMemory, rootArr);
     return path;
 }
 
@@ -982,8 +1274,12 @@ QString StructureHierarchyWidget::formatRetroAchievementsTrigger(QTreeWidgetItem
     if (!item || currentBaseAddress == 0 || !m_manager)
         return QString();
 
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    if (!hierItem)
+        return QString();
+
     std::vector<QTreeWidgetItem*> lineage;
-    for (QTreeWidgetItem* curr = item; curr != nullptr; curr = curr->parent()) {
+    for (QTreeWidgetItem* curr = hierItem; curr != nullptr; curr = curr->parent()) {
         lineage.push_back(curr);
     }
     std::reverse(lineage.begin(), lineage.end());
@@ -1057,17 +1353,17 @@ QString StructureHierarchyWidget::formatRetroAchievementsTrigger(QTreeWidgetItem
 
     for (size_t i = 0; i < lineage.size(); ++i) {
         QTreeWidgetItem* node = lineage[i];
+        QTreeWidgetItem* meta = getTwinItem(node);
         int32_t offset = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt() : node->data(1, Qt::UserRole).toInt();
-        bool isPtr = (node->childCount() > 0 || node->text(COL_NAME).contains("Pointer", Qt::CaseInsensitive) ||
-                      node->text(COL_SIZE).contains("Pointer", Qt::CaseInsensitive));
+        bool isPtr = isPointerItem(node);
         bool isLast = (i == lineage.size() - 1);
 
         if (isStatic) {
             currentStaticAddr += static_cast<uint32_t>(offset);
             if (isPtr) {
-                QString mask = extractMaskFromText(node->text(COL_SIZE));
+                QString mask = extractMaskFromText(meta ? meta->text(META_COL_SIZE) : "");
                 if (mask.isEmpty()) {
-                    mask = extractMaskFromText(node->text(COL_NAME));
+                    mask = extractMaskFromText(node->text(0));
                 }
                 if (mask.isEmpty()) {
                     if (isPs2 && m_manager->isAttached()) {
@@ -1087,9 +1383,9 @@ QString StructureHierarchyWidget::formatRetroAchievementsTrigger(QTreeWidgetItem
         } else {
             accumulatedOffset += static_cast<uint32_t>(offset);
             if (isPtr && !isLast) {
-                QString mask = extractMaskFromText(node->text(COL_SIZE));
+                QString mask = extractMaskFromText(meta ? meta->text(META_COL_SIZE) : "");
                 if (mask.isEmpty()) {
-                    mask = extractMaskFromText(node->text(COL_NAME));
+                    mask = extractMaskFromText(node->text(0));
                 }
                 if (mask.isEmpty()) {
                     if (isPs2 && m_manager->isAttached()) {
@@ -1150,6 +1446,104 @@ void StructureHierarchyWidget::onTreeItemDoubleClicked(QTreeWidgetItem* item, in
     emit followPointerClicked();
 }
 
+void StructureHierarchyWidget::openSizeDropdown(QTreeWidgetItem* item, const QPoint& globalPos) {
+    if (!item)
+        return;
+
+    QTreeWidgetItem* metaItem = (item->treeWidget() == m_metadataTree) ? item : getTwinItem(item);
+    if (!metaItem)
+        return;
+
+    QString currentSize = metaItem->text(META_COL_SIZE).trimmed();
+
+    QMenu menu(this);
+    menu.setStyleSheet("QMenu { font-family: 'Consolas', 'Segoe UI', monospace; font-size: 11px; }");
+
+    for (const auto& type : StandardRATypes) {
+        QAction* act = menu.addAction(type);
+        act->setCheckable(true);
+        if (type.compare(currentSize, Qt::CaseInsensitive) == 0) {
+            act->setChecked(true);
+        }
+
+        connect(act, &QAction::triggered, this, [this, type]() {
+            // Apply selected size across selection, safely skipping pointer nodes
+            QList<QTreeWidgetItem*> selected = m_structureTree->selectedItems();
+            if (selected.isEmpty()) {
+                if (auto* cur = m_structureTree->currentItem()) {
+                    selected.append(cur);
+                }
+            }
+
+            int updatedCount = 0;
+            for (auto* itm : selected) {
+                if (!isPointerItem(itm)) {
+                    applySizeToItem(itm, type);
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0) {
+                emit treeDataChanged();
+            }
+        });
+    }
+
+    menu.exec(globalPos);
+}
+
+void StructureHierarchyWidget::applySizeToItem(QTreeWidgetItem* item, const QString& newSize) {
+    if (!item)
+        return;
+
+    QTreeWidgetItem* metaItem = (item->treeWidget() == m_metadataTree) ? item : getTwinItem(item);
+
+    if (metaItem) {
+        metaItem->setText(META_COL_SIZE, newSize);
+    }
+}
+
+void StructureHierarchyWidget::onMetadataItemDoubleClicked(QTreeWidgetItem* item, int column) {
+    if (!item)
+        return;
+
+    QTreeWidgetItem* hierItem = getTwinItem(item);
+    if (!hierItem)
+        hierItem = item;
+
+    if (column == META_COL_SIZE) {
+        if (isPointerItem(hierItem)) {
+            QString emuName = m_manager ? m_manager->getEmulatorName() : "Emulator";
+            QString ptrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+            emit statusMessageRequested(QString("Pointer size is locked to active architecture (%1: %2)").arg(emuName, ptrDesc));
+            return;
+        }
+
+        QRect rect = m_metadataTree->visualItemRect(item);
+        QPoint globalPos = m_metadataTree->viewport()->mapToGlobal(QPoint(rect.left(), rect.bottom()));
+        openSizeDropdown(hierItem, globalPos);
+    } else {
+        // Double-clicking Offset, Resolved RAM, or Pointer Val navigates in Memory Viewer
+        emit followPointerClicked();
+    }
+}
+
+void StructureHierarchyWidget::onMetadataCustomContextMenu(const QPoint& pos) {
+    QTreeWidgetItem* clickedItem = m_metadataTree->itemAt(pos);
+    if (!clickedItem)
+        return;
+
+    QTreeWidgetItem* hierItem = getTwinItem(clickedItem);
+    if (!hierItem)
+        hierItem = clickedItem;
+
+    if (!m_structureTree->selectedItems().contains(hierItem)) {
+        m_structureTree->setCurrentItem(hierItem);
+    }
+
+    onTreeCustomContextMenu(m_structureTree->viewport()->mapFromGlobal(m_metadataTree->viewport()->mapToGlobal(pos)));
+}
+
 void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
     auto* clickedItem = m_structureTree->itemAt(pos);
     if (!clickedItem)
@@ -1184,8 +1578,10 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
 
     menu.addSeparator();
 
-    bool hasPointerVal = !clickedItem->text(COL_VALUE).trimmed().isEmpty() && clickedItem->text(COL_VALUE) != "N/A" &&
-                         clickedItem->text(COL_VALUE) != "0x00000000";
+    QTreeWidgetItem* meta = getTwinItem(clickedItem);
+    bool hasPointerVal = meta && !meta->text(META_COL_VALUE).trimmed().isEmpty() &&
+                         meta->text(META_COL_VALUE) != "N/A" && meta->text(META_COL_VALUE) != "0x00000000";
+
     if (hasPointerVal) {
         auto* followAct = menu.addAction(getThemeIcon(":/icons/follow_pointer.svg"), "Follow Pointer", this,
                                          &StructureHierarchyWidget::followPointerClicked);
@@ -1200,27 +1596,11 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
 }
 
 void StructureHierarchyWidget::onTreeItemChanged(QTreeWidgetItem* item, int column) {
+    Q_UNUSED(item);
     if (m_structureTree->signalsBlocked())
         return;
 
-    if (column == COL_OFFSET) {
-        QString txt = item->text(COL_OFFSET).trimmed();
-        QRegularExpression rx("^((?:\\|[\\+\\-]?|[\\+\\-])0x)([0-9a-fA-F]+)");
-        auto match = rx.match(txt);
-        if (match.hasMatch()) {
-            QString prefix = match.captured(1);
-            bool isArrayElem = (prefix.startsWith('|') && !prefix.startsWith("|+") && !prefix.startsWith("|-"));
-            bool ok = false;
-            int32_t val = match.captured(2).toInt(&ok, 16);
-            if (prefix.contains('-'))
-                val = -val;
-            item->setData(1, Qt::UserRole, val);
-            item->setData(2, Qt::UserRole, val);
-            item->setData(1, Qt::UserRole + 3, isArrayElem);
-            item->setData(2, Qt::UserRole + 3, isArrayElem);
-            emit treeDataChanged();
-        }
-    } else if (column == COL_NAME || column == COL_SIZE) {
+    if (column == 0) {
         emit treeDataChanged();
     }
 }
