@@ -67,6 +67,8 @@ class StructureHierarchyWidget : public QWidget {
                                            const QString& headerComment) const;
 
     void updateThemeIcons();
+    void saveColumnSettings();
+    void loadColumnSettings();
 
   signals:
     void addVariableClicked();

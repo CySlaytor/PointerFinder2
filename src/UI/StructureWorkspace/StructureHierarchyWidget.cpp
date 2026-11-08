@@ -4,11 +4,14 @@
 #include "UI/Common/ThemeManager.h"
 
 #include <QApplication>
+#include <QCoreApplication>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QStyledItemDelegate>
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
@@ -57,7 +60,9 @@ void parseSizeAndDescription(const QString& rawDesc, QString& outSize, QString& 
 
 StructureHierarchyWidget::StructureHierarchyWidget(QWidget* parent) : QWidget(parent) { setupLayout(); }
 
-StructureHierarchyWidget::~StructureHierarchyWidget() = default;
+StructureHierarchyWidget::~StructureHierarchyWidget() {
+    saveColumnSettings();
+}
 
 QIcon StructureHierarchyWidget::getThemeIcon(const QString& resourcePath) const {
     return ThemeManager::getIcon(resourcePath, GlobalSettings::activeTheme);
@@ -112,17 +117,57 @@ void StructureHierarchyWidget::clearTree() {
 int StructureHierarchyWidget::getColumnMinWidth(int column) const {
     switch (column) {
     case COL_NAME:
-        return 140;
+        return 50;
     case COL_SIZE:
-        return 75;
-    case COL_OFFSET:
         return 65;
+    case COL_OFFSET:
+        return 55;
     case COL_RESOLVED:
     case COL_VALUE:
         return 88; // Sufficient for full 8-digit hexadecimal addresses (e.g. 0x80B4A600)
     default:
         return 50;
     }
+}
+
+void StructureHierarchyWidget::saveColumnSettings() {
+    if (!m_structureTree)
+        return;
+
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DissectStructure");
+    settings.setValue("colWidthName", m_structureTree->columnWidth(COL_NAME));
+    settings.setValue("colWidthSize", m_structureTree->columnWidth(COL_SIZE));
+    settings.setValue("colWidthOffset", m_structureTree->columnWidth(COL_OFFSET));
+    settings.setValue("colWidthResolved", m_structureTree->columnWidth(COL_RESOLVED));
+    settings.setValue("colWidthPointerVal", m_structureTree->columnWidth(COL_VALUE));
+    settings.endGroup();
+}
+
+void StructureHierarchyWidget::loadColumnSettings() {
+    if (!m_structureTree)
+        return;
+
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DissectStructure");
+
+    // Default to preferred proportions when settings.ini does not exist
+    int wName = settings.value("colWidthName", 386).toInt();
+    int wSize = settings.value("colWidthSize", 77).toInt();
+    int wOffset = settings.value("colWidthOffset", 65).toInt();
+    int wResolved = settings.value("colWidthResolved", 88).toInt();
+    int wValue = settings.value("colWidthPointerVal", 90).toInt();
+    settings.endGroup();
+
+    m_isAdjustingColumns = true;
+    m_structureTree->setColumnWidth(COL_NAME, std::max(getColumnMinWidth(COL_NAME), wName));
+    m_structureTree->setColumnWidth(COL_SIZE, std::max(getColumnMinWidth(COL_SIZE), wSize));
+    m_structureTree->setColumnWidth(COL_OFFSET, std::max(getColumnMinWidth(COL_OFFSET), wOffset));
+    m_structureTree->setColumnWidth(COL_RESOLVED, std::max(getColumnMinWidth(COL_RESOLVED), wResolved));
+    m_structureTree->setColumnWidth(COL_VALUE, std::max(getColumnMinWidth(COL_VALUE), wValue));
+    m_isAdjustingColumns = false;
 }
 
 void StructureHierarchyWidget::adjustColumnWidths() {
@@ -139,6 +184,8 @@ void StructureHierarchyWidget::adjustColumnWidths() {
 
     int nonNameWidth = w1 + w2 + w3 + w4;
     int minNameWidth = getColumnMinWidth(COL_NAME);
+
+    // Dynamically scale Description / Name so that columns 1-4 remain fully visible on screen
     int targetNameWidth = std::max(minNameWidth, totalAvailableWidth - nonNameWidth);
 
     m_structureTree->setColumnWidth(COL_NAME, targetNameWidth);
@@ -175,16 +222,13 @@ void StructureHierarchyWidget::setupLayout() {
 
     // Disable stretchLastSection so Pointer Val is not stretched or collapsed to 0 on window shrink
     m_structureTree->header()->setStretchLastSection(false);
-    m_structureTree->header()->setMinimumSectionSize(55);
+    m_structureTree->header()->setMinimumSectionSize(50);
     m_structureTree->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    m_structureTree->setColumnWidth(COL_NAME, 240);
-    m_structureTree->setColumnWidth(COL_SIZE, 135);
-    m_structureTree->setColumnWidth(COL_OFFSET, 70);
-    m_structureTree->setColumnWidth(COL_RESOLVED, 90);
-    m_structureTree->setColumnWidth(COL_VALUE, 90);
+    // Load persisted column widths or apply defaults
+    loadColumnSettings();
 
-    // Enforce individual column minimum widths during manual resize
+    // Enforce individual column minimum widths during manual resize and auto-save adjustments
     connect(m_structureTree->header(), &QHeaderView::sectionResized, this,
             [this](int logicalIndex, int /*oldSize*/, int newSize) {
                 if (m_isAdjustingColumns)
@@ -196,6 +240,8 @@ void StructureHierarchyWidget::setupLayout() {
                     m_structureTree->setColumnWidth(logicalIndex, minWidth);
                     m_isAdjustingColumns = false;
                 }
+
+                saveColumnSettings();
             });
 
     m_structureTree->setAlternatingRowColors(true);
@@ -335,7 +381,6 @@ void StructureHierarchyWidget::populateFromNodes(const std::vector<std::shared_p
     populateTreeFromHierarchyNodes(nodes);
     m_structureTree->expandAll();
     m_structureTree->blockSignals(false);
-    adjustColumnWidths();
 }
 
 void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
@@ -784,7 +829,6 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
     }
 
     tree->setCurrentItem(newItem);
-    adjustColumnWidths();
 }
 
 void StructureHierarchyWidget::removeDocumentationAtAddress(uint32_t address, uint32_t currentBaseAddress,
