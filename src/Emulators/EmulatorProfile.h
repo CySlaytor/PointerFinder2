@@ -4,24 +4,25 @@
 #include "IEmulatorManager.h"
 #include "IPointerScannerStrategy.h"
 
-#include <functional>
-#include <memory>
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+#include <memory>
+
 namespace PointerFinder2::Emulators {
 
-    // This structure maps an emulator profile name (e.g. "PCSX2") to its corresponding 
-    // process name, target platform type, range finder dialog, and scanning procedures.
-    struct EmulatorProfile {
-        QString name;
-        DataModels::EmulatorTarget target;
-        QStringList processNames;
+// This structure maps an emulator profile name (e.g. "PCSX2") to its corresponding
+// process name, target platform type, range finder dialog, and scanning procedures.
+struct EmulatorProfile {
+    QString name;
+    DataModels::EmulatorTarget target;
+    QStringList processNames;
 
-        std::function<std::unique_ptr<IEmulatorManager>()> managerFactory;
-        std::function<std::unique_ptr<IPointerScannerStrategy>()> stateBasedScannerFactory;
+    std::function<std::unique_ptr<IEmulatorManager>()> managerFactory;
+    std::function<std::unique_ptr<IPointerScannerStrategy>()> stateBasedScannerFactory;
 
-        bool supportsStaticRangeFinder = false;
-    };
+    bool supportsStaticRangeFinder = false;
+};
 
-}
+} // namespace PointerFinder2::Emulators

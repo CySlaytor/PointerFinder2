@@ -3,8 +3,8 @@
 #include "Models/GlobalSettings.h"
 #include "Models/PointerPath.h"
 #include "Models/ScanProgressReport.h"
-#include "UI/MainWindow.h"
 #include "UI/Common/ThemeManager.h"
+#include "UI/MainWindow.h"
 
 #include <QApplication>
 

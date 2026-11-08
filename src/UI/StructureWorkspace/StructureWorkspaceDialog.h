@@ -1,21 +1,17 @@
 #pragma once
 
+#include "CodeNoteEditorWidget.h"
 #include "Core/CodeNotes/CodeNoteHierarchyEngine.h"
 #include "Core/Storage/RaStorageService.h"
 #include "Core/Structure/StructureAnalyzer.h"
+#include "DissectAddressBar.h"
 #include "Emulators/IEmulatorManager.h"
 #include "Models/PointerPath.h"
-#include "UI/Widgets/MemoryViewerWidget.h"
-#include "CodeNoteEditorWidget.h"
-#include "DissectAddressBar.h"
+#include "StructureHierarchyWidget.h"
 #include "UI/Dialogs/CloneStrideDialog.h"
 #include "UI/Dialogs/NewAddressDialog.h"
-#include "StructureHierarchyWidget.h"
+#include "UI/Widgets/MemoryViewerWidget.h"
 
-#include <cstdint>
-#include <memory>
-#include <optional>
-#include <vector>
 #include <QDialog>
 #include <QLabel>
 #include <QLineEdit>
@@ -23,154 +19,159 @@
 #include <QSplitter>
 #include <QStatusBar>
 
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
+
 namespace PointerFinder2::UI {
 
-    // A standalone workspace dialog integrating an intelligent, scope-aware pointer structure editor
-    // with a PCSX2-styled read-only memory viewer, eliminating manual offset calculations and level management.
-    class StructureWorkspaceDialog : public QDialog {
-        Q_OBJECT
-    public:
-        static constexpr int DEFAULT_WINDOW_WIDTH = 1300;
-        static constexpr int DEFAULT_WINDOW_HEIGHT = 750;
+// A standalone workspace dialog integrating an intelligent, scope-aware pointer structure editor
+// with a PCSX2-styled read-only memory viewer, eliminating manual offset calculations and level management.
+class StructureWorkspaceDialog : public QDialog {
+    Q_OBJECT
+  public:
+    static constexpr int DEFAULT_WINDOW_WIDTH = 1300;
+    static constexpr int DEFAULT_WINDOW_HEIGHT = 750;
 
-        explicit StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent = nullptr);
-        ~StructureWorkspaceDialog() override;
+    explicit StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent = nullptr);
+    ~StructureWorkspaceDialog() override;
 
-        void refreshMemorySnapshot();
+    void refreshMemorySnapshot();
 
-    public slots:
-        void showStatusMessage(const QString& message, int timeout = 0);
+  public slots:
+    void showStatusMessage(const QString& message, int timeout = 0);
 
-    protected:
-        void keyPressEvent(QKeyEvent* event) override;
-        void resizeEvent(QResizeEvent* event) override;
+  protected:
+    void keyPressEvent(QKeyEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
-    private slots:
-        void onAddressSelectedInViewer(uint32_t address);
-        void onAddressDoubleClickedInViewer(uint32_t address);
-        void onMemoryViewerContextMenu(uint32_t address, const QPoint& globalPos);
-        void onDefineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
-        void onAddVariableClicked();
-        void onAddPointerClicked();
-        void onFollowPointerClicked();
-        void onRemoveNodeClicked();
-        void onRefreshRamClicked();
-        void onGoToAddressClicked();
-        void onViewModeChanged();
-        void onFloatDisplayModeChanged();
+  private slots:
+    void onAddressSelectedInViewer(uint32_t address);
+    void onAddressDoubleClickedInViewer(uint32_t address);
+    void onMemoryViewerContextMenu(uint32_t address, const QPoint& globalPos);
+    void onDefineArrayRequested(uint32_t startAddress, uint32_t endAddress, uint32_t byteCount);
+    void onAddVariableClicked();
+    void onAddPointerClicked();
+    void onFollowPointerClicked();
+    void onRemoveNodeClicked();
+    void onRefreshRamClicked();
+    void onGoToAddressClicked();
+    void onViewModeChanged();
+    void onFloatDisplayModeChanged();
 
-        // RA Game Data & Dissection slots
-        void onNewAddressClicked();
-        void onCloneStrideClicked();
-        void onDeleteAddressClicked();
-        void onAddressSelectedFromBar(uint32_t address, bool autoNavigate);
-        void onSaveUserTxtClicked();
-        void onRevertServerClicked();
-        void onResetClicked();
+    // RA Game Data & Dissection slots
+    void onNewAddressClicked();
+    void onCloneStrideClicked();
+    void onDeleteAddressClicked();
+    void onAddressSelectedFromBar(uint32_t address, bool autoNavigate);
+    void onSaveUserTxtClicked();
+    void onRevertServerClicked();
+    void onResetClicked();
 
-        // Clipboard copy slots for Tree & Viewer
-        void onCopySelectedAsRaFormat();
-        void onCopySelectedAsCodeNote();
-        void onCopySelectedAddress();
-        void onCopySelectedValue();
+    // Clipboard copy slots for Tree & Viewer
+    void onCopySelectedAsRaFormat();
+    void onCopySelectedAsCodeNote();
+    void onCopySelectedAddress();
+    void onCopySelectedValue();
 
-        // Dedicated clipboard copy slots for Memory Viewer
-        void onCopyViewerAsRaFormat();
-        void onCopyViewerAsCodeNote();
-        void onCopyViewerAddress();
-        void onCopyViewerValue();
+    // Dedicated clipboard copy slots for Memory Viewer
+    void onCopyViewerAsRaFormat();
+    void onCopyViewerAsCodeNote();
+    void onCopyViewerAddress();
+    void onCopyViewerValue();
 
-        // Panel 3 & Synchronization slots
-        void onToggleCodeNotePanelClicked();
-        void onFixHierarchyClicked();
-        void onHierarchyStyleChanged();
-        void onTreeDataChanged();
-        void onTreeSelectionChanged();
-        void onSplitterMoved(int pos, int index);
+    // Panel 3 & Synchronization slots
+    void onToggleCodeNotePanelClicked();
+    void onFixHierarchyClicked();
+    void onHierarchyStyleChanged();
+    void onTreeDataChanged();
+    void onTreeSelectionChanged();
+    void onSplitterMoved(int pos, int index);
 
-    private:
-        Emulators::IEmulatorManager* m_manager = nullptr;
+  private:
+    Emulators::IEmulatorManager* m_manager = nullptr;
 
-        // UI Controls
-        QSplitter* m_mainSplitter = nullptr;
+    // UI Controls
+    QSplitter* m_mainSplitter = nullptr;
 
-        // Top Toolbar Component
-        DissectAddressBar* m_addressBar = nullptr;
+    // Top Toolbar Component
+    DissectAddressBar* m_addressBar = nullptr;
 
-        // Panel 1: Structure Hierarchy Component
-        StructureHierarchyWidget* m_hierarchyWidget = nullptr;
+    // Panel 1: Structure Hierarchy Component
+    StructureHierarchyWidget* m_hierarchyWidget = nullptr;
 
-        // Panel 2: Memory Viewer
-        QWidget* m_middleContainer = nullptr;
-        QPushButton* m_navBackBtn = nullptr;
-        QPushButton* m_navForwardBtn = nullptr;
-        QLabel* m_navHistoryLabel = nullptr;
-        QLineEdit* m_goToAddressEdit = nullptr;
-        QPushButton* m_goToAddressBtn = nullptr;
-        QPushButton* m_refreshRamBtn = nullptr;
-        QLabel* m_ramStatusLabel = nullptr;
+    // Panel 2: Memory Viewer
+    QWidget* m_middleContainer = nullptr;
+    QPushButton* m_navBackBtn = nullptr;
+    QPushButton* m_navForwardBtn = nullptr;
+    QLabel* m_navHistoryLabel = nullptr;
+    QLineEdit* m_goToAddressEdit = nullptr;
+    QPushButton* m_goToAddressBtn = nullptr;
+    QPushButton* m_refreshRamBtn = nullptr;
+    QLabel* m_ramStatusLabel = nullptr;
 
-        // Memory View Mode & Float Timer Display Controls
-        QWidget* m_selectorsContainer = nullptr;
-        QLabel* m_viewModeLabel = nullptr;
-        QComboBox* m_viewModeCombo = nullptr;
-        QLabel* m_floatDisplayLabel = nullptr;
-        QComboBox* m_floatDisplayCombo = nullptr;
-        Widgets::MemoryViewerWidget* m_memoryViewer = nullptr;
+    // Memory View Mode & Float Timer Display Controls
+    QWidget* m_selectorsContainer = nullptr;
+    QLabel* m_viewModeLabel = nullptr;
+    QComboBox* m_viewModeCombo = nullptr;
+    QLabel* m_floatDisplayLabel = nullptr;
+    QComboBox* m_floatDisplayCombo = nullptr;
+    Widgets::MemoryViewerWidget* m_memoryViewer = nullptr;
 
-        // Panel 3: Code Note Hierarchy Fixer Component
-        CodeNoteEditorWidget* m_codeNoteEditor = nullptr;
+    // Panel 3: Code Note Hierarchy Fixer Component
+    CodeNoteEditorWidget* m_codeNoteEditor = nullptr;
 
-        // Dedicated Structure Dissect Status Bar
-        QStatusBar* m_statusBar = nullptr;
-        QLabel* m_statusLabel = nullptr;
-        QLabel* m_statusPermanentLabel = nullptr;
+    // Dedicated Structure Dissect Status Bar
+    QStatusBar* m_statusBar = nullptr;
+    QLabel* m_statusLabel = nullptr;
+    QLabel* m_statusPermanentLabel = nullptr;
 
-        using RaCodeNote = Core::RaCodeNote;
-        using RaGameData = Core::RaGameData;
-        using CodeNoteNode = Core::CodeNoteNode;
+    using RaCodeNote = Core::RaCodeNote;
+    using RaGameData = Core::RaGameData;
+    using CodeNoteNode = Core::CodeNoteNode;
 
-        RaGameData m_gameData;
-        uint32_t m_currentViewerSelectedAddress = 0;
-        uint32_t m_currentBaseAddress = 0;
+    RaGameData m_gameData;
+    uint32_t m_currentViewerSelectedAddress = 0;
+    uint32_t m_currentBaseAddress = 0;
 
-        std::vector<uint8_t> m_snapshotMemory;
+    std::vector<uint8_t> m_snapshotMemory;
 
-        bool m_isSyncing = false;
-        bool m_isLoadingSettings = false; // Guard to prevent premature settings overwriting during initialization
-        int m_lastCodeNotePanelWidth = 330;
-        QString m_headerComment;
+    bool m_isSyncing = false;
+    bool m_isLoadingSettings = false; // Guard to prevent premature settings overwriting during initialization
+    int m_lastCodeNotePanelWidth = 330;
+    QString m_headerComment;
 
-        void setupLayout();
-        void updateViewModeComboForEmulator();
-        void loadWorkspaceSettings();
-        void saveWorkspaceSettings();
-        void updateStatusPermanentInfo();
+    void setupLayout();
+    void updateViewModeComboForEmulator();
+    void loadWorkspaceSettings();
+    void saveWorkspaceSettings();
+    void updateStatusPermanentInfo();
 
-        // Confirmation Dialogs
-        bool confirmSaveUserTxt();
-        bool confirmRevertServer();
-        bool confirmReset();
+    // Confirmation Dialogs
+    bool confirmSaveUserTxt();
+    bool confirmRevertServer();
+    bool confirmReset();
 
-        // RA Data Pipeline
-        bool loadActiveGameData();
-        void populateAddressDropdown(bool autoNavigate = true);
-        void selectAddressInUI(uint32_t address, bool navigate = true);
-        void populateTreeFromCodeNote(const QString& noteText);
-        bool saveActiveNoteToUserTxt();
-        void updateToolbarButtonStates();
+    // RA Data Pipeline
+    bool loadActiveGameData();
+    void populateAddressDropdown(bool autoNavigate = true);
+    void selectAddressInUI(uint32_t address, bool navigate = true);
+    void populateTreeFromCodeNote(const QString& noteText);
+    bool saveActiveNoteToUserTxt();
+    void updateToolbarButtonStates();
 
-        void navigateToAddress(uint32_t address);
-        bool isRootArray(uint32_t* outSize = nullptr) const;
-        Core::ScopeMatch findBestScopeForAddress(uint32_t selectedAddr);
-        QString suggestDefaultType(uint32_t address);
+    void navigateToAddress(uint32_t address);
+    bool isRootArray(uint32_t* outSize = nullptr) const;
+    Core::ScopeMatch findBestScopeForAddress(uint32_t selectedAddr);
+    QString suggestDefaultType(uint32_t address);
 
-        std::optional<DataModels::PointerPath> getPathForViewerAddress(uint32_t address) const;
-        void syncTreeToCodeNoteText();
-        void updateOffsetPreview();
-        void updateMemoryHighlights();
+    std::optional<DataModels::PointerPath> getPathForViewerAddress(uint32_t address) const;
+    void syncTreeToCodeNoteText();
+    void updateOffsetPreview();
+    void updateMemoryHighlights();
 
-        QIcon getThemeIcon(const QString& resourcePath) const;
-    };
+    QIcon getThemeIcon(const QString& resourcePath) const;
+};
 
-}
+} // namespace PointerFinder2::UI

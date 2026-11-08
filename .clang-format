@@ -1,0 +1,62 @@
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: Latest
+
+# --- Formatting & Typography ---
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 140
+PointerAlignment: Left
+BreakBeforeBraces: Attach
+SpaceAfterCStyleCast: false
+SpacesInAngles: false
+SpacesInContainerLiterals: true
+
+# --- Include Sorting Configuration ---
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+
+# Main header for this translation unit
+IncludeIsMainRegex: '([-_](test|unittest))?$'
+
+IncludeCategories:
+  # Priority 1: The matching header for the current translation unit
+  - Regex:           '^"(.*[/\\])?([a-zA-Z0-9_]+)\.h"$'
+    Priority:        1
+    SortPriority:    1
+
+  # Priority 2: Project-internal headers (Common, Core, Emulators, Models, UI)
+  - Regex:           '^"(Common|Core|Emulators|Models|UI)/'
+    Priority:        2
+    SortPriority:    2
+
+  # Priority 3: Root windows.h (must always precede dependent Win32 SDK headers)
+  - Regex:           '^<windows\.h>'
+    Priority:        3
+    SortPriority:    3
+
+  # Priority 4: Dependent Windows headers (psapi, tlhelp32, mmsystem, winver, etc.)
+  - Regex:           '^<(psapi|tlhelp32|mmsystem|winver|winreg|shlobj|dwmapi)\.h>'
+    Priority:        4
+    SortPriority:    4
+
+  # Priority 5: Third-party & Qt headers (<Q...>, <Qt...>)
+  - Regex:           '^<Q.*'
+    Priority:        5
+    SortPriority:    5
+
+  # Priority 6: Standard C++ Library headers (<vector>, <memory>, <algorithm>, etc.)
+  - Regex:           '^<[a-z0-9_]+>$'
+    Priority:        6
+    SortPriority:    6
+
+  # Priority 7: Other C/system headers (<stdlib.h>, <cstring>, etc.)
+  - Regex:           '^<.*\.h>'
+    Priority:        7
+    SortPriority:    7
+
+  # Priority 8: All remaining includes
+  - Regex:           '.*'
+    Priority:        8
+    SortPriority:    8

@@ -6,24 +6,24 @@
 
 namespace PointerFinder2::DataModels {
 
-    // Configures formatting guidelines (such as prefix/suffix choices and alignment)
-    // used when converting raw pointer chains into readable code documentation notes.
-    struct CodeNoteSettings {
-        QString Prefix;
-        QString Suffix;
-        bool AlignSuffixes = true;
-        bool SuffixOnLastLineOnly = false;
-        bool AutoPopulatePointers = false;
+// Configures formatting guidelines (such as prefix/suffix choices and alignment)
+// used when converting raw pointer chains into readable code documentation notes.
+struct CodeNoteSettings {
+    QString Prefix;
+    QString Suffix;
+    bool AlignSuffixes = true;
+    bool SuffixOnLastLineOnly = false;
+    bool AutoPopulatePointers = false;
 
-        static CodeNoteSettings getFromGlobalSettings() {
-            CodeNoteSettings s;
-            s.Prefix = GlobalSettings::codeNotePrefix;
-            s.Suffix = GlobalSettings::codeNoteSuffix;
-            s.AlignSuffixes = GlobalSettings::codeNoteAlignSuffixes;
-            s.SuffixOnLastLineOnly = GlobalSettings::codeNoteSuffixOnLastLineOnly;
-            s.AutoPopulatePointers = GlobalSettings::codeNoteAutoPopulatePointers;
-            return s;
-        }
-    };
+    static CodeNoteSettings getFromGlobalSettings() {
+        CodeNoteSettings s;
+        s.Prefix = GlobalSettings::codeNotePrefix;
+        s.Suffix = GlobalSettings::codeNoteSuffix;
+        s.AlignSuffixes = GlobalSettings::codeNoteAlignSuffixes;
+        s.SuffixOnLastLineOnly = GlobalSettings::codeNoteSuffixOnLastLineOnly;
+        s.AutoPopulatePointers = GlobalSettings::codeNoteAutoPopulatePointers;
+        return s;
+    }
+};
 
-}
+} // namespace PointerFinder2::DataModels
