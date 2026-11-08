@@ -46,6 +46,7 @@ namespace PointerFinder2::UI {
                              bool rootArr,
                              const std::vector<uint8_t>& snapshotMemory);
 
+        QString generateCodeNoteFromTree(bool useUnicode, bool indentDesc, const QString& headerComment) const;
         QString generateCodeNoteFromTree(const QString& style, bool indentDesc, const QString& headerComment) const;
 
         QTreeWidgetItem* currentItem() const;

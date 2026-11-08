@@ -1,5 +1,8 @@
 #include "CodeNoteHierarchyEngine.h"
 
+#include "CodeNoteHelper.h"
+#include "../../Models/GlobalSettings.h"
+
 #include <algorithm>
 #include <map>
 #include <QRegularExpression>
@@ -229,17 +232,35 @@ namespace PointerFinder2::Core {
     QString CodeNoteHierarchyEngine::rebuildTextFromTree(
         const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
         int indentLevel,
-        const QString& style,
+        bool useUnicodeTree,
         bool indentDescriptions,
         const QString& headerComment,
         std::vector<bool> ancestorIsLast,
-        int parentNestingLevel
+        int parentNestingLevel,
+        const QString& delimiterSuffix,
+        bool autoPopulateTemplate,
+        const QString& pointerTypeTemplate,
+        const QString& indentPrefix
     ) {
         QString sb = "";
 
         if (indentLevel == 0 && !headerComment.trimmed().isEmpty()) {
             sb.append(headerComment.trimmed() + "\n\n");
         }
+
+        // Resolve active delimiter: prefer explicit parameter, fall back to global setting, then "="
+        QString effectiveDelimiter = !delimiterSuffix.isEmpty() ? delimiterSuffix : DataModels::GlobalSettings::codeNoteSuffix;
+        if (effectiveDelimiter.isEmpty()) effectiveDelimiter = "=";
+
+        static const QRegularExpression offsetRegex(
+            "^((?:\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+)(?:\\s*([=:|]|\\s-\\s)\\s*|\\s+)(.*)$",
+            QRegularExpression::CaseInsensitiveOption
+        );
+
+        static const QRegularExpression attachedNoteKvRegex(
+            R"(^((?:0x[0-9a-fA-F]+|\d+|Bit\s*\d+|[A-Za-z0-9_]+))\s*([=:|]|\s-\s)\s*(.*)$)",
+            QRegularExpression::CaseInsensitiveOption
+        );
 
         for (size_t i = 0; i < nodes.size(); ++i) {
             const auto& node = nodes[i];
@@ -267,7 +288,7 @@ namespace PointerFinder2::Core {
             QString prefix = "";
             int nextNestingLevel = 0;
 
-            if (style.startsWith("Unicode Tree")) {
+            if (useUnicodeTree) {
                 if (isAttachedNote) {
                     if (indentDescriptions && indentLevel > 1) {
                         for (int a = 0; a < indentLevel - 2; ++a) {
@@ -288,7 +309,13 @@ namespace PointerFinder2::Core {
                 nextNestingLevel = indentLevel + 1;
             }
             else {
-                QChar indentChar = style.startsWith("Plusses") ? '+' : '.';
+                QChar indentChar = '+';
+                if (!indentPrefix.isEmpty()) {
+                    indentChar = indentPrefix.at(0);
+                }
+                else if (!DataModels::GlobalSettings::codeNotePrefix.isEmpty()) {
+                    indentChar = DataModels::GlobalSettings::codeNotePrefix.at(0);
+                }
 
                 if (isAttachedNote) {
                     if (indentDescriptions) {
@@ -320,17 +347,90 @@ namespace PointerFinder2::Core {
                 }
             }
 
-            sb.append(QString("%1%2\n").arg(prefix).arg(node->content));
+            // Normalize line delimiters and format pointer templates
+            QString normalizedContent = node->content;
+
+            if (isPointerOffset) {
+                auto match = offsetRegex.match(node->content);
+                if (match.hasMatch()) {
+                    QString offsetToken = match.captured(1);
+                    QString desc = match.captured(3).trimmed();
+
+                    // Auto-populate intermediate pointer templates if requested
+                    if (hasPointerChildren && autoPopulateTemplate) {
+                        desc = CodeNoteHelper::formatPointerDescription(desc, pointerTypeTemplate);
+                    }
+
+                    if (!desc.isEmpty()) {
+                        normalizedContent = offsetToken + effectiveDelimiter + desc;
+                    }
+                    else {
+                        normalizedContent = offsetToken;
+                    }
+                }
+            }
+            else if (isAttachedNote) {
+                // Normalize key-value delimiters on attached notes (e.g. "Bit0 = Name" -> "Bit0=Name")
+                auto match = attachedNoteKvRegex.match(node->content);
+                if (match.hasMatch()) {
+                    QString key = match.captured(1).trimmed();
+                    QString val = match.captured(3).trimmed();
+                    normalizedContent = key + effectiveDelimiter + val;
+                }
+            }
+
+            sb.append(QString("%1%2\n").arg(prefix).arg(normalizedContent));
 
             if (!node->children.empty()) {
                 std::vector<bool> nextAncestors = ancestorIsLast;
                 if (indentLevel > 0) {
                     nextAncestors.push_back(isLastChild);
                 }
-                sb.append(rebuildTextFromTree(node->children, indentLevel + 1, style, indentDescriptions, "", nextAncestors, nextNestingLevel));
+                sb.append(rebuildTextFromTree(
+                    node->children,
+                    indentLevel + 1,
+                    useUnicodeTree,
+                    indentDescriptions,
+                    "",
+                    nextAncestors,
+                    nextNestingLevel,
+                    effectiveDelimiter,
+                    autoPopulateTemplate,
+                    pointerTypeTemplate,
+                    indentPrefix
+                ));
             }
         }
         return sb;
+    }
+
+    QString CodeNoteHierarchyEngine::rebuildTextFromTree(
+        const std::vector<std::shared_ptr<CodeNoteNode>>& nodes,
+        int indentLevel,
+        const QString& style,
+        bool indentDescriptions,
+        const QString& headerComment,
+        std::vector<bool> ancestorIsLast,
+        int parentNestingLevel,
+        const QString& delimiterSuffix,
+        bool autoPopulateTemplate,
+        const QString& pointerTypeTemplate,
+        const QString& indentPrefix
+    ) {
+        bool useUnicode = style.startsWith("Unicode Tree", Qt::CaseInsensitive);
+        return rebuildTextFromTree(
+            nodes,
+            indentLevel,
+            useUnicode,
+            indentDescriptions,
+            headerComment,
+            ancestorIsLast,
+            parentNestingLevel,
+            delimiterSuffix,
+            autoPopulateTemplate,
+            pointerTypeTemplate,
+            indentPrefix
+        );
     }
 
 }

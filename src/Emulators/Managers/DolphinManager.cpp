@@ -258,7 +258,7 @@ namespace PointerFinder2::Emulators::EmulatorManager {
     }
 
     QString DolphinManager::getPlatformPointerTypeDescription(uint32_t) const {
-        return "[32-bit & 0x1FFFFFFF] Pointer";
+        return "[32-bit BE & 0x1FFFFFFF] Pointer";
     }
 
     std::vector<uintptr_t> DolphinManager::findCandidateAddresses(uintptr_t exactRegionSize) {

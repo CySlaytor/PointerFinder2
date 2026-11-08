@@ -167,4 +167,88 @@ namespace PointerFinder2::Core {
         return finalLines.join("\n");
     }
 
+    QString CodeNoteHelper::formatPointerDescription(const QString& desc, const QString& platformPointerType) {
+        QString name = desc.trimmed();
+        if (name.isEmpty() || name.compare("Pointer", Qt::CaseInsensitive) == 0) {
+            return platformPointerType.isEmpty() ? "[32-bit] Pointer" : platformPointerType;
+        }
+
+        if (name.startsWith("[")) {
+            return name;
+        }
+
+        QString ptrType = platformPointerType.isEmpty() ? "[32-bit] Pointer" : platformPointerType;
+        if (name.startsWith("Pointer to ", Qt::CaseInsensitive)) {
+            QString tag = ptrType;
+            int bracketEnd = tag.indexOf(']');
+            if (bracketEnd != -1) {
+                tag = tag.left(bracketEnd + 1);
+            }
+            else {
+                int spaceIdx = tag.indexOf(' ');
+                if (spaceIdx != -1) {
+                    tag = tag.left(spaceIdx);
+                }
+            }
+            return QString("%1 %2").arg(tag, name);
+        }
+
+        return QString("%1 to %2").arg(ptrType, name);
+    }
+
+    QString CodeNoteHelper::formatHeaderComment(const QString& headerComment, const QString& platformPointerType) {
+        if (headerComment.trimmed().isEmpty()) return headerComment;
+
+        QStringList lines = headerComment.split('\n');
+        if (lines.isEmpty()) return headerComment;
+
+        QString firstLine = lines[0].trimmed();
+        static const QRegularExpression headerRegex(R"(^\s*\[([^\]]+)\]\s*(.*)$)");
+        auto match = headerRegex.match(firstLine);
+
+        if (match.hasMatch()) {
+            QString bracketContent = match.captured(1).trimmed();
+            QString remainingText = match.captured(2).trimmed();
+
+            // If it's an array definition, preserve it as-is
+            if (bracketContent.contains("bytes", Qt::CaseInsensitive)) {
+                return headerComment;
+            }
+
+            // Check if bracketContent declares a pointer or bit-width
+            if (bracketContent.contains("pointer", Qt::CaseInsensitive) ||
+                bracketContent.contains("32-bit", Qt::CaseInsensitive) ||
+                bracketContent.contains("24-bit", Qt::CaseInsensitive) ||
+                bracketContent.contains("16-bit", Qt::CaseInsensitive) ||
+                bracketContent.contains("64-bit", Qt::CaseInsensitive)) {
+
+                QString ptrType = platformPointerType.isEmpty() ? "[32-bit] Pointer" : platformPointerType;
+
+                // Strip redundant leading "Pointer" if remainingText starts with it
+                if (remainingText.startsWith("Pointer to ", Qt::CaseInsensitive)) {
+                    remainingText = remainingText.mid(8).trimmed(); // leaves "to ..."
+                }
+                else if (remainingText.compare("Pointer", Qt::CaseInsensitive) == 0) {
+                    remainingText.clear();
+                }
+                else if (remainingText.startsWith("Pointer ", Qt::CaseInsensitive)) {
+                    remainingText = remainingText.mid(8).trimmed();
+                }
+
+                QString newFirstLine;
+                if (remainingText.isEmpty()) {
+                    newFirstLine = ptrType;
+                }
+                else {
+                    newFirstLine = QString("%1 %2").arg(ptrType, remainingText);
+                }
+
+                lines[0] = newFirstLine;
+                return lines.join('\n');
+            }
+        }
+
+        return headerComment;
+    }
+
 }

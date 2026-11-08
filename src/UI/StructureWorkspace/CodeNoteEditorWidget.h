@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QCheckBox>
-#include <QComboBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QWidget>
@@ -20,6 +19,10 @@ namespace PointerFinder2::UI {
         void setPlainText(const QString& text);
         void clear();
 
+        bool isUnicodeTree() const;
+        void setUnicodeTree(bool enabled);
+
+        // Retained for backward-compatible configuration mapping
         QString getStyle() const;
         void setStyle(const QString& style);
 
@@ -41,7 +44,7 @@ namespace PointerFinder2::UI {
 
     private:
         QPlainTextEdit* m_codeNoteTextEdit = nullptr;
-        QComboBox* m_styleCombo = nullptr;
+        QCheckBox* m_unicodeTreeCheck = nullptr;
         QCheckBox* m_indentDescCheck = nullptr;
         QPushButton* m_fixHierarchyBtn = nullptr;
         QPushButton* m_copyCodeNoteBtn = nullptr;

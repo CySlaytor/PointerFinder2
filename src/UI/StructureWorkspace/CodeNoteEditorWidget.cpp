@@ -46,23 +46,21 @@ namespace PointerFinder2::UI {
 
         // Hierarchy Controls Bar (positioned at bottom)
         auto* fixerBottomRow = new QHBoxLayout();
-        fixerBottomRow->addWidget(new QLabel("Style:", this));
 
-        m_styleCombo = new QComboBox(this);
-        m_styleCombo->addItems({
-            "Plusses (+)",
-            "Dots (.)",
-            "Unicode Tree (├─)"
-        });
-        m_styleCombo->setFixedHeight(26);
-        fixerBottomRow->addWidget(m_styleCombo);
+        m_unicodeTreeCheck = new QCheckBox("Unicode Tree", this);
+        m_unicodeTreeCheck->setToolTip("Experimental feature: Use Unicode box-drawing characters (├─, └─, │) for tree hierarchy indentation instead of the configured prefix character.");
+        m_unicodeTreeCheck->setFixedHeight(26);
+        fixerBottomRow->addWidget(m_unicodeTreeCheck);
 
         m_indentDescCheck = new QCheckBox("Indent Descriptions", this);
+        m_indentDescCheck->setToolTip("Indent attached value descriptions and enumerations (using dots) to match the parent pointer's level.");
         m_indentDescCheck->setChecked(true);
+        m_indentDescCheck->setFixedHeight(26);
         fixerBottomRow->addWidget(m_indentDescCheck);
 
         m_fixHierarchyBtn = new QPushButton("Fix Hierarchy", this);
         m_fixHierarchyBtn->setIcon(getThemeIcon(":/icons/hierarchy_fixer.svg"));
+        m_fixHierarchyBtn->setToolTip("Merge duplicate offsets, standardize delimiters, format pointer templates, and rebuild hierarchy.");
         m_fixHierarchyBtn->setFixedHeight(26);
         m_fixHierarchyBtn->setAutoDefault(false);
         m_fixHierarchyBtn->setDefault(false);
@@ -79,7 +77,7 @@ namespace PointerFinder2::UI {
 
         rightLayout->addLayout(fixerBottomRow);
 
-        connect(m_styleCombo, &QComboBox::currentTextChanged, this, &CodeNoteEditorWidget::hierarchyStyleChanged);
+        connect(m_unicodeTreeCheck, &QCheckBox::checkStateChanged, this, &CodeNoteEditorWidget::hierarchyStyleChanged);
         connect(m_indentDescCheck, &QCheckBox::checkStateChanged, this, &CodeNoteEditorWidget::hierarchyStyleChanged);
         connect(m_fixHierarchyBtn, &QPushButton::clicked, this, &CodeNoteEditorWidget::fixHierarchyClicked);
         connect(m_copyCodeNoteBtn, &QPushButton::clicked, this, &CodeNoteEditorWidget::onCopyCodeNoteClicked);
@@ -101,16 +99,24 @@ namespace PointerFinder2::UI {
         }
     }
 
+    bool CodeNoteEditorWidget::isUnicodeTree() const {
+        return m_unicodeTreeCheck ? m_unicodeTreeCheck->isChecked() : false;
+    }
+
+    void CodeNoteEditorWidget::setUnicodeTree(bool enabled) {
+        if (m_unicodeTreeCheck) {
+            m_unicodeTreeCheck->blockSignals(true);
+            m_unicodeTreeCheck->setChecked(enabled);
+            m_unicodeTreeCheck->blockSignals(false);
+        }
+    }
+
     QString CodeNoteEditorWidget::getStyle() const {
-        return m_styleCombo ? m_styleCombo->currentText() : "Plusses (+)";
+        return isUnicodeTree() ? "Unicode Tree (├─)" : "Plusses (+)";
     }
 
     void CodeNoteEditorWidget::setStyle(const QString& style) {
-        if (m_styleCombo) {
-            m_styleCombo->blockSignals(true);
-            m_styleCombo->setCurrentText(style);
-            m_styleCombo->blockSignals(false);
-        }
+        setUnicodeTree(style.startsWith("Unicode Tree", Qt::CaseInsensitive));
     }
 
     bool CodeNoteEditorWidget::isIndentDescriptions() const {

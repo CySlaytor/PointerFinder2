@@ -311,7 +311,15 @@ namespace PointerFinder2::UI {
         settings.AutoPopulatePointers = m_autoPopulatePointersCheck->isChecked();
 
         std::vector<int32_t> dummyOffsets = { 0x4, 0x2A0, 0x1C };
-        QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Description", "[32-bit] Pointer");
+        QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Levels Unlocked", "[32-bit] Pointer");
+
+        // Add realistic description examples (bitfield / enum values) to demonstrate delimiter and indentation formatting
+        QString delim = settings.Suffix;
+        QString dotIndent = "....";
+        preview.append(QString("\n%1Bit0%2Ministry of Ink - Level Unlocked").arg(dotIndent, delim));
+        preview.append(QString("\n%1Bit1%2Lake Raydia - Level Unlocked").arg(dotIndent, delim));
+        preview.append(QString("\n%1Bit2%2Last Resort - Level Unlocked").arg(dotIndent, delim));
+
         m_previewEdit->setPlainText(preview);
     }
 

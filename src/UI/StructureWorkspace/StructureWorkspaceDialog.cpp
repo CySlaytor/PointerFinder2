@@ -703,12 +703,14 @@ namespace PointerFinder2::UI {
         m_currentBaseAddress = address;
         m_addressBar->selectAddressInUI(address);
 
+        // Keep m_isSyncing true throughout the entire note and tree population sequence so the original note is preserved untouched
         m_isSyncing = true;
         m_codeNoteEditor->setPlainText(it->noteText);
-        m_isSyncing = false;
 
         // Populate tree non-destructively without altering or rewriting original user note text
         populateTreeFromCodeNote(it->noteText);
+        m_isSyncing = false;
+
         if (navigate) {
             navigateToAddress(address);
         }
@@ -717,10 +719,14 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::populateTreeFromCodeNote(const QString& noteText) {
+        bool wasSyncing = m_isSyncing;
+        m_isSyncing = true;
+
         QString text = noteText.trimmed();
         if (text.isEmpty()) {
             m_hierarchyWidget->clearTree();
             m_headerComment.clear();
+            m_isSyncing = wasSyncing;
             return;
         }
 
@@ -737,6 +743,8 @@ namespace PointerFinder2::UI {
         m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
         updateOffsetPreview();
         updateMemoryHighlights();
+
+        m_isSyncing = wasSyncing;
     }
 
     bool StructureWorkspaceDialog::saveActiveNoteToUserTxt() {
@@ -1904,12 +1912,24 @@ namespace PointerFinder2::UI {
 
         m_headerComment.clear();
         QStringList lines = text.split(QRegularExpression("[\r\n]+"));
-        QString style = m_codeNoteEditor->getStyle();
+        bool useUnicode = m_codeNoteEditor->isUnicodeTree();
         bool indentDesc = m_codeNoteEditor->isIndentDescriptions();
 
         auto parsedTree = CodeNoteHierarchyEngine::parseLinesToTree(lines, m_headerComment);
         auto mergedTree = CodeNoteHierarchyEngine::mergeTree(parsedTree);
-        QString finalResult = CodeNoteHierarchyEngine::rebuildTextFromTree(mergedTree, 0, style, indentDesc, m_headerComment);
+
+        QString delimiter = DataModels::GlobalSettings::codeNoteSuffix;
+        bool autoPopulate = DataModels::GlobalSettings::codeNoteAutoPopulatePointers;
+        QString ptrTemplate = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+        QString indentPrefix = DataModels::GlobalSettings::codeNotePrefix;
+
+        // Inspect and correct top-level header pointer declarations while retaining user descriptions
+        m_headerComment = CodeNoteHelper::formatHeaderComment(m_headerComment, ptrTemplate);
+
+        QString finalResult = CodeNoteHierarchyEngine::rebuildTextFromTree(
+            mergedTree, 0, useUnicode, indentDesc, m_headerComment, {}, 0,
+            delimiter, autoPopulate, ptrTemplate, indentPrefix
+        );
 
         m_codeNoteEditor->setPlainText(finalResult.trimmed());
 
@@ -1930,9 +1950,9 @@ namespace PointerFinder2::UI {
         if (m_isSyncing || !m_codeNoteEditor) return;
         m_isSyncing = true;
 
-        QString style = m_codeNoteEditor->getStyle();
+        bool useUnicode = m_codeNoteEditor->isUnicodeTree();
         bool indentDesc = m_codeNoteEditor->isIndentDescriptions();
-        QString newText = m_hierarchyWidget->generateCodeNoteFromTree(style, indentDesc, m_headerComment);
+        QString newText = m_hierarchyWidget->generateCodeNoteFromTree(useUnicode, indentDesc, m_headerComment);
 
         if (m_codeNoteEditor->toPlainText() != newText) {
             int cursorPos = m_codeNoteEditor->getCursorPosition();
@@ -2017,8 +2037,11 @@ namespace PointerFinder2::UI {
             onFloatDisplayModeChanged();
         }
 
-        QString style = settings.value("hierarchyStyle", "Plusses (+)").toString();
-        m_codeNoteEditor->setStyle(style);
+        bool useUnicode = settings.value("useUnicodeTree", false).toBool();
+        if (!settings.contains("useUnicodeTree") && settings.contains("hierarchyStyle")) {
+            useUnicode = settings.value("hierarchyStyle").toString().startsWith("Unicode Tree", Qt::CaseInsensitive);
+        }
+        m_codeNoteEditor->setUnicodeTree(useUnicode);
         m_codeNoteEditor->setIndentDescriptions(settings.value("indentDescriptions", true).toBool());
 
         m_addressBar->setCodeNotePanelButtonChecked(panelVisible);
@@ -2057,7 +2080,7 @@ namespace PointerFinder2::UI {
         settings.setValue("viewModeText", m_viewModeCombo ? m_viewModeCombo->currentText() : "32-bit");
         settings.setValue("floatDisplayMode", m_floatDisplayCombo ? m_floatDisplayCombo->currentIndex() : 0);
 
-        settings.setValue("hierarchyStyle", m_codeNoteEditor->getStyle());
+        settings.setValue("useUnicodeTree", m_codeNoteEditor->isUnicodeTree());
         settings.setValue("indentDescriptions", m_codeNoteEditor->isIndentDescriptions());
 
         settings.endGroup();

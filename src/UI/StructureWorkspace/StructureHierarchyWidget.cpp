@@ -370,6 +370,9 @@ namespace PointerFinder2::UI {
     void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
         if (!m_manager || currentBaseAddress == 0) return;
 
+        // Block tree signals during internal address and pointer calculations to prevent spurious itemChanged events
+        m_structureTree->blockSignals(true);
+
         uint32_t base = m_manager->unnormalizeAddress(QString::number(currentBaseAddress, 16));
 
         uint32_t initialParentBase = base;
@@ -439,6 +442,8 @@ namespace PointerFinder2::UI {
         for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
             updateNode(m_structureTree->topLevelItem(i), initialParentBase, initialValid);
         }
+
+        m_structureTree->blockSignals(false);
     }
 
     void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candidateScopes, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
@@ -694,7 +699,7 @@ namespace PointerFinder2::UI {
         }
     }
 
-    QString StructureHierarchyWidget::generateCodeNoteFromTree(const QString& style, bool indentDesc, const QString& headerComment) const {
+    QString StructureHierarchyWidget::generateCodeNoteFromTree(bool useUnicode, bool indentDesc, const QString& headerComment) const {
         std::function<std::vector<std::shared_ptr<CodeNoteNode>>(QTreeWidgetItem*)> treeToNodes =
             [&](QTreeWidgetItem* parent) {
                 std::vector<std::shared_ptr<CodeNoteNode>> nodes;
@@ -742,7 +747,20 @@ namespace PointerFinder2::UI {
             };
 
         auto rootNodes = treeToNodes(nullptr);
-        return CodeNoteHierarchyEngine::rebuildTextFromTree(rootNodes, 0, style, indentDesc, headerComment);
+        QString delimiter = DataModels::GlobalSettings::codeNoteSuffix;
+        bool autoPopulate = DataModels::GlobalSettings::codeNoteAutoPopulatePointers;
+        QString ptrTemplate = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
+        QString indentPrefix = DataModels::GlobalSettings::codeNotePrefix;
+
+        return CodeNoteHierarchyEngine::rebuildTextFromTree(
+            rootNodes, 0, useUnicode, indentDesc, headerComment, {}, 0,
+            delimiter, autoPopulate, ptrTemplate, indentPrefix
+        );
+    }
+
+    QString StructureHierarchyWidget::generateCodeNoteFromTree(const QString& style, bool indentDesc, const QString& headerComment) const {
+        bool useUnicode = style.startsWith("Unicode Tree", Qt::CaseInsensitive);
+        return generateCodeNoteFromTree(useUnicode, indentDesc, headerComment);
     }
 
     std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWidgetItem* item, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory, bool rootArr) const {
@@ -996,6 +1014,8 @@ namespace PointerFinder2::UI {
     }
 
     void StructureHierarchyWidget::onTreeItemChanged(QTreeWidgetItem* item, int column) {
+        if (m_structureTree->signalsBlocked()) return;
+
         if (column == 1) {
             QString txt = item->text(1).trimmed();
             QRegularExpression rx("^((?:\\|[\\+\\-]?|[\\+\\-])0x)([0-9a-fA-F]+)");
