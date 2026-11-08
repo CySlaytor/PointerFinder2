@@ -4,6 +4,8 @@
 #include "Common/EndianUtils.h"
 #include "Core/CodeNotes/CodeNoteHelper.h"
 #include "Core/CodeNotes/ExportService.h"
+#include "Emulators/Managers/DolphinManager.h"
+#include "Emulators/Managers/RALibretroGBAManager.h"
 #include "Models/CodeNoteSettings.h"
 #include "Models/GlobalSettings.h"
 #include "UI/Common/ThemeManager.h"
@@ -930,7 +932,26 @@ namespace PointerFinder2::UI {
         if (!dump.empty()) {
             bool isBE = (m_manager->getRetroAchievementsPrefix() == "G");
             m_snapshotMemory = dump;
-            m_memoryViewer->setMemoryData(std::move(dump), start, isBE);
+
+            // Stack multi-region memory banks seamlessly without extra UI controls
+            if (m_manager->getEmulatorName().contains("Wii", Qt::CaseInsensitive)) {
+                std::vector<Widgets::MemoryViewerWidget::MemoryRegionDescriptor> regions = {
+                    { Emulators::EmulatorManager::DolphinManager::MEM1_INGAME_BASE, Emulators::EmulatorManager::DolphinManager::MEM1_SIZE },
+                    { Emulators::EmulatorManager::DolphinManager::MEM2_INGAME_BASE, Emulators::EmulatorManager::DolphinManager::MEM2_SIZE }
+                };
+                m_memoryViewer->setMemoryRegions(std::move(dump), regions, isBE);
+            }
+            else if (m_manager->getEmulatorName().contains("GBA", Qt::CaseInsensitive)) {
+                std::vector<Widgets::MemoryViewerWidget::MemoryRegionDescriptor> regions = {
+                    { Emulators::EmulatorManager::RALibretroGBAManager::GBA_EWRAM_START, Emulators::EmulatorManager::RALibretroGBAManager::GBA_EWRAM_SIZE },
+                    { Emulators::EmulatorManager::RALibretroGBAManager::GBA_IWRAM_START, Emulators::EmulatorManager::RALibretroGBAManager::GBA_IWRAM_SIZE }
+                };
+                m_memoryViewer->setMemoryRegions(std::move(dump), regions, isBE);
+            }
+            else {
+                m_memoryViewer->setMemoryData(std::move(dump), start, isBE);
+            }
+
             m_ramStatusLabel->setText(QString("Snapshot active (%1 KB)").arg(size / 1024));
 
             uint32_t rootArrSize = 0;
@@ -956,9 +977,7 @@ namespace PointerFinder2::UI {
         uint32_t nativeAddr = address;
         if (m_manager) nativeAddr = m_manager->unnormalizeAddress(QString::number(address, 16));
 
-        if (nativeAddr >= m_memoryViewer->getMemoryBase() && 
-            nativeAddr < m_memoryViewer->getMemoryBase() + m_memoryViewer->getMemorySize()) {
-
+        if (m_memoryViewer->isValidAddress(nativeAddr)) {
             m_memoryViewer->setSelectedAddress(nativeAddr, true, true);
         }
     }
@@ -1141,7 +1160,7 @@ namespace PointerFinder2::UI {
         if (!selectedTreeItems.isEmpty() && m_manager) {
             QStringList noteStrings;
             CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
-            QString ptrTemplate = m_manager->getPlatformPointerTypeDescription();
+            QString ptrTemplate = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
 
             for (auto* item : selectedTreeItems) {
                 auto pathOpt = m_hierarchyWidget->getPathForTreeItem(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
@@ -1195,7 +1214,7 @@ namespace PointerFinder2::UI {
             auto pathOpt = m_hierarchyWidget->getPathForTreeItem(matchedItem, m_currentBaseAddress, m_snapshotMemory, rootArr);
             if (pathOpt.has_value()) {
                 CodeNoteSettings settings = CodeNoteSettings::getFromGlobalSettings();
-                QString ptrTemplate = m_manager->getPlatformPointerTypeDescription();
+                QString ptrTemplate = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
                 QString note = CodeNoteHelper::buildCodeNote(pathOpt->offsets, settings, "", matchedItem->text(0), ptrTemplate);
                 QApplication::clipboard()->setText(note);
                 showStatusMessage("Copied code note to clipboard.");
@@ -1531,6 +1550,15 @@ namespace PointerFinder2::UI {
     }
 
     void StructureWorkspaceDialog::onTreeSelectionChanged() {
+        auto* current = m_hierarchyWidget->currentItem();
+        if (current) {
+            uint32_t rootArrSize = 0;
+            bool rootArr = isRootArray(&rootArrSize);
+            uint32_t resolved = m_hierarchyWidget->resolveNodeAddress(current, m_currentBaseAddress, m_snapshotMemory, rootArr);
+            if (resolved != 0 && m_manager) {
+                m_currentViewerSelectedAddress = m_manager->unnormalizeAddress(QString::number(resolved, 16));
+            }
+        }
         updateOffsetPreview();
         updateMemoryHighlights();
         // Selection change only updates highlights and preview without moving the viewport

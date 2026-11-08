@@ -57,10 +57,17 @@ namespace PointerFinder2::UI::Widgets {
             bool hasSelection = false;
         };
 
+        // Stacked region descriptor for platforms with non-contiguous memory banks (e.g. Wii MEM1 + MEM2)
+        struct MemoryRegionDescriptor {
+            uint32_t startAddress = 0;
+            size_t size = 0;
+        };
+
         explicit MemoryViewerWidget(QWidget* parent = nullptr);
         ~MemoryViewerWidget() override;
 
         void setMemoryData(std::vector<uint8_t> memData, uint32_t memoryBaseAddress, bool isBigEndian = false);
+        void setMemoryRegions(std::vector<uint8_t> memData, const std::vector<MemoryRegionDescriptor>& regions, bool isBigEndian = false);
         void clearMemory();
 
         ViewMode getViewMode() const { return m_viewMode; }
@@ -90,6 +97,7 @@ namespace PointerFinder2::UI::Widgets {
         uint32_t getSelectedAddress() const { return m_selectedAddress; }
         uint32_t getHoverAddress() const { return m_hoverAddress; }
         bool isAddressDocumented(uint32_t address) const;
+        bool isValidAddress(uint32_t address) const;
         void setSelectedAddress(uint32_t address, bool recordHistory = true, bool centerTarget = false);
         void goToAddress(uint32_t address, bool recordHistory = true, bool centerTarget = false);
 
@@ -131,11 +139,21 @@ namespace PointerFinder2::UI::Widgets {
         void contextMenuEvent(QContextMenuEvent* event) override;
 
     private:
+        struct StackedRegion {
+            uint32_t startAddress = 0;
+            size_t size = 0;
+            size_t bufferOffset = 0;
+            int64_t startRow = 0;
+            int64_t rowCount = 0;
+        };
+
         std::vector<uint8_t> m_memoryData;
         uint32_t m_memoryBaseAddress = 0;
         bool m_isBigEndian = false;
         ViewMode m_viewMode = ViewMode::Mode32Bit;
         FloatDisplayMode m_floatDisplayMode = FloatDisplayMode::Raw;
+
+        std::vector<StackedRegion> m_regions;
 
         std::unordered_map<uint32_t, HighlightInfo> m_highlights;
         std::vector<DefinedArrayInfo> m_definedArrays;
@@ -180,6 +198,11 @@ namespace PointerFinder2::UI::Widgets {
         int64_t totalRows() const;
         uint32_t addressAtPosition(const QPoint& pos) const;
         QString formatFloatString(float fVal, uint32_t rawVal) const;
+
+        const StackedRegion* findRegionForRow(int64_t row) const;
+        const StackedRegion* findRegionForAddress(uint32_t address) const;
+        int64_t rowForAddress(uint32_t address) const;
+        int64_t bufferOffsetForAddress(uint32_t address) const;
     };
 
 }

@@ -102,9 +102,37 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     void MemoryViewerWidget::setMemoryData(std::vector<uint8_t> memData, uint32_t memoryBaseAddress, bool isBigEndian) {
+        std::vector<MemoryRegionDescriptor> singleDesc = { { memoryBaseAddress, memData.size() } };
+        setMemoryRegions(std::move(memData), singleDesc, isBigEndian);
+    }
+
+    void MemoryViewerWidget::setMemoryRegions(std::vector<uint8_t> memData, const std::vector<MemoryRegionDescriptor>& regions, bool isBigEndian) {
         m_memoryData = std::move(memData);
-        m_memoryBaseAddress = memoryBaseAddress;
         m_isBigEndian = isBigEndian;
+        m_regions.clear();
+
+        if (regions.empty()) {
+            m_memoryBaseAddress = 0;
+        }
+        else {
+            m_memoryBaseAddress = regions.front().startAddress;
+        }
+
+        int64_t accumulatedRows = 0;
+        size_t accumulatedOffset = 0;
+
+        for (const auto& r : regions) {
+            StackedRegion reg;
+            reg.startAddress = r.startAddress;
+            reg.size = r.size;
+            reg.bufferOffset = accumulatedOffset;
+            reg.startRow = accumulatedRows;
+            reg.rowCount = static_cast<int64_t>((r.size + 15) / 16);
+
+            accumulatedRows += reg.rowCount;
+            accumulatedOffset += r.size;
+            m_regions.push_back(reg);
+        }
 
         if (m_isBigEndian) {
             if (m_viewMode == ViewMode::Mode32Bit) {
@@ -115,8 +143,7 @@ namespace PointerFinder2::UI::Widgets {
             }
         }
 
-        if (m_selectedAddress < m_memoryBaseAddress || 
-            m_selectedAddress >= m_memoryBaseAddress + m_memoryData.size()) {
+        if (!isValidAddress(m_selectedAddress)) {
             m_selectedAddress = m_memoryBaseAddress;
         }
 
@@ -133,6 +160,7 @@ namespace PointerFinder2::UI::Widgets {
 
     void MemoryViewerWidget::clearMemory() {
         m_memoryData.clear();
+        m_regions.clear();
         m_highlights.clear();
         m_definedArrays.clear();
         m_hasSelection = false;
@@ -183,6 +211,47 @@ namespace PointerFinder2::UI::Widgets {
 
     bool MemoryViewerWidget::isAddressDocumented(uint32_t address) const {
         return m_highlights.find(address) != m_highlights.end();
+    }
+
+    bool MemoryViewerWidget::isValidAddress(uint32_t address) const {
+        return rowForAddress(address) >= 0;
+    }
+
+    const MemoryViewerWidget::StackedRegion* MemoryViewerWidget::findRegionForRow(int64_t row) const {
+        for (const auto& reg : m_regions) {
+            if (row >= reg.startRow && row < reg.startRow + reg.rowCount) {
+                return &reg;
+            }
+        }
+        return nullptr;
+    }
+
+    const MemoryViewerWidget::StackedRegion* MemoryViewerWidget::findRegionForAddress(uint32_t address) const {
+        for (const auto& reg : m_regions) {
+            if (address >= reg.startAddress && address < reg.startAddress + reg.size) {
+                return &reg;
+            }
+        }
+        return nullptr;
+    }
+
+    int64_t MemoryViewerWidget::rowForAddress(uint32_t address) const {
+        for (const auto& reg : m_regions) {
+            if (address >= reg.startAddress && address < reg.startAddress + reg.size) {
+                uint32_t offsetInReg = address - reg.startAddress;
+                return reg.startRow + static_cast<int64_t>(offsetInReg / 16);
+            }
+        }
+        return -1;
+    }
+
+    int64_t MemoryViewerWidget::bufferOffsetForAddress(uint32_t address) const {
+        for (const auto& reg : m_regions) {
+            if (address >= reg.startAddress && address < reg.startAddress + reg.size) {
+                return static_cast<int64_t>(reg.bufferOffset + (address - reg.startAddress));
+            }
+        }
+        return -1;
     }
 
     void MemoryViewerWidget::clearRangeSelection() {
@@ -355,9 +424,8 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     uint32_t MemoryViewerWidget::readDwordAt(uint32_t address) const {
-        if (address < m_memoryBaseAddress) return 0;
-        size_t offset = address - m_memoryBaseAddress;
-        if (offset + 3 >= m_memoryData.size()) return 0;
+        int64_t offset = bufferOffsetForAddress(address);
+        if (offset < 0 || static_cast<size_t>(offset) + 3 >= m_memoryData.size()) return 0;
 
         bool isBE = (m_viewMode == ViewMode::Mode32BitBE) || (m_viewMode == ViewMode::ModeFloatBE) || m_isBigEndian;
         if (isBE) {
@@ -375,8 +443,12 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     int64_t MemoryViewerWidget::totalRows() const {
-        if (m_memoryData.empty()) return 0;
-        return static_cast<int64_t>((m_memoryData.size() + 15) / 16);
+        if (m_regions.empty()) return 0;
+        int64_t total = 0;
+        for (const auto& reg : m_regions) {
+            total += reg.rowCount;
+        }
+        return total;
     }
 
     void MemoryViewerWidget::updateScrollBars() {
@@ -394,23 +466,29 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     void MemoryViewerWidget::setSelectedAddress(uint32_t address, bool recordHistory, bool centerTarget) {
-        if (m_memoryData.empty()) return;
+        if (m_memoryData.empty() || m_regions.empty()) return;
 
-        uint32_t maxAddr = m_memoryBaseAddress + static_cast<uint32_t>(m_memoryData.size());
-        uint32_t clampedAddr = std::clamp(address, m_memoryBaseAddress, maxAddr > 1 ? maxAddr - 1 : m_memoryBaseAddress);
+        // Verify or find appropriate region for target address
+        const auto* reg = findRegionForAddress(address);
+        if (!reg) {
+            reg = &m_regions.front();
+            address = reg->startAddress;
+        }
 
         // Record history and navigate to destination
-        goToAddress(clampedAddr, recordHistory, centerTarget);
+        goToAddress(address, recordHistory, centerTarget);
         emit addressSelected(m_selectedAddress);
         viewport()->update();
     }
 
     void MemoryViewerWidget::goToAddress(uint32_t address, bool recordHistory, bool centerTarget) {
-        if (m_memoryData.empty()) return;
+        if (m_memoryData.empty() || m_regions.empty()) return;
 
-        if (address < m_memoryBaseAddress) address = m_memoryBaseAddress;
-        uint32_t offset = address - m_memoryBaseAddress;
-        int targetRow = static_cast<int>(offset / 16);
+        int64_t targetRow = rowForAddress(address);
+        if (targetRow < 0) {
+            targetRow = 0;
+            address = m_regions.front().startAddress;
+        }
 
         int visibleRows = (viewport()->height() - m_headerHeight) / m_lineHeight;
         int currentRow = verticalScrollBar()->value();
@@ -426,7 +504,7 @@ namespace PointerFinder2::UI::Widgets {
         // 2. Perform the view positioning
         if (centerTarget) {
             // Explicit pointer exploration or jump: Center the target address row in view
-            int centeredRow = std::max(0, targetRow - (visibleRows / 2));
+            int centeredRow = std::max(0, static_cast<int>(targetRow - (visibleRows / 2)));
             verticalScrollBar()->setValue(std::min(centeredRow, maxRow));
         }
         else {
@@ -439,20 +517,20 @@ namespace PointerFinder2::UI::Widgets {
                 int bottomMargin = (2 * visibleRows) / 3;
 
                 if (targetRow < currentRow + topMargin) {
-                    int newScroll = std::max(0, targetRow - topMargin);
+                    int newScroll = std::max(0, static_cast<int>(targetRow - topMargin));
                     verticalScrollBar()->setValue(newScroll);
                 }
                 else if (targetRow > currentRow + bottomMargin) {
-                    int newScroll = std::min(maxRow, targetRow - bottomMargin);
+                    int newScroll = std::min(maxRow, static_cast<int>(targetRow - bottomMargin));
                     verticalScrollBar()->setValue(newScroll);
                 }
             }
             else if (visibleRows > 0) {
                 if (targetRow < currentRow) {
-                    verticalScrollBar()->setValue(targetRow);
+                    verticalScrollBar()->setValue(static_cast<int>(targetRow));
                 }
                 else if (targetRow >= currentRow + visibleRows) {
-                    verticalScrollBar()->setValue(std::min(maxRow, targetRow - visibleRows + 1));
+                    verticalScrollBar()->setValue(std::min(maxRow, static_cast<int>(targetRow - visibleRows + 1)));
                 }
             }
         }
@@ -490,13 +568,17 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     uint32_t MemoryViewerWidget::addressAtPosition(const QPoint& pos) const {
-        if (m_memoryData.empty() || pos.y() < m_headerHeight) return 0;
+        if (m_memoryData.empty() || m_regions.empty() || pos.y() < m_headerHeight) return 0;
 
         int rowOffset = (pos.y() - m_headerHeight) / m_lineHeight;
         int64_t row = verticalScrollBar()->value() + rowOffset;
         if (row < 0 || row >= totalRows()) return 0;
 
-        uint32_t rowAddress = m_memoryBaseAddress + static_cast<uint32_t>(row * 16);
+        const auto* reg = findRegionForRow(row);
+        if (!reg) return 0;
+
+        int64_t relRow = row - reg->startRow;
+        uint32_t rowAddress = reg->startAddress + static_cast<uint32_t>(relRow * 16);
 
         if (m_viewMode == ViewMode::Mode8Bit) {
             int byteWidth = m_charWidth * 2;
@@ -553,7 +635,7 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::mousePressEvent(QMouseEvent* event) {
         if (event->button() == Qt::LeftButton && !m_memoryData.empty()) {
             uint32_t addr = addressAtPosition(event->pos());
-            if (addr >= m_memoryBaseAddress && addr < m_memoryBaseAddress + m_memoryData.size()) {
+            if (isValidAddress(addr)) {
                 if (event->modifiers() & Qt::ShiftModifier) {
                     // Handle Shift+Click contiguous range selection
                     if (m_rangeAnchor == 0) {
@@ -598,7 +680,7 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::mouseDoubleClickEvent(QMouseEvent* event) {
         if (event->button() == Qt::LeftButton && !m_memoryData.empty()) {
             uint32_t addr = addressAtPosition(event->pos());
-            if (addr >= m_memoryBaseAddress && addr < m_memoryBaseAddress + m_memoryData.size()) {
+            if (isValidAddress(addr)) {
                 m_selectedAddress = addr;
                 m_hasSelection = true;
                 emit addressDoubleClicked(m_selectedAddress);
@@ -610,7 +692,7 @@ namespace PointerFinder2::UI::Widgets {
     void MemoryViewerWidget::contextMenuEvent(QContextMenuEvent* event) {
         if (!m_memoryData.empty()) {
             uint32_t addr = addressAtPosition(event->pos());
-            if (addr >= m_memoryBaseAddress && addr < m_memoryBaseAddress + m_memoryData.size()) {
+            if (isValidAddress(addr)) {
                 m_selectedAddress = addr;
                 m_hasSelection = true;
 
@@ -717,7 +799,7 @@ namespace PointerFinder2::UI::Widgets {
     }
 
     void MemoryViewerWidget::keyPressEvent(QKeyEvent* event) {
-        if (m_memoryData.empty()) {
+        if (m_memoryData.empty() || m_regions.empty()) {
             QAbstractScrollArea::keyPressEvent(event);
             return;
         }
@@ -780,33 +862,67 @@ namespace PointerFinder2::UI::Widgets {
             return;
         }
 
-        uint32_t maxAddr = m_memoryBaseAddress + static_cast<uint32_t>(m_memoryData.size());
         uint32_t step = (m_viewMode == ViewMode::Mode8Bit) ? 1 : ((m_viewMode == ViewMode::Mode16Bit) ? 2 : 4);
+        const auto* curReg = findRegionForAddress(m_selectedAddress);
+        if (!curReg) curReg = &m_regions.front();
 
         if (event->key() == Qt::Key_Up) {
-            if (m_selectedAddress >= m_memoryBaseAddress + 16) {
+            if (m_selectedAddress >= curReg->startAddress + 16) {
                 setSelectedAddress(m_selectedAddress - 16, false, false);
+            }
+            else {
+                // Cross boundary into previous memory segment if available
+                int regIdx = static_cast<int>(curReg - &m_regions.front());
+                if (regIdx > 0) {
+                    const auto& prevReg = m_regions[regIdx - 1];
+                    uint32_t targetEnd = prevReg.startAddress + static_cast<uint32_t>(prevReg.size) - 16 + (m_selectedAddress % 16);
+                    setSelectedAddress(targetEnd, false, false);
+                }
             }
             event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Down) {
-            if (m_selectedAddress + 16 < maxAddr) {
+            if (m_selectedAddress + 16 < curReg->startAddress + curReg->size) {
                 setSelectedAddress(m_selectedAddress + 16, false, false);
+            }
+            else {
+                // Cross boundary into next memory segment if available
+                int regIdx = static_cast<int>(curReg - &m_regions.front());
+                if (regIdx + 1 < static_cast<int>(m_regions.size())) {
+                    const auto& nextReg = m_regions[regIdx + 1];
+                    uint32_t targetStart = nextReg.startAddress + (m_selectedAddress % 16);
+                    setSelectedAddress(targetStart, false, false);
+                }
             }
             event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Left) {
-            if (m_selectedAddress >= m_memoryBaseAddress + step) {
+            if (m_selectedAddress >= curReg->startAddress + step) {
                 setSelectedAddress(m_selectedAddress - step, false, false);
+            }
+            else {
+                int regIdx = static_cast<int>(curReg - &m_regions.front());
+                if (regIdx > 0) {
+                    const auto& prevReg = m_regions[regIdx - 1];
+                    uint32_t targetEnd = prevReg.startAddress + static_cast<uint32_t>(prevReg.size) - step;
+                    setSelectedAddress(targetEnd, false, false);
+                }
             }
             event->accept();
             return;
         }
         else if (event->key() == Qt::Key_Right) {
-            if (m_selectedAddress + step < maxAddr) {
+            if (m_selectedAddress + step < curReg->startAddress + curReg->size) {
                 setSelectedAddress(m_selectedAddress + step, false, false);
+            }
+            else {
+                int regIdx = static_cast<int>(curReg - &m_regions.front());
+                if (regIdx + 1 < static_cast<int>(m_regions.size())) {
+                    const auto& nextReg = m_regions[regIdx + 1];
+                    setSelectedAddress(nextReg.startAddress, false, false);
+                }
             }
             event->accept();
             return;
@@ -922,7 +1038,7 @@ namespace PointerFinder2::UI::Widgets {
         QPainter painter(viewport());
         painter.setFont(m_monoFont);
 
-        if (m_memoryData.empty()) {
+        if (m_memoryData.empty() || m_regions.empty()) {
             painter.setPen(palette().color(QPalette::Disabled, QPalette::Text));
             painter.drawText(viewport()->rect(), Qt::AlignCenter, "No memory dump loaded.\nClick 'Re-dump / Refresh RAM' to capture active memory.");
             return;
@@ -1005,8 +1121,14 @@ namespace PointerFinder2::UI::Widgets {
 
         for (int64_t r = startRow; r < endRow; ++r) {
             int y = m_headerHeight + static_cast<int>((r - startRow) * m_lineHeight);
-            uint32_t rowAddress = m_memoryBaseAddress + static_cast<uint32_t>(r * 16);
-            size_t dataOffset = static_cast<size_t>(r * 16);
+
+            // Locate specific memory segment containing virtual row
+            const StackedRegion* reg = findRegionForRow(r);
+            if (!reg) continue;
+
+            int64_t relRow = r - reg->startRow;
+            uint32_t rowAddress = reg->startAddress + static_cast<uint32_t>(relRow * 16);
+            size_t dataOffset = reg->bufferOffset + static_cast<size_t>(relRow * 16);
 
             painter.setPen(addrColor);
             QString addrStr = QString("%1").arg(rowAddress, 8, 16, QChar('0')).toUpper();

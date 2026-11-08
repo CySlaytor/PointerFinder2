@@ -214,10 +214,13 @@ namespace PointerFinder2::Emulators::EmulatorManager {
         uint32_t parsed = address.toUInt(&ok, 16);
         if (!ok) return 0;
 
-        if (isValidPointerTarget(parsed)) {
+        // Check if already in native CPU address range (aligned or unaligned)
+        if ((parsed >= MEM1_INGAME_BASE && parsed < MEM1_INGAME_END) ||
+            (m_detectedSystem == SystemType::Wii && parsed >= MEM2_INGAME_BASE && parsed < MEM2_INGAME_END)) {
             return parsed;
         }
 
+        // Check if in RetroAchievements MEM2 range [0x10000000 - 0x137FFFFF]
         if (m_detectedSystem == SystemType::Wii && (parsed >= 0x10000000 && parsed < 0x20000000)) {
             return (parsed - 0x10000000) + MEM2_INGAME_BASE;
         }
