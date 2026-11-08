@@ -25,6 +25,12 @@ namespace PointerFinder2::UI {
 class StructureHierarchyWidget : public QWidget {
     Q_OBJECT
   public:
+    static constexpr int COL_NAME = 0;
+    static constexpr int COL_SIZE = 1;
+    static constexpr int COL_OFFSET = 2;
+    static constexpr int COL_RESOLVED = 3;
+    static constexpr int COL_VALUE = 4;
+
     explicit StructureHierarchyWidget(QWidget* parent = nullptr);
     ~StructureHierarchyWidget() override;
 
@@ -77,6 +83,7 @@ class StructureHierarchyWidget : public QWidget {
 
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
   private slots:
     void onTreeItemDoubleClicked(QTreeWidgetItem* item, int column);
@@ -98,6 +105,11 @@ class StructureHierarchyWidget : public QWidget {
     QAction* m_treeCopyNoteAction = nullptr;
     QAction* m_treeCopyAddressAction = nullptr;
     QAction* m_treeCopyValueAction = nullptr;
+
+    bool m_isAdjustingColumns = false;
+
+    int getColumnMinWidth(int column) const;
+    void adjustColumnWidths();
 
     void setupLayout();
     void populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<Core::CodeNoteNode>>& nodes,
