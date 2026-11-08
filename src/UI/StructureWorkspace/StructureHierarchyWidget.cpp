@@ -9,6 +9,7 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QRegularExpression>
+#include <QStyledItemDelegate>
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
@@ -18,6 +19,41 @@ namespace PointerFinder2::UI {
 
 using namespace PointerFinder2::Core;
 using namespace PointerFinder2::DataModels;
+
+namespace {
+// Item delegate restricting cell editing strictly to Column 0 (Description / Name)
+class NonEditableColumnDelegate : public QStyledItemDelegate {
+  public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        if (index.column() != 0) {
+            return nullptr;
+        }
+        return QStyledItemDelegate::createEditor(parent, option, index);
+    }
+};
+
+// Extracts bracketed size/mask specifiers into a dedicated string and returns the clean description
+void parseSizeAndDescription(const QString& rawDesc, QString& outSize, QString& outCleanDesc) {
+    QString trimmed = rawDesc.trimmed();
+    outSize.clear();
+    outCleanDesc = trimmed;
+
+    static const QRegularExpression bracketRx(R"(^\[([^\]]+)\]\s*(.*)$)");
+    auto match = bracketRx.match(trimmed);
+    if (match.hasMatch()) {
+        QString tag = match.captured(1).trimmed();
+        // Validate whether the bracket represents a memory size, data type, bitfield, mask, or byte span
+        static const QRegularExpression sizePatternRx(
+            R"((\d+-bit|\d+\s*x\s*\d+\s*bytes|\d+\s*bytes|float|double|byte|bit\d*|pointer|\&|lower|upper|mbf))",
+            QRegularExpression::CaseInsensitiveOption);
+        if (sizePatternRx.match(tag).hasMatch()) {
+            outSize = "[" + tag + "]";
+            outCleanDesc = match.captured(2).trimmed();
+        }
+    }
+}
+} // namespace
 
 StructureHierarchyWidget::StructureHierarchyWidget(QWidget* parent) : QWidget(parent) { setupLayout(); }
 
@@ -81,25 +117,30 @@ void StructureHierarchyWidget::setupLayout() {
     leftLayout->setSpacing(6);
 
     m_structureTree = new QTreeWidget(this);
-    m_structureTree->setColumnCount(4);
-    m_structureTree->setHeaderLabels({"Description / Name", "Offset", "Resolved RAM", "Pointer Val"});
+    m_structureTree->setColumnCount(5);
+    m_structureTree->setHeaderLabels({"Description / Name", "Size", "Offset", "Resolved RAM", "Pointer Val"});
     m_structureTree->setContextMenuPolicy(Qt::CustomContextMenu);
 
     m_structureTree->header()->setSectionResizeMode(0, QHeaderView::Interactive);
     m_structureTree->header()->setSectionResizeMode(1, QHeaderView::Interactive);
     m_structureTree->header()->setSectionResizeMode(2, QHeaderView::Interactive);
     m_structureTree->header()->setSectionResizeMode(3, QHeaderView::Interactive);
+    m_structureTree->header()->setSectionResizeMode(4, QHeaderView::Interactive);
     m_structureTree->header()->setStretchLastSection(true);
 
-    m_structureTree->setColumnWidth(0, 260);
-    m_structureTree->setColumnWidth(1, 80);
-    m_structureTree->setColumnWidth(2, 110);
-    m_structureTree->setColumnWidth(3, 110);
+    m_structureTree->setColumnWidth(0, 220);
+    m_structureTree->setColumnWidth(1, 140);
+    m_structureTree->setColumnWidth(2, 75);
+    m_structureTree->setColumnWidth(3, 105);
+    m_structureTree->setColumnWidth(4, 105);
 
     m_structureTree->setAlternatingRowColors(true);
     // Enable multi-selection like a standard file explorer / tree view
     m_structureTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_structureTree->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
+
+    // Enforce strict non-editability on all columns except Description / Name
+    m_structureTree->setItemDelegate(new NonEditableColumnDelegate(m_structureTree));
 
     // Install event filter on m_structureTree to handle navigation and hierarchy shortcuts (Enter, F, V, P, Delete, X)
     m_structureTree->installEventFilter(this);
@@ -262,8 +303,13 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
             if (sign == "-")
                 offsetVal = -offsetVal;
 
+            QString sizeStr;
+            QString cleanDesc;
+            parseSizeAndDescription(desc, sizeStr, cleanDesc);
+
             auto* newItem = new QTreeWidgetItem(parentItem ? parentItem : m_structureTree->invisibleRootItem());
-            newItem->setText(0, desc);
+            newItem->setText(0, cleanDesc);
+            newItem->setText(1, sizeStr);
             newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
             QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
 
@@ -276,10 +322,13 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
                 displayOffset = (offsetVal < 0 ? "-0x" : "+0x") + offsetHex;
             }
 
-            newItem->setText(1, displayOffset);
+            newItem->setText(2, displayOffset);
             newItem->setData(1, Qt::UserRole, offsetVal);
+            newItem->setData(2, Qt::UserRole, offsetVal);
             newItem->setData(1, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
+            newItem->setData(2, Qt::UserRole + 1, delimiter.isEmpty() ? "=" : delimiter);
             newItem->setData(1, Qt::UserRole + 3, isArrayElem);
+            newItem->setData(2, Qt::UserRole + 3, isArrayElem);
 
             QStringList notes;
             for (const auto& child : node->children) {
@@ -346,10 +395,11 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
 
     for (size_t i = 0; i < lineage.size(); ++i) {
         auto* node = lineage[i];
-        int32_t offset = node->data(1, Qt::UserRole).toInt();
+        int32_t offset = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt() : node->data(1, Qt::UserRole).toInt();
         currentAddress += static_cast<uint32_t>(offset);
 
-        if (node != item && (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive))) {
+        if (node != item && (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+                             node->text(1).contains("Pointer", Qt::CaseInsensitive))) {
             auto ptrVal = readMemoryDword(currentAddress, snapshotMemory);
             if (ptrVal.has_value() && m_manager && m_manager->isValidPointerTarget(ptrVal.value())) {
                 currentAddress = m_manager->unnormalizeAddress(QString::number(ptrVal.value(), 16));
@@ -383,10 +433,10 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
 
     std::function<void(QTreeWidgetItem*, uint32_t, bool)> updateNode = [&](QTreeWidgetItem* node, uint32_t parentBase, bool parentValid) {
         if (!parentValid || parentBase == 0) {
-            node->setText(2, "N/A");
             node->setText(3, "N/A");
-            node->setForeground(2, QColor(140, 140, 140));
+            node->setText(4, "N/A");
             node->setForeground(3, QColor(140, 140, 140));
+            node->setForeground(4, QColor(140, 140, 140));
 
             for (int i = 0; i < node->childCount(); ++i) {
                 updateNode(node->child(i), 0, false);
@@ -394,12 +444,12 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
             return;
         }
 
-        int32_t offset = node->data(1, Qt::UserRole).toInt();
+        int32_t offset = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt() : node->data(1, Qt::UserRole).toInt();
         uint32_t resolved = parentBase + static_cast<uint32_t>(offset);
 
         QString displayAddr = m_manager->formatDisplayAddress(resolved);
-        node->setText(2, "0x" + displayAddr);
-        node->setForeground(2, palette().color(QPalette::Text));
+        node->setText(3, "0x" + displayAddr);
+        node->setForeground(3, palette().color(QPalette::Text));
 
         auto valOpt = readMemoryDword(resolved, snapshotMemory);
         uint32_t nextBase = 0;
@@ -408,10 +458,11 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
         if (valOpt.has_value()) {
             uint32_t rawVal = valOpt.value();
             QString valHex = QString("%1").arg(rawVal, 8, 16, QChar('0')).toUpper();
-            node->setText(3, "0x" + valHex);
-            node->setForeground(3, palette().color(QPalette::Text));
+            node->setText(4, "0x" + valHex);
+            node->setForeground(4, palette().color(QPalette::Text));
 
-            if (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive)) {
+            if (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+                node->text(1).contains("Pointer", Qt::CaseInsensitive)) {
                 if (rawVal != 0 && m_manager->isValidPointerTarget(rawVal)) {
                     nextBase = m_manager->unnormalizeAddress(QString::number(rawVal, 16));
                     nextValid = true;
@@ -422,8 +473,8 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
                 }
             }
         } else {
-            node->setText(3, "N/A");
-            node->setForeground(3, QColor(140, 140, 140));
+            node->setText(4, "N/A");
+            node->setForeground(4, QColor(140, 140, 140));
             nextValid = false;
             node->setData(0, Qt::UserRole + 4, 0);
         }
@@ -445,8 +496,12 @@ void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candid
     std::function<void(QTreeWidgetItem*, int)> collect = [&](QTreeWidgetItem* item, int depth) {
         uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
         QString desc = item->text(0).trimmed();
+        QString sizeTag = item->text(1).trimmed();
         static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
         auto match = arrayTagRx.match(desc);
+        if (!match.hasMatch()) {
+            match = arrayTagRx.match(sizeTag);
+        }
 
         bool isArray = item->data(0, Qt::UserRole + 6).toBool() || match.hasMatch();
         uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
@@ -492,40 +547,37 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
             Widgets::MemoryViewerWidget::HighlightInfo info;
 
             // Extract clean name by removing redundant size/format tag like [32-bit], [Float], etc.
-            QString rawDesc = item->text(0).trimmed();
-            static const QRegularExpression sizeTagRegex("^\\s*\\[([^\\]]+)\\]\\s*");
-            auto match = sizeTagRegex.match(rawDesc);
+            QString sizeTag = item->text(1).trimmed();
+            if (sizeTag.isEmpty()) {
+                sizeTag = item->text(0).trimmed();
+            }
 
             uint32_t varSize = 4;
-            if (match.hasMatch()) {
-                QString tag = match.captured(1).trimmed().toLower();
-                if (tag.startsWith("8-bit") || tag == "8bit" || tag == "byte" || tag.startsWith("bit") || tag.contains("bitflag") ||
-                    tag == "lower4" || tag == "upper4") {
-                    varSize = 1;
-                } else if (tag.startsWith("16-bit") || tag == "16bit" || tag == "short") {
-                    varSize = 2;
-                } else if (tag.startsWith("24-bit") || tag == "24bit") {
-                    varSize = 3;
-                } else if (tag.startsWith("64-bit") || tag == "64bit" || tag.contains("double")) {
-                    varSize = 8;
-                } else if (tag.startsWith("32-bit") || tag == "32bit" || tag.contains("float") || tag.contains("pointer")) {
-                    varSize = 4;
-                }
+            QString tagLower = sizeTag.toLower();
+            if (tagLower.startsWith('[') && tagLower.endsWith(']')) {
+                tagLower = tagLower.mid(1, tagLower.length() - 2).trimmed();
             }
 
-            QString cleanName = rawDesc;
-            cleanName.remove(sizeTagRegex);
-            cleanName = cleanName.trimmed();
-            if (cleanName.isEmpty()) {
-                cleanName = rawDesc;
+            if (tagLower.startsWith("8-bit") || tagLower == "8bit" || tagLower == "byte" || tagLower.startsWith("bit") ||
+                tagLower.contains("bitflag") || tagLower == "lower4" || tagLower == "upper4") {
+                varSize = 1;
+            } else if (tagLower.startsWith("16-bit") || tagLower == "16bit" || tagLower == "short") {
+                varSize = 2;
+            } else if (tagLower.startsWith("24-bit") || tagLower == "24bit") {
+                varSize = 3;
+            } else if (tagLower.startsWith("64-bit") || tagLower == "64bit" || tagLower.contains("double")) {
+                varSize = 8;
+            } else if (tagLower.startsWith("32-bit") || tagLower == "32bit" || tagLower.contains("float") || tagLower.contains("pointer")) {
+                varSize = 4;
             }
 
-            info.name = cleanName;
-            info.offset = item->text(1).trimmed();
-            info.label = cleanName + " (" + info.offset + ")";
+            info.name = item->text(0).trimmed();
+            info.offset = item->text(2).trimmed();
+            info.label = info.name + " (" + info.offset + ")";
             info.startAddress = nativeAddr;
             info.size = varSize;
-            info.isPointer = (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive));
+            info.isPointer = (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+                              item->text(1).contains("Pointer", Qt::CaseInsensitive));
             info.isChildOfActive = (activeItem && (item == activeItem || item->parent() == activeItem));
 
             for (uint32_t b = 0; b < varSize; ++b) {
@@ -535,8 +587,12 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
 
         // Identify defined array boundaries across the hierarchy
         QString desc = item->text(0).trimmed();
+        QString sizeTagStr = item->text(1).trimmed();
         static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
         auto arrayMatch = arrayTagRx.match(desc);
+        if (!arrayMatch.hasMatch()) {
+            arrayMatch = arrayTagRx.match(sizeTagStr);
+        }
 
         bool isArray = item->data(0, Qt::UserRole + 6).toBool() || arrayMatch.hasMatch();
         uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
@@ -584,7 +640,7 @@ void StructureHierarchyWidget::updateOffsetPreview(uint32_t selectedAddr, const 
         QString scopeName;
         auto* node = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
         if (node) {
-            scopeName = node->text(0) + " (" + node->text(1) + ")";
+            scopeName = node->text(0) + " (" + node->text(2) + ")";
         } else if (match.isArrayScope) {
             scopeName = headerComment.isEmpty() ? "Root Array" : headerComment.trimmed();
         } else {
@@ -614,20 +670,28 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
     int insertIndex = childCount;
     for (int i = 0; i < childCount; ++i) {
         QTreeWidgetItem* existing = parentScope ? parentScope->child(i) : tree->topLevelItem(i);
-        int32_t existingOffset = existing->data(1, Qt::UserRole).toInt();
+        int32_t existingOffset = existing->data(2, Qt::UserRole).isValid() ? existing->data(2, Qt::UserRole).toInt()
+                                                                           : existing->data(1, Qt::UserRole).toInt();
         if (existingOffset > offset) {
             insertIndex = i;
             break;
         }
     }
 
+    QString sizeStr;
+    QString cleanDesc;
+    parseSizeAndDescription(description, sizeStr, cleanDesc);
+
     auto* newItem = new QTreeWidgetItem();
-    newItem->setText(0, description);
+    newItem->setText(0, cleanDesc);
+    newItem->setText(1, sizeStr);
     newItem->setFlags(newItem->flags() | Qt::ItemIsEditable);
     QString sign = (offset < 0) ? "-" : "";
     QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
 
-    bool parentIsArrayElem = parentScope && parentScope->data(1, Qt::UserRole + 3).toBool();
+    bool parentIsArrayElem = parentScope && (parentScope->data(2, Qt::UserRole + 3).isValid()
+                                                 ? parentScope->data(2, Qt::UserRole + 3).toBool()
+                                                 : parentScope->data(1, Qt::UserRole + 3).toBool());
 
     // Standardized array offset display (|0x.. without redundant '+')
     QString displayOffset;
@@ -639,10 +703,13 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
         displayOffset = (offset < 0 ? "-0x" : "+0x") + offsetHex;
     }
 
-    newItem->setText(1, displayOffset);
+    newItem->setText(2, displayOffset);
     newItem->setData(1, Qt::UserRole, offset);
+    newItem->setData(2, Qt::UserRole, offset);
     newItem->setData(1, Qt::UserRole + 1, "="); // Default delimiter
+    newItem->setData(2, Qt::UserRole + 1, "=");
     newItem->setData(1, Qt::UserRole + 3, isArrayElement);
+    newItem->setData(2, Qt::UserRole + 3, isArrayElement);
 
     if (parentScope) {
         parentScope->insertChild(insertIndex, newItem);
@@ -690,14 +757,18 @@ QString StructureHierarchyWidget::generateCodeNoteFromTree(bool useUnicode, bool
 
         for (int i = 0; i < count; ++i) {
             QTreeWidgetItem* item = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
-            int32_t offset = item->data(1, Qt::UserRole).toInt();
+            int32_t offset = item->data(2, Qt::UserRole).isValid() ? item->data(2, Qt::UserRole).toInt() : item->data(1, Qt::UserRole).toInt();
             QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toLower();
-            QString delimiter = item->data(1, Qt::UserRole + 1).toString();
+            QString delimiter = item->data(2, Qt::UserRole + 1).isValid() ? item->data(2, Qt::UserRole + 1).toString()
+                                                                           : item->data(1, Qt::UserRole + 1).toString();
             if (delimiter.isEmpty())
                 delimiter = "=";
 
-            bool isArrayElem = item->data(1, Qt::UserRole + 3).toBool();
-            bool parentIsArrayElem = parent && parent->data(1, Qt::UserRole + 3).toBool();
+            bool isArrayElem = item->data(2, Qt::UserRole + 3).isValid() ? item->data(2, Qt::UserRole + 3).toBool()
+                                                                         : item->data(1, Qt::UserRole + 3).toBool();
+            bool parentIsArrayElem = parent && (parent->data(2, Qt::UserRole + 3).isValid()
+                                                    ? parent->data(2, Qt::UserRole + 3).toBool()
+                                                    : parent->data(1, Qt::UserRole + 3).toBool());
 
             QString offsetStr;
             if (isArrayElem) {
@@ -708,8 +779,19 @@ QString StructureHierarchyWidget::generateCodeNoteFromTree(bool useUnicode, bool
                 offsetStr = (offset < 0 ? QString("-") : QString("+")) + "0x" + offsetHex;
             }
 
+            QString sizeStr = item->text(1).trimmed();
+            QString descStr = item->text(0).trimmed();
+            QString fullDesc;
+            if (!sizeStr.isEmpty() && !descStr.isEmpty()) {
+                fullDesc = sizeStr + " " + descStr;
+            } else if (!sizeStr.isEmpty()) {
+                fullDesc = sizeStr;
+            } else {
+                fullDesc = descStr;
+            }
+
             auto node = std::make_shared<CodeNoteNode>();
-            node->content = offsetStr + delimiter + item->text(0);
+            node->content = offsetStr + delimiter + fullDesc;
 
             QStringList valueNotes = item->data(0, Qt::UserRole + 2).toStringList();
             for (const auto& vNote : valueNotes) {
@@ -759,12 +841,14 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
     // In static array structures, the top-level element offset represents a direct offset in static RAM,
     // not an additional indirect pointer chain level.
     if (rootArr && !lineage.empty()) {
-        int32_t elemOffset = lineage[0]->data(1, Qt::UserRole).toInt();
+        int32_t elemOffset = lineage[0]->data(2, Qt::UserRole).isValid() ? lineage[0]->data(2, Qt::UserRole).toInt()
+                                                                         : lineage[0]->data(1, Qt::UserRole).toInt();
         path.baseAddress = currentBaseAddress + static_cast<uint32_t>(elemOffset);
 
         // Append offsets within the pointed instance
         for (size_t i = 1; i < lineage.size(); ++i) {
-            path.offsets.push_back(lineage[i]->data(1, Qt::UserRole).toInt());
+            path.offsets.push_back(lineage[i]->data(2, Qt::UserRole).isValid() ? lineage[i]->data(2, Qt::UserRole).toInt()
+                                                                               : lineage[i]->data(1, Qt::UserRole).toInt());
         }
 
         // If the element itself is selected, target offset is 0
@@ -774,7 +858,8 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
     } else {
         path.baseAddress = currentBaseAddress;
         for (auto* node : lineage) {
-            path.offsets.push_back(node->data(1, Qt::UserRole).toInt());
+            path.offsets.push_back(node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt()
+                                                                         : node->data(1, Qt::UserRole).toInt());
         }
     }
 
@@ -862,14 +947,18 @@ QString StructureHierarchyWidget::formatRetroAchievementsTrigger(QTreeWidgetItem
 
     for (size_t i = 0; i < lineage.size(); ++i) {
         QTreeWidgetItem* node = lineage[i];
-        int32_t offset = node->data(1, Qt::UserRole).toInt();
-        bool isPtr = (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive));
+        int32_t offset = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt() : node->data(1, Qt::UserRole).toInt();
+        bool isPtr = (node->childCount() > 0 || node->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+                      node->text(1).contains("Pointer", Qt::CaseInsensitive));
         bool isLast = (i == lineage.size() - 1);
 
         if (isStatic) {
             currentStaticAddr += static_cast<uint32_t>(offset);
             if (isPtr) {
-                QString mask = extractMaskFromText(node->text(0));
+                QString mask = extractMaskFromText(node->text(1));
+                if (mask.isEmpty()) {
+                    mask = extractMaskFromText(node->text(0));
+                }
                 if (mask.isEmpty()) {
                     if (isPs2 && m_manager->isAttached()) {
                         auto [normAddr, _] = m_manager->normalizeAddressForRead(currentStaticAddr);
@@ -888,7 +977,10 @@ QString StructureHierarchyWidget::formatRetroAchievementsTrigger(QTreeWidgetItem
         } else {
             accumulatedOffset += static_cast<uint32_t>(offset);
             if (isPtr && !isLast) {
-                QString mask = extractMaskFromText(node->text(0));
+                QString mask = extractMaskFromText(node->text(1));
+                if (mask.isEmpty()) {
+                    mask = extractMaskFromText(node->text(0));
+                }
                 if (mask.isEmpty()) {
                     if (isPs2 && m_manager->isAttached()) {
                         uint32_t nodeAddr =
@@ -982,7 +1074,7 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
 
     menu.addSeparator();
 
-    bool hasPointerVal = !clickedItem->text(3).trimmed().isEmpty() && clickedItem->text(3) != "N/A" && clickedItem->text(3) != "0x00000000";
+    bool hasPointerVal = !clickedItem->text(4).trimmed().isEmpty() && clickedItem->text(4) != "N/A" && clickedItem->text(4) != "0x00000000";
     if (hasPointerVal) {
         auto* followAct = menu.addAction(getThemeIcon(":/icons/follow_pointer.svg"), "Follow Pointer", this,
                                          &StructureHierarchyWidget::followPointerClicked);
@@ -1000,8 +1092,8 @@ void StructureHierarchyWidget::onTreeItemChanged(QTreeWidgetItem* item, int colu
     if (m_structureTree->signalsBlocked())
         return;
 
-    if (column == 1) {
-        QString txt = item->text(1).trimmed();
+    if (column == 2) {
+        QString txt = item->text(2).trimmed();
         QRegularExpression rx("^((?:\\|[\\+\\-]?|[\\+\\-])0x)([0-9a-fA-F]+)");
         auto match = rx.match(txt);
         if (match.hasMatch()) {
@@ -1012,10 +1104,12 @@ void StructureHierarchyWidget::onTreeItemChanged(QTreeWidgetItem* item, int colu
             if (prefix.contains('-'))
                 val = -val;
             item->setData(1, Qt::UserRole, val);
+            item->setData(2, Qt::UserRole, val);
             item->setData(1, Qt::UserRole + 3, isArrayElem);
+            item->setData(2, Qt::UserRole + 3, isArrayElem);
             emit treeDataChanged();
         }
-    } else if (column == 0) {
+    } else if (column == 0 || column == 1) {
         emit treeDataChanged();
     }
 }

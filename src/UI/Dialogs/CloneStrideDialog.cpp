@@ -49,25 +49,30 @@ void CloneStrideDialog::parseInitialNote(uint32_t& outStride, QString& outTempla
         m_originalBody = "";
     }
 
-    // 1. Auto-detect stride from [N bytes] tag in header (e.g. [144 bytes])
-    QString sizeTag = "";
-    static const QRegularExpression sizeTagRx(R"(^(\s*\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\]\s*))",
-                                              QRegularExpression::CaseInsensitiveOption);
-    auto match = sizeTagRx.match(header);
-    if (match.hasMatch()) {
-        sizeTag = match.captured(1).trimmed();
-        if (!match.captured(2).isEmpty() && !match.captured(3).isEmpty()) {
-            outStride = match.captured(2).toUInt() * match.captured(3).toUInt();
-        } else if (!match.captured(4).isEmpty()) {
-            outStride = match.captured(4).toUInt();
+    // 1. Match ANY leading bracketed tag (e.g. [32-bit BE & 0x1FFFFFFF], [8-bit], [144 bytes], [30x16 bytes])
+    QString prefixTag = "";
+    static const QRegularExpression leadingBracketRx(R"(^(\s*\[[^\]]+\]\s*))");
+    auto bracketMatch = leadingBracketRx.match(header);
+    if (bracketMatch.hasMatch()) {
+        prefixTag = bracketMatch.captured(1).trimmed();
+
+        // Auto-detect stride if bracketed tag specifies byte size
+        static const QRegularExpression bytesRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])",
+                                                QRegularExpression::CaseInsensitiveOption);
+        auto bytesMatch = bytesRx.match(prefixTag);
+        if (bytesMatch.hasMatch()) {
+            if (!bytesMatch.captured(1).isEmpty() && !bytesMatch.captured(2).isEmpty()) {
+                outStride = bytesMatch.captured(1).toUInt() * bytesMatch.captured(2).toUInt();
+            } else if (!bytesMatch.captured(3).isEmpty()) {
+                outStride = bytesMatch.captured(3).toUInt();
+            }
         }
     }
 
-    // 2. Auto-detect numbering and parenthesized names in title
-    // Isolate title without the size tag so the stride number (e.g. 144) is never mistaken for a sequence index
+    // 2. Auto-detect numbering and parenthesized names strictly outside the prefix tag
     QString titleCandidate = header;
-    if (!sizeTag.isEmpty()) {
-        titleCandidate = titleCandidate.mid(match.capturedLength()).trimmed();
+    if (!prefixTag.isEmpty()) {
+        titleCandidate = titleCandidate.mid(bracketMatch.capturedLength()).trimmed();
     }
 
     // Extract custom name inside parentheses, e.g. "(Isolation)"
@@ -87,11 +92,18 @@ void CloneStrideDialog::parseInitialNote(uint32_t& outStride, QString& outTempla
         QString prefix = numMatch.captured(1);
         QString token = (digits.length() >= 2) ? "{INDEX:02}" : "{INDEX}";
         titleCandidate.replace(numMatch.capturedStart(2), digits.length(), token);
+    } else if (!titleCandidate.contains("{INDEX")) {
+        // If title has no number, append index token so each clone has a distinct sequential title
+        if (!titleCandidate.isEmpty()) {
+            titleCandidate += " {INDEX:02}";
+        } else {
+            titleCandidate = "{INDEX:02}";
+        }
     }
 
-    // Re-attach size tag prefix to the template
-    if (!sizeTag.isEmpty()) {
-        outTemplate = sizeTag + " " + titleCandidate;
+    // Re-attach prefix tag to the template
+    if (!prefixTag.isEmpty()) {
+        outTemplate = prefixTag + " " + titleCandidate;
     } else {
         outTemplate = titleCandidate;
     }

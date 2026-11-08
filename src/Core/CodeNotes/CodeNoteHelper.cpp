@@ -217,11 +217,13 @@ QString CodeNoteHelper::formatHeaderComment(const QString& headerComment, const 
             return headerComment;
         }
 
-        // Check if bracketContent declares a pointer or bit-width
-        if (bracketContent.contains("pointer", Qt::CaseInsensitive) || bracketContent.contains("32-bit", Qt::CaseInsensitive) ||
-            bracketContent.contains("24-bit", Qt::CaseInsensitive) || bracketContent.contains("16-bit", Qt::CaseInsensitive) ||
-            bracketContent.contains("64-bit", Qt::CaseInsensitive)) {
+        // Only format as a pointer if the description actually represents a pointer declaration.
+        // Plain variables or bitfield headers (e.g. "[8-bit] Game Boot Up State") must remain as variables.
+        bool isPointerDeclaration = bracketContent.contains("pointer", Qt::CaseInsensitive) ||
+                                    remainingText.contains("pointer", Qt::CaseInsensitive) ||
+                                    remainingText.startsWith("to ", Qt::CaseInsensitive);
 
+        if (isPointerDeclaration) {
             QString ptrType = platformPointerType.isEmpty() ? "[32-bit] Pointer" : platformPointerType;
 
             // Strip redundant leading "Pointer" if remainingText starts with it

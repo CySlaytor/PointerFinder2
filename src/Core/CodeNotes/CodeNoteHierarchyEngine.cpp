@@ -99,6 +99,11 @@ std::vector<std::shared_ptr<CodeNoteNode>> CodeNoteHierarchyEngine::parseLinesTo
             }
             cleanNote = cleanNote.mid(prefixChars).trimmed();
 
+            // Strip accidental leading delimiter left from previous mangled fixes
+            if (cleanNote.startsWith('=') && cleanNote.length() > 1 && cleanNote[1] != '=') {
+                cleanNote = cleanNote.mid(1).trimmed();
+            }
+
             if (!cleanNote.isEmpty()) {
                 auto noteNode = std::make_shared<CodeNoteNode>();
                 noteNode->content = cleanNote;
@@ -234,20 +239,46 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
                                                      const QString& pointerTypeTemplate, const QString& indentPrefix) {
     QString sb = "";
 
-    if (indentLevel == 0 && !headerComment.trimmed().isEmpty()) {
-        sb.append(headerComment.trimmed() + "\n\n");
-    }
-
     // Resolve active delimiter: prefer explicit parameter, fall back to global setting, then "="
     QString effectiveDelimiter = !delimiterSuffix.isEmpty() ? delimiterSuffix : DataModels::GlobalSettings::codeNoteSuffix;
     if (effectiveDelimiter.isEmpty())
         effectiveDelimiter = "=";
 
+    if (indentLevel == 0 && !headerComment.trimmed().isEmpty()) {
+        // Rebuild top-level header and standardize any root-level enumeration lines
+        QStringList headerLines = headerComment.split('\n');
+        QStringList formattedHeader;
+
+        static const QRegularExpression rootEnumKvRegex(R"(^((?:0x[0-9a-fA-F]+|\d+|Bit\s*\d+))\s*([=:]|\s-\s)\s*(.*)$)",
+                                                        QRegularExpression::CaseInsensitiveOption);
+
+        for (int i = 0; i < headerLines.size(); ++i) {
+            QString hLine = headerLines[i].trimmed();
+            if (i > 0) {
+                auto match = rootEnumKvRegex.match(hLine);
+                if (match.hasMatch()) {
+                    QString key = match.captured(1).trimmed();
+                    QString val = match.captured(3).trimmed();
+                    formattedHeader.append(key + effectiveDelimiter + val);
+                    continue;
+                }
+            }
+            formattedHeader.append(hLine);
+        }
+
+        sb.append(formattedHeader.join("\n").trimmed() + "\n\n");
+    }
+
     static const QRegularExpression offsetRegex("^((?:\\|[\\+\\-]?|[\\+\\-])0x[0-9a-fA-F]+)(?:\\s*([=:|]|\\s-\\s)\\s*|\\s+)(.*)$",
                                                 QRegularExpression::CaseInsensitiveOption);
 
-    static const QRegularExpression attachedNoteKvRegex(R"(^((?:0x[0-9a-fA-F]+|\d+|Bit\s*\d+|[A-Za-z0-9_]+))\s*([=:|]|\s-\s)\s*(.*)$)",
+    // Matches distinct key-value declarations (e.g. "Bit0=...", "0x00=...", "1=...")
+    static const QRegularExpression attachedEnumKvRegex(R"(^((?:0x[0-9a-fA-F]+|\d+|Bit\s*\d+))\s*([=:]|\s-\s)\s*(.*)$)",
                                                         QRegularExpression::CaseInsensitiveOption);
+
+    // Matches named key-value declarations strictly with '=' or ':' (e.g. "Key=Value"), avoiding false splits on hyphens
+    static const QRegularExpression attachedNamedKvRegex(R"(^([A-Za-z0-9_]+)\s*([=:])\s*(.*)$)",
+                                                         QRegularExpression::CaseInsensitiveOption);
 
     for (size_t i = 0; i < nodes.size(); ++i) {
         const auto& node = nodes[i];
@@ -347,11 +378,20 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
             }
         } else if (isAttachedNote) {
             // Normalize key-value delimiters on attached notes (e.g. "Bit0 = Name" -> "Bit0=Name")
-            auto match = attachedNoteKvRegex.match(node->content);
-            if (match.hasMatch()) {
-                QString key = match.captured(1).trimmed();
-                QString val = match.captured(3).trimmed();
+            auto enumMatch = attachedEnumKvRegex.match(node->content);
+            auto namedMatch = attachedNamedKvRegex.match(node->content);
+
+            if (enumMatch.hasMatch()) {
+                QString key = enumMatch.captured(1).trimmed();
+                QString val = enumMatch.captured(3).trimmed();
                 normalizedContent = key + effectiveDelimiter + val;
+            } else if (namedMatch.hasMatch()) {
+                QString key = namedMatch.captured(1).trimmed();
+                QString val = namedMatch.captured(3).trimmed();
+                normalizedContent = key + effectiveDelimiter + val;
+            } else {
+                // Preserve description content without prepending a stray delimiter
+                normalizedContent = node->content.trimmed();
             }
         }
 
