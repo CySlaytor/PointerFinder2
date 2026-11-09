@@ -58,7 +58,8 @@ class StructureHierarchyWidget : public QWidget {
                        const std::vector<uint8_t>& snapshotMemory, bool rootArr);
     void gatherHighlights(std::unordered_map<uint32_t, Widgets::MemoryViewerWidget::HighlightInfo>& highlights,
                           std::vector<Widgets::MemoryViewerWidget::DefinedArrayInfo>& definedArrays, uint32_t currentBaseAddress,
-                          bool rootArr, const std::vector<uint8_t>& snapshotMemory);
+                          bool rootArr, const std::vector<uint8_t>& snapshotMemory,
+                          const QString& headerComment = "");
 
     QString generateCodeNoteFromTree(bool useUnicode, bool indentDesc, const QString& headerComment) const;
     QString generateCodeNoteFromTree(const QString& style, bool indentDesc, const QString& headerComment) const;

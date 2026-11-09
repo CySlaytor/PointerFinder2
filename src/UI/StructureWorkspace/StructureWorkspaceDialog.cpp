@@ -1328,15 +1328,18 @@ void StructureWorkspaceDialog::onMemoryViewerContextMenu(uint32_t address, const
     followPtrAct->setEnabled(isPointer);
 
     if (m_memoryViewer->isAddressDocumented(address)) {
-        menu.addSeparator();
-        auto* removeDocAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove Documentation", this, [this, address]() {
-            uint32_t rootArrSize = 0;
-            bool rootArr = isRootArray(&rootArrSize);
-            m_hierarchyWidget->removeDocumentationAtAddress(address, m_currentBaseAddress, m_snapshotMemory, rootArr);
-            QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString::number(address, 16).toUpper();
-            showStatusMessage(QString("Removed documentation at address 0x%1").arg(addrStr));
-        });
-        removeDocAct->setProperty("iconPath", ":/icons/delete.svg");
+        uint32_t base = m_manager ? m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16)) : 0;
+        if (address != base) {
+            menu.addSeparator();
+            auto* removeDocAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove Documentation", this, [this, address]() {
+                uint32_t rootArrSize = 0;
+                bool rootArr = isRootArray(&rootArrSize);
+                m_hierarchyWidget->removeDocumentationAtAddress(address, m_currentBaseAddress, m_snapshotMemory, rootArr);
+                QString addrStr = m_manager ? m_manager->formatDisplayAddress(address) : QString::number(address, 16).toUpper();
+                showStatusMessage(QString("Removed documentation at address 0x%1").arg(addrStr));
+            });
+            removeDocAct->setProperty("iconPath", ":/icons/delete.svg");
+        }
     }
 
     menu.addSeparator();
@@ -1570,8 +1573,56 @@ void StructureWorkspaceDialog::updateMemoryHighlights() {
         }
     }
 
-    // If this note has no sub-offsets, document the root base address itself as a single variable
-    if (m_hierarchyWidget->treeWidget()->topLevelItemCount() == 0 && m_currentBaseAddress != 0 && !rootArr) {
+    // Determine whether the root structure note itself declares a pointer
+    QString headerText = m_headerComment.trimmed();
+    auto noteIt = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(),
+                               [&](const RaCodeNote& n) { return n.address == m_currentBaseAddress; });
+    if (headerText.isEmpty() && noteIt != m_gameData.notes.end()) {
+        headerText = noteIt->title.trimmed();
+    }
+    bool rootIsPointer = !rootArr && headerText.contains("Pointer", Qt::CaseInsensitive);
+
+    // If the root address represents a pointer, highlight the base pointer in memory (red with mask)
+    if (rootIsPointer && m_currentBaseAddress != 0) {
+        uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
+        if (base != 0) {
+            Widgets::MemoryViewerWidget::HighlightInfo info;
+            QString rawTitle = (noteIt != m_gameData.notes.end()) ? noteIt->title : headerText;
+
+            static const QRegularExpression sizeTagRegex(R"(^\s*\[([^\]]+)\]\s*)");
+            QString cleanName = rawTitle;
+            cleanName.remove(sizeTagRegex);
+            cleanName = cleanName.trimmed();
+            if (cleanName.isEmpty())
+                cleanName = rawTitle;
+
+            info.name = cleanName;
+            info.offset = "Base";
+            info.label = cleanName + " (Base)";
+            info.startAddress = base;
+            info.size = 4;
+            info.isPointer = true;
+            info.isChildOfActive = false;
+
+            // Extract pointer mask from header declaration if present, otherwise 0xFFFFFFFF
+            static const QRegularExpression maskRx(R"(\&\s*(?:0x([0-9a-fA-F]+)|(\d+)))");
+            auto maskMatch = maskRx.match(headerText);
+            uint32_t rootMask = 0;
+            if (maskMatch.hasMatch()) {
+                if (!maskMatch.captured(1).isEmpty()) {
+                    rootMask = maskMatch.captured(1).toUInt(nullptr, 16);
+                } else if (!maskMatch.captured(2).isEmpty()) {
+                    rootMask = maskMatch.captured(2).toUInt(nullptr, 10);
+                }
+            }
+            info.pointerMask = (rootMask != 0) ? rootMask : 0xFFFFFFFF;
+
+            for (uint32_t b = 0; b < 4; ++b) {
+                highlights[base + b] = info;
+            }
+        }
+    } else if (m_hierarchyWidget->treeWidget()->topLevelItemCount() == 0 && m_currentBaseAddress != 0 && !rootArr) {
+        // If this note has no sub-offsets and is a plain variable, document the root base address itself as a single variable
         auto it = std::find_if(m_gameData.notes.begin(), m_gameData.notes.end(),
                                [&](const RaCodeNote& n) { return n.address == m_currentBaseAddress; });
         if (it != m_gameData.notes.end()) {
@@ -1620,7 +1671,7 @@ void StructureWorkspaceDialog::updateMemoryHighlights() {
         }
     }
 
-    m_hierarchyWidget->gatherHighlights(highlights, definedArrays, m_currentBaseAddress, rootArr, m_snapshotMemory);
+    m_hierarchyWidget->gatherHighlights(highlights, definedArrays, m_currentBaseAddress, rootArr, m_snapshotMemory, m_headerComment);
 
     m_memoryViewer->setHighlightedAddresses(highlights);
     m_memoryViewer->setDefinedArrays(definedArrays);

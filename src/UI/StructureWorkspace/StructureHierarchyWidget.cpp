@@ -58,6 +58,25 @@ void parseSizeAndDescription(const QString& rawDesc, QString& outSize, QString& 
     }
 }
 
+// Extracts numeric bitmask from a text string (e.g. "& 0x1FFFFFFF", "& 33554431")
+uint32_t extractMaskValueFromText(const QString& text) {
+    static const QRegularExpression maskRx(R"(\&\s*(?:0x([0-9a-fA-F]+)|(\d+)))");
+    auto match = maskRx.match(text);
+    if (match.hasMatch()) {
+        bool ok = false;
+        if (!match.captured(1).isEmpty()) {
+            uint32_t val = match.captured(1).toUInt(&ok, 16);
+            if (ok && val != 0)
+                return val;
+        } else if (!match.captured(2).isEmpty()) {
+            uint32_t val = match.captured(2).toUInt(&ok, 10);
+            if (ok && val != 0)
+                return val;
+        }
+    }
+    return 0;
+}
+
 // 24 standard RAIntegration memory data types in exact ordered sequence
 static const QStringList StandardRATypes = {
     "Bit0",     "Bit1",       "Bit2",       "Bit3",     "Bit4",     "Bit5",       "Bit6",        "Bit7",
@@ -896,7 +915,8 @@ void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candid
 
 void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Widgets::MemoryViewerWidget::HighlightInfo>& highlights,
                                                 std::vector<Widgets::MemoryViewerWidget::DefinedArrayInfo>& definedArrays,
-                                                uint32_t currentBaseAddress, bool rootArr, const std::vector<uint8_t>& snapshotMemory) {
+                                                uint32_t currentBaseAddress, bool rootArr, const std::vector<uint8_t>& snapshotMemory,
+                                                const QString& headerComment) {
     if (!m_manager)
         return;
 
@@ -940,6 +960,21 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
             info.size = varSize;
             info.isPointer = isPointerItem(item);
             info.isChildOfActive = (activeItem && (item == activeItem || item->parent() == activeItem));
+
+            // Resolve pointer mask following the 3 priority levels:
+            // 1. Pointer-specific mask from node's size tag or description
+            // 2. Header mask from the top-level structure declaration
+            // 3. Fallback to full address (0xFFFFFFFF)
+            if (info.isPointer) {
+                uint32_t mask = extractMaskValueFromText(meta ? meta->text(META_COL_SIZE) : "");
+                if (mask == 0) {
+                    mask = extractMaskValueFromText(item->text(0));
+                }
+                if (mask == 0 && !headerComment.isEmpty()) {
+                    mask = extractMaskValueFromText(headerComment);
+                }
+                info.pointerMask = (mask != 0) ? mask : 0xFFFFFFFF;
+            }
 
             for (uint32_t b = 0; b < varSize; ++b) {
                 highlights[nativeAddr + b] = info;

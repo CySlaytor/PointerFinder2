@@ -41,6 +41,17 @@ ScopeMatch StructureAnalyzer::findBestScopeForAddress(uint32_t selectedAddr, uin
     if (base == 0)
         return best;
 
+    // Check if the selected address is the root base address itself (e.g. root pointer)
+    if (!rootIsArray && selectedAddr >= base && selectedAddr < base + 4) {
+        best.scopeIdentifier = nullptr;
+        best.baseAddress = base;
+        best.offset = static_cast<int32_t>(selectedAddr - base);
+        best.depth = 0;
+        best.isValid = true;
+        best.isArrayScope = false;
+        return best;
+    }
+
     uint32_t initialParentBase = base;
 
     // When the root address itself is declared as a static array, do not dereference

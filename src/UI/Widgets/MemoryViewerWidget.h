@@ -29,6 +29,7 @@ class MemoryViewerWidget : public QAbstractScrollArea {
         uint32_t size = 4;
         bool isPointer = false;
         bool isChildOfActive = false;
+        uint32_t pointerMask = 0xFFFFFFFF; // Bitmask defining relevant pointer address bits (defaults to full 32-bit address)
     };
 
     struct DefinedArrayInfo {

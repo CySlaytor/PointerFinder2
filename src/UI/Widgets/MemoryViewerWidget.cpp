@@ -1083,6 +1083,8 @@ void MemoryViewerWidget::paintEvent(QPaintEvent*) {
     const QColor arrayBorderColor = isDark ? QColor(163, 113, 247, 180) : QColor(138, 43, 226, 120);
     const QColor rangeSelectBgColor = isDark ? QColor(138, 75, 175, 120) : QColor(160, 100, 220, 70);
 
+    static const char hexCharsUpper[] = "0123456789ABCDEF";
+
     for (int64_t r = startRow; r < endRow; ++r) {
         int y = m_headerHeight + static_cast<int>((r - startRow) * m_lineHeight);
 
@@ -1138,14 +1140,32 @@ void MemoryViewerWidget::paintEvent(QPaintEvent*) {
                         painter.drawRect(selRect);
                     }
 
-                    // Tier 3: Foreground text
+                    // Tier 3: Foreground text with nibble-level pointer mask support
                     if (it != m_highlights.end()) {
-                        painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                        if (it->second.isPointer && it->second.pointerMask != 0xFFFFFFFF) {
+                            uint32_t byteOffsetInPtr = (currAddr >= it->second.startAddress) ? (currAddr - it->second.startAddress) : 0;
+                            int shiftByte = (m_isBigEndian ? (3 - (byteOffsetInPtr % 4)) : (byteOffsetInPtr % 4)) * 8;
+                            uint8_t hnVal = (byteVal >> 4) & 0xF;
+                            uint8_t lnVal = byteVal & 0xF;
+                            uint32_t hnMask = (it->second.pointerMask >> (shiftByte + 4)) & 0xF;
+                            uint32_t lnMask = (it->second.pointerMask >> shiftByte) & 0xF;
+
+                            bool hnIsPtr = (hnMask == 0xF) ? true : ((hnMask == 0) ? false : ((hnVal & ~hnMask) == 0));
+                            bool lnIsPtr = (lnMask == 0xF) ? true : ((lnMask == 0) ? false : ((lnVal & ~lnMask) == 0));
+
+                            painter.setPen(hnIsPtr ? pointerColor : (hnVal == 0 ? zeroColor : textColor));
+                            painter.drawText(bx, y + m_charHeight, QString(hexCharsUpper[hnVal]));
+
+                            painter.setPen(lnIsPtr ? pointerColor : (lnVal == 0 ? zeroColor : textColor));
+                            painter.drawText(bx + m_charWidth, y + m_charHeight, QString(hexCharsUpper[lnVal]));
+                        } else {
+                            painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                            painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
+                        }
                     } else {
                         painter.setPen(byteVal == 0 ? zeroColor : textColor);
+                        painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                     }
-
-                    painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                 }
             }
         } else if (m_viewMode == ViewMode::Mode16Bit) {
@@ -1194,11 +1214,30 @@ void MemoryViewerWidget::paintEvent(QPaintEvent*) {
 
                         auto it = m_highlights.find(byteAddr);
                         if (it != m_highlights.end()) {
-                            painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                            if (it->second.isPointer && it->second.pointerMask != 0xFFFFFFFF) {
+                                uint32_t byteOffsetInPtr = (byteAddr >= it->second.startAddress) ? (byteAddr - it->second.startAddress) : 0;
+                                int shiftByte = (isBE ? (3 - (byteOffsetInPtr % 4)) : (byteOffsetInPtr % 4)) * 8;
+                                uint8_t hnVal = (byteVal >> 4) & 0xF;
+                                uint8_t lnVal = byteVal & 0xF;
+                                uint32_t hnMask = (it->second.pointerMask >> (shiftByte + 4)) & 0xF;
+                                uint32_t lnMask = (it->second.pointerMask >> shiftByte) & 0xF;
+
+                                bool hnIsPtr = (hnMask == 0xF) ? true : ((hnMask == 0) ? false : ((hnVal & ~hnMask) == 0));
+                                bool lnIsPtr = (lnMask == 0xF) ? true : ((lnMask == 0) ? false : ((lnVal & ~lnMask) == 0));
+
+                                painter.setPen(hnIsPtr ? pointerColor : (hnVal == 0 ? zeroColor : textColor));
+                                painter.drawText(bx, y + m_charHeight, QString(hexCharsUpper[hnVal]));
+
+                                painter.setPen(lnIsPtr ? pointerColor : (lnVal == 0 ? zeroColor : textColor));
+                                painter.drawText(bx + m_charWidth, y + m_charHeight, QString(hexCharsUpper[lnVal]));
+                            } else {
+                                painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                                painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
+                            }
                         } else {
                             painter.setPen(byteVal == 0 ? zeroColor : textColor);
+                            painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                         }
-                        painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                     }
                 }
             }
@@ -1322,11 +1361,32 @@ void MemoryViewerWidget::paintEvent(QPaintEvent*) {
 
                         auto it = m_highlights.find(byteAddr);
                         if (it != m_highlights.end()) {
-                            painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                            // If this address is a pointer with a specific mask (not 0xFFFFFFFF), apply nibble-level masking
+                            if (it->second.isPointer && it->second.pointerMask != 0xFFFFFFFF) {
+                                uint8_t hnVal = (byteVal >> 4) & 0xF;
+                                uint8_t lnVal = byteVal & 0xF;
+
+                                int shiftH = (7 - (b * 2)) * 4;
+                                int shiftL = (6 - (b * 2)) * 4;
+                                uint32_t hMask = (it->second.pointerMask >> shiftH) & 0xF;
+                                uint32_t lMask = (it->second.pointerMask >> shiftL) & 0xF;
+
+                                bool hIsPtr = (hMask == 0xF) ? true : ((hMask == 0) ? false : ((hnVal & ~hMask) == 0));
+                                bool lIsPtr = (lMask == 0xF) ? true : ((lMask == 0) ? false : ((lnVal & ~lMask) == 0));
+
+                                painter.setPen(hIsPtr ? pointerColor : (hnVal == 0 ? zeroColor : textColor));
+                                painter.drawText(bx, y + m_charHeight, QString(hexCharsUpper[hnVal]));
+
+                                painter.setPen(lIsPtr ? pointerColor : (lnVal == 0 ? zeroColor : textColor));
+                                painter.drawText(bx + m_charWidth, y + m_charHeight, QString(hexCharsUpper[lnVal]));
+                            } else {
+                                painter.setPen(it->second.isPointer ? pointerColor : variableColor);
+                                painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
+                            }
                         } else {
                             painter.setPen(byteVal == 0 ? zeroColor : textColor);
+                            painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                         }
-                        painter.drawText(bx, y + m_charHeight, QString("%1").arg(byteVal, 2, 16, QChar('0')).toUpper());
                     }
                 }
             }
