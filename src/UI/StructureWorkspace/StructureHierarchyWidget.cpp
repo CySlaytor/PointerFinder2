@@ -98,6 +98,9 @@ QIcon StructureHierarchyWidget::getThemeIcon(const QString& resourcePath) const 
 void StructureHierarchyWidget::updateThemeIcons() {
     m_addVariableBtn->setIcon(getThemeIcon(":/icons/bookmark_add.svg"));
     m_addPointerBtn->setIcon(getThemeIcon(":/icons/attach.svg"));
+    if (m_descriptionsBtn) {
+        m_descriptionsBtn->setIcon(getThemeIcon(":/icons/copy_note.svg"));
+    }
     m_followPointerBtn->setIcon(getThemeIcon(":/icons/follow_pointer.svg"));
     m_removeNodeBtn->setIcon(getThemeIcon(":/icons/delete.svg"));
     m_toggleMetadataBtn->setIcon(getThemeIcon(":/icons/converter.svg"));
@@ -524,6 +527,13 @@ void StructureHierarchyWidget::setupLayout() {
     m_addPointerBtn->setAutoDefault(false);
     m_addPointerBtn->setDefault(false);
 
+    m_descriptionsBtn = new QPushButton("Descriptions", this);
+    m_descriptionsBtn->setToolTip("Add or edit value descriptions for selected variable (Shortcut: D)");
+    m_descriptionsBtn->setIcon(getThemeIcon(":/icons/copy_note.svg"));
+    m_descriptionsBtn->setFixedHeight(26);
+    m_descriptionsBtn->setAutoDefault(false);
+    m_descriptionsBtn->setDefault(false);
+
     m_followPointerBtn = new QPushButton("Follow Pointer", this);
     m_followPointerBtn->setToolTip("Follow pointer value to destination address (Shortcut: Enter, F, or Double-click)");
     m_followPointerBtn->setIcon(getThemeIcon(":/icons/follow_pointer.svg"));
@@ -549,6 +559,7 @@ void StructureHierarchyWidget::setupLayout() {
 
     treeButtonsRow->addWidget(m_addVariableBtn, 1);
     treeButtonsRow->addWidget(m_addPointerBtn, 1);
+    treeButtonsRow->addWidget(m_descriptionsBtn, 1);
     treeButtonsRow->addWidget(m_followPointerBtn, 1);
     treeButtonsRow->addWidget(m_removeNodeBtn, 1);
     treeButtonsRow->addWidget(m_toggleMetadataBtn, 1);
@@ -566,6 +577,7 @@ void StructureHierarchyWidget::setupLayout() {
 
     connect(m_addVariableBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::addVariableClicked);
     connect(m_addPointerBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::addPointerClicked);
+    connect(m_descriptionsBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::manageDescriptionsClicked);
     connect(m_followPointerBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::followPointerClicked);
     connect(m_removeNodeBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::removeNodeClicked);
     connect(m_toggleMetadataBtn, &QPushButton::clicked, this, &StructureHierarchyWidget::onToggleMetadataClicked);
@@ -600,6 +612,11 @@ bool StructureHierarchyWidget::eventFilter(QObject* obj, QEvent* event) {
             if (keyEvent->key() == Qt::Key_P) {
                 keyEvent->accept();
                 emit addPointerClicked();
+                return true;
+            }
+            if (keyEvent->key() == Qt::Key_D) {
+                keyEvent->accept();
+                emit manageDescriptionsClicked();
                 return true;
             }
         }
@@ -1612,6 +1629,14 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
     copyValAct->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
 
     menu.addSeparator();
+
+    // Context menu option to add or edit value descriptions for non-pointer variables
+    if (!isPointerItem(clickedItem)) {
+        auto* descAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Value Descriptions... (D)", this,
+                                       &StructureHierarchyWidget::manageDescriptionsClicked);
+        descAct->setProperty("iconPath", ":/icons/copy_note.svg");
+        menu.addSeparator();
+    }
 
     QTreeWidgetItem* meta = getTwinItem(clickedItem);
     bool hasPointerVal = meta && !meta->text(META_COL_VALUE).trimmed().isEmpty() &&

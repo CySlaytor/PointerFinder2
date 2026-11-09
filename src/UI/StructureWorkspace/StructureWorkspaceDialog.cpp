@@ -12,6 +12,7 @@
 #include "UI/Dialogs/AddPointerDialog.h"
 #include "UI/Dialogs/AddVariableDialog.h"
 #include "UI/Dialogs/CloneStrideDialog.h"
+#include "UI/Dialogs/EditValueDescriptionsDialog.h"
 
 #include <windows.h>
 
@@ -336,6 +337,7 @@ void StructureWorkspaceDialog::setupLayout() {
     // Hierarchy Widget Connections
     connect(m_hierarchyWidget, &StructureHierarchyWidget::addVariableClicked, this, &StructureWorkspaceDialog::onAddVariableClicked);
     connect(m_hierarchyWidget, &StructureHierarchyWidget::addPointerClicked, this, &StructureWorkspaceDialog::onAddPointerClicked);
+    connect(m_hierarchyWidget, &StructureHierarchyWidget::manageDescriptionsClicked, this, &StructureWorkspaceDialog::onManageDescriptionsClicked);
     connect(m_hierarchyWidget, &StructureHierarchyWidget::followPointerClicked, this, &StructureWorkspaceDialog::onFollowPointerClicked);
     connect(m_hierarchyWidget, &StructureHierarchyWidget::removeNodeClicked, this, &StructureWorkspaceDialog::onRemoveNodeClicked);
     connect(m_hierarchyWidget, &StructureHierarchyWidget::treeDataChanged, this, &StructureWorkspaceDialog::onTreeDataChanged);
@@ -1836,6 +1838,35 @@ void StructureWorkspaceDialog::onAddPointerClicked() {
             QString("Pointer added: %1 at offset %2%3 -> Target: 0x%4").arg(ptrDesc.trimmed(), prefix, "0x" + offsetHex, targetStr));
     } else {
         showStatusMessage(QString("Pointer added: %1 at offset %2%3").arg(ptrDesc.trimmed(), prefix, "0x" + offsetHex));
+    }
+}
+
+void StructureWorkspaceDialog::onManageDescriptionsClicked() {
+    auto* current = m_hierarchyWidget->currentItem();
+    if (!current) {
+        showStatusMessage("Please select a variable in the Structure Hierarchy.");
+        return;
+    }
+
+    auto* meta = static_cast<QTreeWidgetItem*>(current->data(0, Qt::UserRole + 10).value<void*>());
+    QString sizeTag = meta ? meta->text(StructureHierarchyWidget::META_COL_SIZE) : "8-bit";
+
+    if (current->childCount() > 0 || current->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+        sizeTag.contains("Pointer", Qt::CaseInsensitive)) {
+        showStatusMessage("Value descriptions can only be attached to variables, not pointers.");
+        return;
+    }
+
+    QStringList initialNotes = current->data(0, Qt::UserRole + 2).toStringList();
+
+    EditValueDescriptionsDialog dialog(current->text(0), initialNotes, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        QStringList updatedDescriptions = dialog.getDescriptions();
+        current->setData(0, Qt::UserRole + 2, updatedDescriptions);
+        current->setToolTip(0, updatedDescriptions.join("\n"));
+
+        onTreeDataChanged();
+        showStatusMessage(QString("Updated %1 value description(s) for '%2'").arg(updatedDescriptions.size()).arg(current->text(0)));
     }
 }
 

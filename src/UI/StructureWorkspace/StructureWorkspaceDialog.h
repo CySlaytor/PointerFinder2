@@ -55,6 +55,7 @@ class StructureWorkspaceDialog : public QDialog {
     void onAddPointerClicked();
     void onFollowPointerClicked();
     void onRemoveNodeClicked();
+    void onManageDescriptionsClicked();
     void onRefreshRamClicked();
     void onGoToAddressClicked();
     void onViewModeChanged();

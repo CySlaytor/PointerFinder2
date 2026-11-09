@@ -85,6 +85,7 @@ class StructureHierarchyWidget : public QWidget {
     void addPointerClicked();
     void followPointerClicked();
     void removeNodeClicked();
+    void manageDescriptionsClicked();
     void treeSelectionChanged();
     void treeDataChanged();
 
@@ -115,6 +116,7 @@ class StructureHierarchyWidget : public QWidget {
     QLabel* m_offsetPreviewLabel = nullptr;
     QPushButton* m_addVariableBtn = nullptr;
     QPushButton* m_addPointerBtn = nullptr;
+    QPushButton* m_descriptionsBtn = nullptr;
     QPushButton* m_followPointerBtn = nullptr;
     QPushButton* m_removeNodeBtn = nullptr;
     QPushButton* m_toggleMetadataBtn = nullptr;
