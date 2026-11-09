@@ -42,6 +42,7 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
     m_alignCheck->setChecked(GlobalSettings::codeNoteAlignSuffixes);
     m_suffixLastLineCheck->setChecked(GlobalSettings::codeNoteSuffixOnLastLineOnly);
     m_autoPopulatePointersCheck->setChecked(GlobalSettings::codeNoteAutoPopulatePointers);
+    m_suffixLastLineCheck->setEnabled(!GlobalSettings::codeNoteAutoPopulatePointers);
 
     m_isInitializing = false;
     updateCodeNotePreview();
@@ -235,11 +236,11 @@ void SettingsDialog::onCodeNoteHelpClicked() {
     monoFont.setStyleHint(QFont::Monospace);
     exampleEdit->setFont(monoFont);
     exampleEdit->setPlainText("[32-bit] Pointer to PlayerObject\n\n"
-                              "+0x0=[32-bit] Pointer to PlayerData\n"
+                              "+0x00=[32-bit] Pointer to PlayerData\n"
                               "++0x14=[32-bit] Pointer to Coordinates\n"
-                              "+++0x0=[Float] Position X\n"
-                              "+++0x4=[Float] Position Y\n"
-                              "+++0x8=[Float] Position Z\n"
+                              "+++0x00=[Float] Position X\n"
+                              "+++0x04=[Float] Position Y\n"
+                              "+++0x08=[Float] Position Z\n"
                               "++0x28=[32-bit] Player State\n"
                               "...0x00=Idle\n"
                               "...0x01=Running\n"
@@ -292,6 +293,8 @@ void SettingsDialog::onCodeNoteSettingChanged() {
     GlobalSettings::codeNoteSuffixOnLastLineOnly = m_suffixLastLineCheck->isChecked();
     GlobalSettings::codeNoteAutoPopulatePointers = m_autoPopulatePointersCheck->isChecked();
 
+    m_suffixLastLineCheck->setEnabled(!m_autoPopulatePointersCheck->isChecked());
+
     SettingsManager::saveGlobalSettingsOnly();
     updateCodeNotePreview();
 }
@@ -301,18 +304,18 @@ void SettingsDialog::updateCodeNotePreview() {
     settings.Prefix = m_prefixEdit->text();
     settings.Suffix = m_suffixEdit->text();
     settings.AlignSuffixes = m_alignCheck->isChecked();
-    settings.SuffixOnLastLineOnly = m_suffixLastLineCheck->isChecked();
+    settings.SuffixOnLastLineOnly = m_suffixLastLineCheck->isChecked() && m_suffixLastLineCheck->isEnabled();
     settings.AutoPopulatePointers = m_autoPopulatePointersCheck->isChecked();
 
-    std::vector<int32_t> dummyOffsets = {0x4, 0x2A0, 0x1C};
-    QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Levels Unlocked", "[32-bit] Pointer");
+    std::vector<int32_t> dummyOffsets = {0x04, 0x2A0, 0x1C};
+    QString preview = CodeNoteHelper::buildCodeNote(dummyOffsets, settings, "8-bit", "Stage", "[32-bit] Pointer");
 
     // Add realistic description examples (bitfield / enum values) to demonstrate delimiter and indentation formatting
     QString delim = settings.Suffix;
     QString dotIndent = "....";
-    preview.append(QString("\n%1Bit0%2Ministry of Ink - Level Unlocked").arg(dotIndent, delim));
-    preview.append(QString("\n%1Bit1%2Lake Raydia - Level Unlocked").arg(dotIndent, delim));
-    preview.append(QString("\n%1Bit2%2Last Resort - Level Unlocked").arg(dotIndent, delim));
+    preview.append(QString("\n%1Bit0%2Stage 1").arg(dotIndent, delim));
+    preview.append(QString("\n%1Bit1%2Stage 2").arg(dotIndent, delim));
+    preview.append(QString("\n%1Bit2%2Stage 3").arg(dotIndent, delim));
 
     m_previewEdit->setPlainText(preview);
 }

@@ -31,7 +31,18 @@ void NewAddressDialog::loadPositionSettings() {
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
     if (settings.contains("NewAddressDialog")) {
-        restoreGeometry(settings.value("NewAddressDialog").toByteArray());
+        QString val = settings.value("NewAddressDialog").toString();
+        if (!val.startsWith("@ByteArray")) {
+            QStringList parts = val.split(',');
+            if (parts.size() >= 2) {
+                bool okX = false, okY = false;
+                int x = parts[0].trimmed().toInt(&okX);
+                int y = parts[1].trimmed().toInt(&okY);
+                if (okX && okY) {
+                    move(x, y);
+                }
+            }
+        }
     }
     settings.endGroup();
 }
@@ -40,7 +51,7 @@ void NewAddressDialog::savePositionSettings() {
     QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
-    settings.setValue("NewAddressDialog", saveGeometry());
+    settings.setValue("NewAddressDialog", QString("%1, %2").arg(pos().x()).arg(pos().y()));
     settings.endGroup();
 }
 

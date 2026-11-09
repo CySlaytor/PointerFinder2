@@ -49,11 +49,15 @@ class StructureHierarchyWidget : public QWidget {
     uint32_t resolveNodeAddress(QTreeWidgetItem* item, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory,
                                 bool rootArr);
 
+    QTreeWidgetItem* findItemForAddress(uint32_t address, uint32_t currentBaseAddress,
+                                        const std::vector<uint8_t>& snapshotMemory, bool rootArr);
+
     bool locateAndSelectAddress(uint32_t address, uint32_t currentBaseAddress,
                                 const std::vector<uint8_t>& snapshotMemory, bool rootArr);
 
     void updateOffsetPreview(uint32_t selectedAddr, const Core::ScopeMatch& match, const QString& headerComment);
     void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description, bool isArrayElement = false);
+    void updateNodeDescription(QTreeWidgetItem* item, const QString& description);
     void removeDocumentationAtAddress(uint32_t address, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory,
                                       bool rootArr);
 
@@ -70,6 +74,9 @@ class StructureHierarchyWidget : public QWidget {
     QTreeWidgetItem* currentItem() const;
     QList<QTreeWidgetItem*> selectedItemsInOrder() const;
     QTreeWidget* treeWidget() const;
+
+    QTreeWidgetItem* getTwinItem(QTreeWidgetItem* item) const;
+    bool isPointerItem(QTreeWidgetItem* item) const;
 
     std::optional<DataModels::PointerPath> getPathForTreeItem(QTreeWidgetItem* item, uint32_t currentBaseAddress,
                                                               const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
@@ -145,9 +152,7 @@ class StructureHierarchyWidget : public QWidget {
                                         QTreeWidgetItem* metaParentItem = nullptr);
     std::optional<uint32_t> readMemoryDword(uint32_t address, const std::vector<uint8_t>& snapshotMemory);
 
-    QTreeWidgetItem* getTwinItem(QTreeWidgetItem* item) const;
     void setTwinItems(QTreeWidgetItem* leftItem, QTreeWidgetItem* rightItem);
-    bool isPointerItem(QTreeWidgetItem* item) const;
     void openSizeDropdown(QTreeWidgetItem* item, const QPoint& globalPos);
     void applySizeToItem(QTreeWidgetItem* item, const QString& newSize);
 

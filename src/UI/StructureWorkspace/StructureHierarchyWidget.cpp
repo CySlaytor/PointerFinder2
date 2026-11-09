@@ -797,10 +797,10 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
     return currentAddress;
 }
 
-bool StructureHierarchyWidget::locateAndSelectAddress(uint32_t address, uint32_t currentBaseAddress,
-                                                      const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
+QTreeWidgetItem* StructureHierarchyWidget::findItemForAddress(uint32_t address, uint32_t currentBaseAddress,
+                                                              const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
     if (!m_manager || address == 0 || currentBaseAddress == 0)
-        return false;
+        return nullptr;
 
     QTreeWidgetItem* targetItem = nullptr;
     std::function<void(QTreeWidgetItem*)> search = [&](QTreeWidgetItem* item) {
@@ -821,6 +821,15 @@ bool StructureHierarchyWidget::locateAndSelectAddress(uint32_t address, uint32_t
         if (targetItem)
             break;
     }
+    return targetItem;
+}
+
+bool StructureHierarchyWidget::locateAndSelectAddress(uint32_t address, uint32_t currentBaseAddress,
+                                                      const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
+    if (!m_manager || address == 0 || currentBaseAddress == 0)
+        return false;
+
+    QTreeWidgetItem* targetItem = findItemForAddress(address, currentBaseAddress, snapshotMemory, rootArr);
 
     if (targetItem) {
         // Expand all ancestors to make the item visible in the tree
@@ -833,12 +842,23 @@ bool StructureHierarchyWidget::locateAndSelectAddress(uint32_t address, uint32_t
             p = p->parent();
         }
 
+        // Preserve horizontal scroll position across navigation to prevent unexpected view shifts
+        int savedTreeHScroll = m_structureTree->horizontalScrollBar() ? m_structureTree->horizontalScrollBar()->value() : 0;
+        int savedMetaHScroll = m_metadataTree->horizontalScrollBar() ? m_metadataTree->horizontalScrollBar()->value() : 0;
+
         m_structureTree->setCurrentItem(targetItem);
         if (auto* metaItem = getTwinItem(targetItem)) {
             m_metadataTree->setCurrentItem(metaItem);
         }
         m_structureTree->scrollToItem(targetItem, QAbstractItemView::PositionAtCenter);
         m_structureTree->setFocus();
+
+        if (m_structureTree->horizontalScrollBar()) {
+            m_structureTree->horizontalScrollBar()->setValue(savedTreeHScroll);
+        }
+        if (m_metadataTree->horizontalScrollBar()) {
+            m_metadataTree->horizontalScrollBar()->setValue(savedMetaHScroll);
+        }
         return true;
     }
     return false;
@@ -1207,28 +1227,31 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
     tree->setCurrentItem(leftItem);
 }
 
+void StructureHierarchyWidget::updateNodeDescription(QTreeWidgetItem* item, const QString& description) {
+    if (!item)
+        return;
+
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    QTreeWidgetItem* metaItem = (item->treeWidget() == m_metadataTree) ? item : getTwinItem(item);
+
+    QString sizeStr;
+    QString cleanDesc;
+    parseSizeAndDescription(description, sizeStr, cleanDesc);
+
+    if (hierItem) {
+        hierItem->setText(0, cleanDesc);
+    }
+    if (metaItem) {
+        metaItem->setText(META_COL_SIZE, sizeStr);
+    }
+}
+
 void StructureHierarchyWidget::removeDocumentationAtAddress(uint32_t address, uint32_t currentBaseAddress,
                                                             const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
     if (!m_manager || address == 0)
         return;
 
-    QTreeWidgetItem* targetItem = nullptr;
-    std::function<void(QTreeWidgetItem*)> findItem = [&](QTreeWidgetItem* item) {
-        if (targetItem)
-            return;
-        uint32_t res = resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
-        if (res == address) {
-            targetItem = item;
-            return;
-        }
-        for (int i = 0; i < item->childCount(); ++i) {
-            findItem(item->child(i));
-        }
-    };
-
-    for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
-        findItem(m_structureTree->topLevelItem(i));
-    }
+    QTreeWidgetItem* targetItem = findItemForAddress(address, currentBaseAddress, snapshotMemory, rootArr);
 
     if (targetItem) {
         QTreeWidgetItem* meta = getTwinItem(targetItem);

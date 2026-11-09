@@ -29,7 +29,28 @@ void EditValueDescriptionsDialog::loadPositionSettings() {
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
     if (settings.contains("EditValueDescriptionsDialog")) {
-        restoreGeometry(settings.value("EditValueDescriptionsDialog").toByteArray());
+        QString val = settings.value("EditValueDescriptionsDialog").toString();
+        if (!val.startsWith("@ByteArray")) {
+            QStringList parts = val.split(',');
+            if (parts.size() >= 4) {
+                bool okX = false, okY = false, okW = false, okH = false;
+                int x = parts[0].trimmed().toInt(&okX);
+                int y = parts[1].trimmed().toInt(&okY);
+                int w = parts[2].trimmed().toInt(&okW);
+                int h = parts[3].trimmed().toInt(&okH);
+                if (okX && okY && okW && okH) {
+                    move(x, y);
+                    resize(std::max(w, 400), std::max(h, 260));
+                }
+            } else if (parts.size() >= 2) {
+                bool okX = false, okY = false;
+                int x = parts[0].trimmed().toInt(&okX);
+                int y = parts[1].trimmed().toInt(&okY);
+                if (okX && okY) {
+                    move(x, y);
+                }
+            }
+        }
     }
     settings.endGroup();
 }
@@ -38,7 +59,7 @@ void EditValueDescriptionsDialog::savePositionSettings() {
     QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
-    settings.setValue("EditValueDescriptionsDialog", saveGeometry());
+    settings.setValue("EditValueDescriptionsDialog", QString("%1, %2, %3, %4").arg(pos().x()).arg(pos().y()).arg(width()).arg(height()));
     settings.endGroup();
 }
 

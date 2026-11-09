@@ -38,7 +38,28 @@ void CloneStrideDialog::loadPositionSettings() {
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
     if (settings.contains("CloneStrideDialog")) {
-        restoreGeometry(settings.value("CloneStrideDialog").toByteArray());
+        QString val = settings.value("CloneStrideDialog").toString();
+        if (!val.startsWith("@ByteArray")) {
+            QStringList parts = val.split(',');
+            if (parts.size() >= 4) {
+                bool okX = false, okY = false, okW = false, okH = false;
+                int x = parts[0].trimmed().toInt(&okX);
+                int y = parts[1].trimmed().toInt(&okY);
+                int w = parts[2].trimmed().toInt(&okW);
+                int h = parts[3].trimmed().toInt(&okH);
+                if (okX && okY && okW && okH) {
+                    move(x, y);
+                    resize(std::max(w, 780), std::max(h, 480));
+                }
+            } else if (parts.size() >= 2) {
+                bool okX = false, okY = false;
+                int x = parts[0].trimmed().toInt(&okX);
+                int y = parts[1].trimmed().toInt(&okY);
+                if (okX && okY) {
+                    move(x, y);
+                }
+            }
+        }
     }
     settings.endGroup();
 }
@@ -47,7 +68,7 @@ void CloneStrideDialog::savePositionSettings() {
     QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
-    settings.setValue("CloneStrideDialog", saveGeometry());
+    settings.setValue("CloneStrideDialog", QString("%1, %2, %3, %4").arg(pos().x()).arg(pos().y()).arg(width()).arg(height()));
     settings.endGroup();
 }
 

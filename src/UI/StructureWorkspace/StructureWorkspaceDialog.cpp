@@ -985,7 +985,7 @@ void StructureWorkspaceDialog::onAddressSelectedInViewer(uint32_t address) {
     updateMemoryHighlights();
 }
 
-// Double-clicking in Memory Viewer: If DWORD is a pointer, traverse it; otherwise prompt to add variable
+// Double-clicking in Memory Viewer: If DWORD is a pointer, traverse it; otherwise prompt to add/edit variable
 void StructureWorkspaceDialog::onAddressDoubleClickedInViewer(uint32_t address) {
     m_currentViewerSelectedAddress = address;
     uint32_t dwordVal = m_memoryViewer->readDwordAt(address);
@@ -995,9 +995,6 @@ void StructureWorkspaceDialog::onAddressDoubleClickedInViewer(uint32_t address) 
         navigateToAddress(nativeTarget);
         QString targetStr = m_manager ? m_manager->formatDisplayAddress(nativeTarget) : QString::number(nativeTarget, 16).toUpper();
         showStatusMessage(QString("Followed pointer to target address 0x%1").arg(targetStr));
-    } else if (m_memoryViewer->isAddressDocumented(address)) {
-        // If double-clicking a documented variable, locate and select it directly in the Structure Hierarchy
-        onLocateInHierarchyClicked();
     } else {
         onAddVariableClicked();
     }
@@ -1094,25 +1091,7 @@ void StructureWorkspaceDialog::onCopyViewerAsRaFormat() {
     bool rootArr = isRootArray(&rootArrSize);
 
     // 1. Check if the address directly corresponds to a documented node in the Structure Hierarchy
-    QTreeWidgetItem* matchedItem = nullptr;
-    std::function<void(QTreeWidgetItem*)> findItem = [&](QTreeWidgetItem* item) {
-        if (matchedItem)
-            return;
-        uint32_t addr = m_hierarchyWidget->resolveNodeAddress(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
-        if (addr == m_currentViewerSelectedAddress) {
-            matchedItem = item;
-            return;
-        }
-        for (int i = 0; i < item->childCount(); ++i) {
-            findItem(item->child(i));
-        }
-    };
-
-    for (int i = 0; i < m_hierarchyWidget->treeWidget()->topLevelItemCount(); ++i) {
-        findItem(m_hierarchyWidget->treeWidget()->topLevelItem(i));
-        if (matchedItem)
-            break;
-    }
+    QTreeWidgetItem* matchedItem = m_hierarchyWidget->findItemForAddress(m_currentViewerSelectedAddress, m_currentBaseAddress, m_snapshotMemory, rootArr);
 
     if (matchedItem) {
         QString trigger = m_hierarchyWidget->formatRetroAchievementsTrigger(matchedItem, m_currentBaseAddress, rootArr, m_headerComment);
@@ -1174,25 +1153,7 @@ void StructureWorkspaceDialog::onCopyViewerAsCodeNote() {
     uint32_t rootArrSize = 0;
     bool rootArr = isRootArray(&rootArrSize);
 
-    QTreeWidgetItem* matchedItem = nullptr;
-    std::function<void(QTreeWidgetItem*)> findItem = [&](QTreeWidgetItem* item) {
-        if (matchedItem)
-            return;
-        uint32_t addr = m_hierarchyWidget->resolveNodeAddress(item, m_currentBaseAddress, m_snapshotMemory, rootArr);
-        if (addr == m_currentViewerSelectedAddress) {
-            matchedItem = item;
-            return;
-        }
-        for (int i = 0; i < item->childCount(); ++i) {
-            findItem(item->child(i));
-        }
-    };
-
-    for (int i = 0; i < m_hierarchyWidget->treeWidget()->topLevelItemCount(); ++i) {
-        findItem(m_hierarchyWidget->treeWidget()->topLevelItem(i));
-        if (matchedItem)
-            break;
-    }
+    QTreeWidgetItem* matchedItem = m_hierarchyWidget->findItemForAddress(m_currentViewerSelectedAddress, m_currentBaseAddress, m_snapshotMemory, rootArr);
 
     if (matchedItem) {
         auto pathOpt = m_hierarchyWidget->getPathForTreeItem(matchedItem, m_currentBaseAddress, m_snapshotMemory, rootArr);
@@ -1334,7 +1295,7 @@ void StructureWorkspaceDialog::onMemoryViewerContextMenu(uint32_t address, const
     followPtrAct->setEnabled(isPointer);
 
     if (m_memoryViewer->isAddressDocumented(address)) {
-        auto* locateAct = menu.addAction(getThemeIcon(":/icons/find.svg"), "Locate in Structure Hierarchy (H)", this,
+        auto* locateAct = menu.addAction(getThemeIcon(":/icons/find.svg"), "Locate in Structure Hierarchy", this,
                                          &StructureWorkspaceDialog::onLocateInHierarchyClicked);
         locateAct->setProperty("iconPath", ":/icons/find.svg");
         locateAct->setShortcut(QKeySequence(Qt::Key_H));
@@ -1744,6 +1705,41 @@ void StructureWorkspaceDialog::onAddVariableClicked() {
         alignedAddr &= ~1U;
     }
 
+    uint32_t rootArrSize = 0;
+    bool rootArr = isRootArray(&rootArrSize);
+
+    // Check if this address corresponds to an existing documented variable
+    QTreeWidgetItem* existingItem = m_hierarchyWidget->findItemForAddress(alignedAddr, m_currentBaseAddress, m_snapshotMemory, rootArr);
+    if (!existingItem && alignedAddr != m_currentViewerSelectedAddress) {
+        existingItem = m_hierarchyWidget->findItemForAddress(m_currentViewerSelectedAddress, m_currentBaseAddress, m_snapshotMemory, rootArr);
+    }
+
+    if (existingItem && !m_hierarchyWidget->isPointerItem(existingItem)) {
+        QTreeWidgetItem* meta = m_hierarchyWidget->getTwinItem(existingItem);
+        QString existingType = meta ? meta->text(StructureHierarchyWidget::META_COL_SIZE).trimmed() : "";
+        if (existingType.isEmpty()) {
+            existingType = "32-bit";
+        }
+        QString existingName = existingItem->text(0).trimmed();
+
+        AddVariableDialog dialog(existingType, existingName, this);
+        dialog.setWindowTitle("Edit Variable");
+        if (dialog.exec() != QDialog::Accepted)
+            return;
+
+        QString desc = dialog.getFullDescription();
+        if (desc.trimmed().isEmpty())
+            return;
+
+        m_hierarchyWidget->updateNodeDescription(existingItem, desc.trimmed());
+        m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
+        syncTreeToCodeNoteText();
+        updateMemoryHighlights();
+
+        showStatusMessage(QString("Variable updated: %1").arg(desc.trimmed()));
+        return;
+    }
+
     auto match = findBestScopeForAddress(alignedAddr);
     if (!match.isValid) {
         QMessageBox::warning(this, "Structure Placement", "Selected address does not fall within any active pointer scope.");
@@ -1786,8 +1782,6 @@ void StructureWorkspaceDialog::onAddVariableClicked() {
     auto* scopeNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
     m_hierarchyWidget->insertNodeInScope(scopeNode, match.offset, desc.trimmed(), match.isArrayScope);
 
-    uint32_t rootArrSize = 0;
-    bool rootArr = isRootArray(&rootArrSize);
     m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
     syncTreeToCodeNoteText();
     updateMemoryHighlights();
@@ -1804,10 +1798,13 @@ void StructureWorkspaceDialog::onAddPointerClicked() {
     // Pointers are always 4-byte aligned on target platforms
     uint32_t alignedAddr = m_currentViewerSelectedAddress & ~3U;
 
-    auto match = findBestScopeForAddress(alignedAddr);
-    if (!match.isValid) {
-        QMessageBox::warning(this, "Structure Placement", "Selected address does not fall within any active pointer scope.");
-        return;
+    uint32_t rootArrSize = 0;
+    bool rootArr = isRootArray(&rootArrSize);
+
+    // Check if this address or current item represents an existing documented pointer
+    QTreeWidgetItem* existingItem = m_hierarchyWidget->findItemForAddress(alignedAddr, m_currentBaseAddress, m_snapshotMemory, rootArr);
+    if (!existingItem && m_hierarchyWidget->currentItem() && m_hierarchyWidget->isPointerItem(m_hierarchyWidget->currentItem())) {
+        existingItem = m_hierarchyWidget->currentItem();
     }
 
     uint32_t dwordVal = 0;
@@ -1817,6 +1814,51 @@ void StructureWorkspaceDialog::onAddPointerClicked() {
     }
 
     QString defaultPtrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription(dwordVal) : "[32-bit] Pointer";
+
+    if (existingItem && m_hierarchyWidget->isPointerItem(existingItem)) {
+        // Edit existing documented pointer in-place without duplicating
+        QTreeWidgetItem* meta = m_hierarchyWidget->getTwinItem(existingItem);
+        if (meta) {
+            QString existingSize = meta->text(StructureHierarchyWidget::META_COL_SIZE).trimmed();
+            if (!existingSize.isEmpty()) {
+                if (existingSize.contains("Pointer", Qt::CaseInsensitive)) {
+                    defaultPtrDesc = QString("[%1]").arg(existingSize);
+                } else {
+                    defaultPtrDesc = QString("[%1] Pointer").arg(existingSize);
+                }
+            }
+        }
+
+        QString currentName = existingItem->text(0).trimmed();
+        if (currentName.startsWith("Pointer to ", Qt::CaseInsensitive)) {
+            currentName = currentName.mid(11).trimmed();
+        } else if (currentName.compare("Pointer", Qt::CaseInsensitive) == 0) {
+            currentName = "Pointer";
+        }
+
+        AddPointerDialog dialog(currentName, this);
+        dialog.setWindowTitle("Edit Pointer");
+        if (dialog.exec() != QDialog::Accepted)
+            return;
+
+        QString ptrDesc = dialog.getFullDescription(defaultPtrDesc);
+        if (ptrDesc.trimmed().isEmpty())
+            return;
+
+        m_hierarchyWidget->updateNodeDescription(existingItem, ptrDesc.trimmed());
+        m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
+        syncTreeToCodeNoteText();
+        updateMemoryHighlights();
+
+        showStatusMessage(QString("Pointer updated: %1").arg(ptrDesc.trimmed()));
+        return;
+    }
+
+    auto match = findBestScopeForAddress(alignedAddr);
+    if (!match.isValid) {
+        QMessageBox::warning(this, "Structure Placement", "Selected address does not fall within any active pointer scope.");
+        return;
+    }
 
     AddPointerDialog dialog("Pointer", this);
     if (dialog.exec() != QDialog::Accepted)
@@ -1829,8 +1871,6 @@ void StructureWorkspaceDialog::onAddPointerClicked() {
     auto* scopeNode = static_cast<QTreeWidgetItem*>(match.scopeIdentifier);
     m_hierarchyWidget->insertNodeInScope(scopeNode, match.offset, ptrDesc.trimmed(), match.isArrayScope);
 
-    uint32_t rootArrSize = 0;
-    bool rootArr = isRootArray(&rootArrSize);
     m_hierarchyWidget->recalculateTreeAddresses(m_currentBaseAddress, m_snapshotMemory, rootArr);
     syncTreeToCodeNoteText();
     updateMemoryHighlights();

@@ -117,7 +117,7 @@ QString CodeNoteHelper::buildCodeNote(const std::vector<int32_t>& offsets, const
         int32_t offset = offsets[i];
         QString prefix = (i == 0) ? "" : QString(i, settings.Prefix.isEmpty() ? '+' : settings.Prefix.at(0));
         QString sign = (offset < 0) ? "-" : "+";
-        QString offsetHex = QString::number(std::abs(offset), 16).toUpper();
+        QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toUpper();
 
         // Separate formatting arguments into four parameters. This prevents the Qt parser
         // from misinterpreting a trailing "0x" and dynamic numerical placeholder "%2"

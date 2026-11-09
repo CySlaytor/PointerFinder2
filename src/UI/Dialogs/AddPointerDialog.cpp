@@ -24,7 +24,18 @@ void AddPointerDialog::loadPositionSettings() {
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
     if (settings.contains("AddPointerDialog")) {
-        restoreGeometry(settings.value("AddPointerDialog").toByteArray());
+        QString val = settings.value("AddPointerDialog").toString();
+        if (!val.startsWith("@ByteArray")) {
+            QStringList parts = val.split(',');
+            if (parts.size() >= 2) {
+                bool okX = false, okY = false;
+                int x = parts[0].trimmed().toInt(&okX);
+                int y = parts[1].trimmed().toInt(&okY);
+                if (okX && okY) {
+                    move(x, y);
+                }
+            }
+        }
     }
     settings.endGroup();
 }
@@ -33,7 +44,7 @@ void AddPointerDialog::savePositionSettings() {
     QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
     QSettings settings(iniPath, QSettings::IniFormat);
     settings.beginGroup("DialogPositions");
-    settings.setValue("AddPointerDialog", saveGeometry());
+    settings.setValue("AddPointerDialog", QString("%1, %2").arg(pos().x()).arg(pos().y()));
     settings.endGroup();
 }
 
