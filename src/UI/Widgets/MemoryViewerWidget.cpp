@@ -796,6 +796,11 @@ void MemoryViewerWidget::keyPressEvent(QKeyEvent* event) {
         emit followPointerTriggered();
         return;
     }
+    if (event->key() == Qt::Key_H) {
+        event->accept();
+        emit locateInHierarchyTriggered();
+        return;
+    }
     if (event->key() == Qt::Key_V) {
         event->accept();
         emit addVariableTriggered();

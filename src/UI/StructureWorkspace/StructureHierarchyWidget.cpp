@@ -77,11 +77,12 @@ uint32_t extractMaskValueFromText(const QString& text) {
     return 0;
 }
 
-// 24 standard RAIntegration memory data types in exact ordered sequence
+// Standard RetroAchievements memory data types (>= 8-bit allocation sizes)
 static const QStringList StandardRATypes = {
-    "Bit0",     "Bit1",       "Bit2",       "Bit3",     "Bit4",     "Bit5",       "Bit6",        "Bit7",
-    "Lower4",   "Upper4",     "8-bit",      "16-bit",   "24-bit",   "32-bit",     "16-bit BE",   "24-bit BE",
-    "32-bit BE","BitCount",   "Float",      "Float BE", "Double32", "Double32 BE","MBF32",       "MBF32 LE"
+    "8-bit",      "16-bit",     "24-bit",     "32-bit",
+    "16-bit BE",  "24-bit BE",  "32-bit BE",  "Float",
+    "Float BE",   "Double32",   "Double32 BE","MBF32",
+    "MBF32 LE"
 };
 } // namespace
 
@@ -794,6 +795,53 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
         }
     }
     return currentAddress;
+}
+
+bool StructureHierarchyWidget::locateAndSelectAddress(uint32_t address, uint32_t currentBaseAddress,
+                                                      const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
+    if (!m_manager || address == 0 || currentBaseAddress == 0)
+        return false;
+
+    QTreeWidgetItem* targetItem = nullptr;
+    std::function<void(QTreeWidgetItem*)> search = [&](QTreeWidgetItem* item) {
+        if (targetItem)
+            return;
+        uint32_t resolved = resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
+        if (resolved == address) {
+            targetItem = item;
+            return;
+        }
+        for (int i = 0; i < item->childCount(); ++i) {
+            search(item->child(i));
+        }
+    };
+
+    for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
+        search(m_structureTree->topLevelItem(i));
+        if (targetItem)
+            break;
+    }
+
+    if (targetItem) {
+        // Expand all ancestors to make the item visible in the tree
+        QTreeWidgetItem* p = targetItem->parent();
+        while (p) {
+            p->setExpanded(true);
+            if (auto* metaTwin = getTwinItem(p)) {
+                metaTwin->setExpanded(true);
+            }
+            p = p->parent();
+        }
+
+        m_structureTree->setCurrentItem(targetItem);
+        if (auto* metaItem = getTwinItem(targetItem)) {
+            m_metadataTree->setCurrentItem(metaItem);
+        }
+        m_structureTree->scrollToItem(targetItem, QAbstractItemView::PositionAtCenter);
+        m_structureTree->setFocus();
+        return true;
+    }
+    return false;
 }
 
 void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory,

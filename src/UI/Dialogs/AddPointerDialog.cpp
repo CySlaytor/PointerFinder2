@@ -1,7 +1,10 @@
 #include "AddPointerDialog.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSettings>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
@@ -13,6 +16,30 @@ AddPointerDialog::AddPointerDialog(const QString& defaultName, QWidget* parent) 
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     setupLayout(defaultName);
+    loadPositionSettings();
+}
+
+void AddPointerDialog::loadPositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    if (settings.contains("AddPointerDialog")) {
+        restoreGeometry(settings.value("AddPointerDialog").toByteArray());
+    }
+    settings.endGroup();
+}
+
+void AddPointerDialog::savePositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    settings.setValue("AddPointerDialog", saveGeometry());
+    settings.endGroup();
+}
+
+void AddPointerDialog::done(int r) {
+    savePositionSettings();
+    QDialog::done(r);
 }
 
 void AddPointerDialog::setupLayout(const QString& defaultName) {

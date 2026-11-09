@@ -108,6 +108,7 @@ class MemoryViewerWidget : public QAbstractScrollArea {
     void addVariableTriggered();
     void addPointerTriggered();
     void followPointerTriggered();
+    void locateInHierarchyTriggered();
     void removeDocumentationTriggered(uint32_t address);
 
     // Clipboard copy actions scoped to Memory Viewer

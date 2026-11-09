@@ -320,6 +320,7 @@ void StructureWorkspaceDialog::setupLayout() {
     connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addVariableTriggered, this, &StructureWorkspaceDialog::onAddVariableClicked);
     connect(m_memoryViewer, &Widgets::MemoryViewerWidget::addPointerTriggered, this, &StructureWorkspaceDialog::onAddPointerClicked);
     connect(m_memoryViewer, &Widgets::MemoryViewerWidget::followPointerTriggered, this, &StructureWorkspaceDialog::onFollowPointerClicked);
+    connect(m_memoryViewer, &Widgets::MemoryViewerWidget::locateInHierarchyTriggered, this, &StructureWorkspaceDialog::onLocateInHierarchyClicked);
     connect(m_memoryViewer, &Widgets::MemoryViewerWidget::removeDocumentationTriggered, this, [this](uint32_t address) {
         uint32_t rootArrSize = 0;
         bool rootArr = isRootArray(&rootArrSize);
@@ -994,6 +995,9 @@ void StructureWorkspaceDialog::onAddressDoubleClickedInViewer(uint32_t address) 
         navigateToAddress(nativeTarget);
         QString targetStr = m_manager ? m_manager->formatDisplayAddress(nativeTarget) : QString::number(nativeTarget, 16).toUpper();
         showStatusMessage(QString("Followed pointer to target address 0x%1").arg(targetStr));
+    } else if (m_memoryViewer->isAddressDocumented(address)) {
+        // If double-clicking a documented variable, locate and select it directly in the Structure Hierarchy
+        onLocateInHierarchyClicked();
     } else {
         onAddVariableClicked();
     }
@@ -1330,6 +1334,11 @@ void StructureWorkspaceDialog::onMemoryViewerContextMenu(uint32_t address, const
     followPtrAct->setEnabled(isPointer);
 
     if (m_memoryViewer->isAddressDocumented(address)) {
+        auto* locateAct = menu.addAction(getThemeIcon(":/icons/find.svg"), "Locate in Structure Hierarchy (H)", this,
+                                         &StructureWorkspaceDialog::onLocateInHierarchyClicked);
+        locateAct->setProperty("iconPath", ":/icons/find.svg");
+        locateAct->setShortcut(QKeySequence(Qt::Key_H));
+
         uint32_t base = m_manager ? m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16)) : 0;
         if (address != base) {
             menu.addSeparator();
@@ -1867,6 +1876,30 @@ void StructureWorkspaceDialog::onManageDescriptionsClicked() {
 
         onTreeDataChanged();
         showStatusMessage(QString("Updated %1 value description(s) for '%2'").arg(updatedDescriptions.size()).arg(current->text(0)));
+    }
+}
+
+void StructureWorkspaceDialog::onLocateInHierarchyClicked() {
+    if (m_currentViewerSelectedAddress == 0 || !m_manager)
+        return;
+
+    uint32_t rootArrSize = 0;
+    bool rootArr = isRootArray(&rootArrSize);
+
+    bool found = m_hierarchyWidget->locateAndSelectAddress(m_currentViewerSelectedAddress, m_currentBaseAddress,
+                                                           m_snapshotMemory, rootArr);
+    if (found) {
+        auto* item = m_hierarchyWidget->currentItem();
+        QString name = item ? item->text(0) : "Variable";
+        QString addrStr = m_manager->formatDisplayAddress(m_currentViewerSelectedAddress);
+        showStatusMessage(QString("Located '%1' (0x%2) in Structure Hierarchy").arg(name, addrStr));
+    } else {
+        uint32_t base = m_manager->unnormalizeAddress(QString::number(m_currentBaseAddress, 16));
+        if (m_currentViewerSelectedAddress == base) {
+            showStatusMessage("Selected address is the Root Base Pointer.");
+        } else {
+            showStatusMessage("Address is not a documented node in the Structure Hierarchy.");
+        }
     }
 }
 

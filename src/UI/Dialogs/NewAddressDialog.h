@@ -24,6 +24,9 @@ class NewAddressDialog : public QDialog {
     QString getInitialCodeNote() const;
     bool isArrayStructure() const;
 
+  protected:
+    void done(int r) override;
+
   private slots:
     void onStructureTypeChanged();
     void onCreateClicked();
@@ -43,6 +46,8 @@ class NewAddressDialog : public QDialog {
     void setupLayout(uint32_t defaultAddress);
     void updatePreview();
     QString sanitizeHexInput(const QString& input) const;
+    void loadPositionSettings();
+    void savePositionSettings();
 };
 
 } // namespace PointerFinder2::UI

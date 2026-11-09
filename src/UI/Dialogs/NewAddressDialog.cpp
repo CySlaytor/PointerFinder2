@@ -1,9 +1,12 @@
 #include "NewAddressDialog.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QSettings>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
@@ -18,9 +21,33 @@ NewAddressDialog::NewAddressDialog(Emulators::IEmulatorManager* manager, uint32_
 
     setupLayout(defaultAddress);
     updatePreview();
+    loadPositionSettings();
 }
 
 NewAddressDialog::~NewAddressDialog() = default;
+
+void NewAddressDialog::loadPositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    if (settings.contains("NewAddressDialog")) {
+        restoreGeometry(settings.value("NewAddressDialog").toByteArray());
+    }
+    settings.endGroup();
+}
+
+void NewAddressDialog::savePositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    settings.setValue("NewAddressDialog", saveGeometry());
+    settings.endGroup();
+}
+
+void NewAddressDialog::done(int r) {
+    savePositionSettings();
+    QDialog::done(r);
+}
 
 void NewAddressDialog::setupLayout(uint32_t defaultAddress) {
     auto* mainLayout = new QVBoxLayout(this);

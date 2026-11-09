@@ -2,12 +2,15 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCoreApplication>
+#include <QDir>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -25,9 +28,33 @@ CloneStrideDialog::CloneStrideDialog(Emulators::IEmulatorManager* manager, uint3
 
     setupLayout();
     onParametersChanged();
+    loadPositionSettings();
 }
 
 CloneStrideDialog::~CloneStrideDialog() = default;
+
+void CloneStrideDialog::loadPositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    if (settings.contains("CloneStrideDialog")) {
+        restoreGeometry(settings.value("CloneStrideDialog").toByteArray());
+    }
+    settings.endGroup();
+}
+
+void CloneStrideDialog::savePositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    settings.setValue("CloneStrideDialog", saveGeometry());
+    settings.endGroup();
+}
+
+void CloneStrideDialog::done(int r) {
+    savePositionSettings();
+    QDialog::done(r);
+}
 
 void CloneStrideDialog::parseInitialNote(uint32_t& outStride, QString& outTemplate, QString& outFirstName) {
     outStride = 64; // Fallback default stride

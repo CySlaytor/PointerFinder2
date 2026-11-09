@@ -16,12 +16,17 @@ class AddPointerDialog : public QDialog {
     QString getPointerName() const;
     QString getFullDescription(const QString& platformPointerType = "[32-bit] Pointer") const;
 
+  protected:
+    void done(int r) override;
+
   private:
     QLineEdit* m_nameEdit = nullptr;
     QPushButton* m_okButton = nullptr;
     QPushButton* m_cancelButton = nullptr;
 
     void setupLayout(const QString& defaultName);
+    void loadPositionSettings();
+    void savePositionSettings();
 };
 
 } // namespace PointerFinder2::UI

@@ -19,6 +19,9 @@ class AddVariableDialog : public QDialog {
     QString getVariableName() const;
     QString getFullDescription() const;
 
+  protected:
+    void done(int r) override;
+
   private:
     QComboBox* m_typeCombo = nullptr;
     QLineEdit* m_nameEdit = nullptr;
@@ -26,6 +29,8 @@ class AddVariableDialog : public QDialog {
     QPushButton* m_cancelButton = nullptr;
 
     void setupLayout(const QString& defaultType, const QString& defaultName);
+    void loadPositionSettings();
+    void savePositionSettings();
 };
 
 } // namespace PointerFinder2::UI

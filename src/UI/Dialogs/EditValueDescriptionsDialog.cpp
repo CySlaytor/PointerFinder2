@@ -1,8 +1,11 @@
 #include "EditValueDescriptionsDialog.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
@@ -18,6 +21,30 @@ EditValueDescriptionsDialog::EditValueDescriptionsDialog(const QString& variable
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     setupLayout(initialDescriptions);
+    loadPositionSettings();
+}
+
+void EditValueDescriptionsDialog::loadPositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    if (settings.contains("EditValueDescriptionsDialog")) {
+        restoreGeometry(settings.value("EditValueDescriptionsDialog").toByteArray());
+    }
+    settings.endGroup();
+}
+
+void EditValueDescriptionsDialog::savePositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    settings.setValue("EditValueDescriptionsDialog", saveGeometry());
+    settings.endGroup();
+}
+
+void EditValueDescriptionsDialog::done(int r) {
+    savePositionSettings();
+    QDialog::done(r);
 }
 
 void EditValueDescriptionsDialog::setupLayout(const QStringList& initialDescriptions) {

@@ -31,6 +31,9 @@ class CloneStrideDialog : public QDialog {
 
     std::vector<GeneratedStrideNote> getGeneratedNotes() const;
 
+  protected:
+    void done(int r) override;
+
   private slots:
     void onParametersChanged();
     void onPasteNamesFromClipboard();
@@ -63,6 +66,8 @@ class CloneStrideDialog : public QDialog {
     void rebuildTableRows();
     QString formatTitle(int index, uint32_t offsetBytes, const QString& customName) const;
     uint32_t getBaseAddress() const;
+    void loadPositionSettings();
+    void savePositionSettings();
 };
 
 } // namespace PointerFinder2::UI

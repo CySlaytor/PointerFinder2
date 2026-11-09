@@ -49,6 +49,9 @@ class StructureHierarchyWidget : public QWidget {
     uint32_t resolveNodeAddress(QTreeWidgetItem* item, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory,
                                 bool rootArr);
 
+    bool locateAndSelectAddress(uint32_t address, uint32_t currentBaseAddress,
+                                const std::vector<uint8_t>& snapshotMemory, bool rootArr);
+
     void updateOffsetPreview(uint32_t selectedAddr, const Core::ScopeMatch& match, const QString& headerComment);
     void insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description, bool isArrayElement = false);
     void removeDocumentationAtAddress(uint32_t address, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory,

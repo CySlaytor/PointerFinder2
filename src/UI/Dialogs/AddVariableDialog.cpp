@@ -1,7 +1,10 @@
 #include "AddVariableDialog.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSettings>
 #include <QVBoxLayout>
 
 namespace PointerFinder2::UI {
@@ -9,10 +12,34 @@ namespace PointerFinder2::UI {
 AddVariableDialog::AddVariableDialog(const QString& defaultType, const QString& defaultName, QWidget* parent) : QDialog(parent) {
     setWindowTitle("Add Variable");
     setModal(true);
-    setFixedSize(350, 104);
+    setFixedSize(365, 104);
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     setupLayout(defaultType, defaultName);
+    loadPositionSettings();
+}
+
+void AddVariableDialog::loadPositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    if (settings.contains("AddVariableDialog")) {
+        restoreGeometry(settings.value("AddVariableDialog").toByteArray());
+    }
+    settings.endGroup();
+}
+
+void AddVariableDialog::savePositionSettings() {
+    QString iniPath = QDir(QCoreApplication::applicationDirPath()).filePath("settings.ini");
+    QSettings settings(iniPath, QSettings::IniFormat);
+    settings.beginGroup("DialogPositions");
+    settings.setValue("AddVariableDialog", saveGeometry());
+    settings.endGroup();
+}
+
+void AddVariableDialog::done(int r) {
+    savePositionSettings();
+    QDialog::done(r);
 }
 
 void AddVariableDialog::setupLayout(const QString& defaultType, const QString& defaultName) {
@@ -30,8 +57,9 @@ void AddVariableDialog::setupLayout(const QString& defaultType, const QString& d
 
     auto* typeLabel = new QLabel("Data Type:", this);
     m_typeCombo = new QComboBox(this);
-    m_typeCombo->setFixedWidth(95);
-    m_typeCombo->addItems({"8-bit", "16-bit", "24-bit", "32-bit", "16-bit BE", "24-bit BE", "32-bit BE", "Float", "Float BE"});
+    m_typeCombo->setFixedWidth(110);
+    // Standard data types >= 8-bit matching RetroAchievements memory allocation standards
+    m_typeCombo->addItems({"8-bit", "16-bit", "24-bit", "32-bit", "16-bit BE", "24-bit BE", "32-bit BE", "Float", "Float BE", "Double32", "Double32 BE", "MBF32", "MBF32 LE"});
 
     int typeIdx = m_typeCombo->findText(defaultType, Qt::MatchFixedString);
     if (typeIdx != -1) {

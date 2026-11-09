@@ -31,6 +31,9 @@ class EditValueDescriptionsDialog : public QDialog {
 
     QStringList getDescriptions() const;
 
+  protected:
+    void done(int r) override;
+
   private slots:
     void onSaveClicked();
 
@@ -41,6 +44,8 @@ class EditValueDescriptionsDialog : public QDialog {
     QPushButton* m_cancelBtn = nullptr;
 
     void setupLayout(const QStringList& initialDescriptions);
+    void loadPositionSettings();
+    void savePositionSettings();
 };
 
 } // namespace PointerFinder2::UI
