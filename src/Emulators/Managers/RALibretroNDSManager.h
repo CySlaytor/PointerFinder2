@@ -13,12 +13,6 @@ class RALibretroNDSManager : public BaseEmulatorManager {
     static constexpr uint32_t NDS_RAM_SIZE = 0x400000; // 4MB RAM segment
     static constexpr uint32_t NDS_RAM_END = NDS_RAM_START + NDS_RAM_SIZE;
 
-    struct CoreProfile {
-        QString name;
-        int64_t searchSize;
-        int32_t offset;
-    };
-
     RALibretroNDSManager();
 
     QString getEmulatorName() const override;
@@ -45,8 +39,7 @@ class RALibretroNDSManager : public BaseEmulatorManager {
   private:
     uintptr_t m_ndsMemoryBaseInPC = 0;
     QString m_foundCoreName = "Unknown";
-    uintptr_t findBaseAddressBySize(int64_t exactRegionSizeBytes);
-    uintptr_t findModuleBase(const std::wstring& moduleName);
+    uintptr_t resolveNdsRamBase();
 };
 
 } // namespace PointerFinder2::Emulators::EmulatorManager

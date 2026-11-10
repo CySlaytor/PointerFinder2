@@ -40,7 +40,7 @@ class RALibretroGBAManager : public BaseEmulatorManager {
     QString getPlatformPointerTypeDescription(uint32_t pointerValue = 0) const override;
 
   private:
-    uintptr_t findGbaRamBase();
+    uintptr_t resolveGbaRamBase();
 };
 
 } // namespace PointerFinder2::Emulators::EmulatorManager

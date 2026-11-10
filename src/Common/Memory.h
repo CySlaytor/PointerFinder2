@@ -38,6 +38,15 @@ class Memory {
 
     // Gathers active system virtual memory mapping assignments via OS-specific APIs.
     static std::vector<MemoryRegion> queryMemoryRegions(PlatformHandle handle);
+
+    // Determines whether the target process is running as a 64-bit process.
+    static bool isProcess64Bit(PlatformHandle handle);
+
+    // Enumerates loaded modules in the target process and returns the base address of the first module matching any of the given substrings.
+    static uintptr_t findRemoteModule(PlatformHandle handle, const std::vector<std::string>& moduleSubstrings, std::string* outModuleName = nullptr);
+
+    // Executes retro_get_memory_data(memoryId) in the target process via a remote execution stub and returns the resolved pointer address.
+    static uintptr_t callRemoteRetroGetMemoryData(PlatformHandle handle, uintptr_t coreModuleBase, uint32_t memoryId = 2);
 };
 
 } // namespace PointerFinder2::Core

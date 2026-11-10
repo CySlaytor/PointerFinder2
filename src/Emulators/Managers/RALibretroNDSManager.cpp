@@ -2,18 +2,9 @@
 
 #include <windows.h>
 
-#include <psapi.h>
+#include <cctype>
 
 namespace PointerFinder2::Emulators::EmulatorManager {
-
-static const RALibretroNDSManager::CoreProfile CoreProfiles[] = {
-    {"melonDS", 17678336, 0x0},         // Updated melonDS core (0x10DC000)
-    {"melonDS (Legacy)", 17760256, 0x0} // Legacy melonDS core (0x10F0000)
-};
-
-// Offsets from desmume_libretro.dll module base (AllocationBase) to NDS RAM (0x02000000)
-static constexpr uintptr_t DESMUME_NEW_OFFSET = 0x1120F40;    // Git 8f6b32c+
-static constexpr uintptr_t DESMUME_LEGACY_OFFSET = 0x112BF40; // Older libretro builds
 
 RALibretroNDSManager::RALibretroNDSManager() = default;
 
@@ -34,44 +25,14 @@ bool RALibretroNDSManager::attach(uint32_t processId) {
         return false;
     }
 
-    // 1. First attempt: Direct module resolution for DeSmuME core (desmume_libretro.dll)
-    uintptr_t desmumeDllBase = findModuleBase(L"desmume_libretro.dll");
-    if (desmumeDllBase != 0) {
-        // Check new core offset first, then fall back to legacy offset
-        uintptr_t candidatePC = desmumeDllBase + DESMUME_NEW_OFFSET;
-        auto testRead = Core::Memory::readBytes(m_processHandle, candidatePC, 4);
-
-        if (!testRead.empty()) {
-            m_foundCoreName = "DeSmuME";
-            m_memoryBasePC = candidatePC;
-        } else {
-            candidatePC = desmumeDllBase + DESMUME_LEGACY_OFFSET;
-            testRead = Core::Memory::readBytes(m_processHandle, candidatePC, 4);
-            if (!testRead.empty()) {
-                m_foundCoreName = "DeSmuME (Legacy)";
-                m_memoryBasePC = candidatePC;
-            }
-        }
-
-        if (m_memoryBasePC != 0) {
-            m_ndsMemoryBaseInPC = m_memoryBasePC - NDS_RAM_START;
-            return true;
-        }
+    m_memoryBasePC = resolveNdsRamBase();
+    if (m_memoryBasePC == 0) {
+        detach();
+        return false;
     }
 
-    // 2. Second attempt: Region size scanning for melonDS (and other standalone cores)
-    for (const auto& profile : CoreProfiles) {
-        uintptr_t parentBlockBase = findBaseAddressBySize(profile.searchSize);
-        if (parentBlockBase != 0) {
-            m_foundCoreName = profile.name;
-            m_memoryBasePC = parentBlockBase + profile.offset;
-            m_ndsMemoryBaseInPC = m_memoryBasePC - NDS_RAM_START;
-            return true;
-        }
-    }
-
-    detach();
-    return false;
+    m_ndsMemoryBaseInPC = m_memoryBasePC - NDS_RAM_START;
+    return true;
 }
 
 // Verifies if the core DS memory blocks are still mapped and readable from RALibretro.
@@ -79,11 +40,8 @@ bool RALibretroNDSManager::verifyAttachment() {
     if (!isAttached())
         return false;
 
-    MEMORY_BASIC_INFORMATION mbi;
-    if (VirtualQueryEx(static_cast<HANDLE>(m_processHandle), reinterpret_cast<LPCVOID>(m_memoryBasePC), &mbi, sizeof(mbi)) == 0) {
-        return false;
-    }
-    return mbi.State == MEM_COMMIT;
+    uintptr_t currentBase = resolveNdsRamBase();
+    return currentBase != 0 && m_memoryBasePC == currentBase;
 }
 
 // Reads raw data directly from the emulator's active DS memory blocks.
@@ -151,38 +109,32 @@ int64_t RALibretroNDSManager::getIndexForStateDump(uint32_t address) const {
 
 QString RALibretroNDSManager::getPlatformPointerTypeDescription(uint32_t) const { return "[24-bit] Pointer"; }
 
-uintptr_t RALibretroNDSManager::findBaseAddressBySize(int64_t exactRegionSizeBytes) {
-    std::vector<uintptr_t> foundAddresses;
-    auto regions = Core::Memory::queryMemoryRegions(m_processHandle);
-    for (const auto& region : regions) {
-        if (region.isCommitted && static_cast<int64_t>(region.size) == exactRegionSizeBytes) {
-            foundAddresses.push_back(region.baseAddress);
-        }
-    }
-    return !foundAddresses.empty() ? foundAddresses.back() : 0;
-}
-
-uintptr_t RALibretroNDSManager::findModuleBase(const std::wstring& moduleName) {
+uintptr_t RALibretroNDSManager::resolveNdsRamBase() {
     if (!m_processHandle)
         return 0;
 
-    HMODULE hMods[1024];
-    DWORD cbNeeded = 0;
-    HANDLE hProcess = static_cast<HANDLE>(m_processHandle);
-
-    if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
-        int count = static_cast<int>(cbNeeded / sizeof(HMODULE));
-        for (int i = 0; i < count; ++i) {
-            wchar_t szModName[MAX_PATH];
-            if (GetModuleFileNameExW(hProcess, hMods[i], szModName, MAX_PATH)) {
-                std::wstring path(szModName);
-                if (path.find(moduleName) != std::wstring::npos) {
-                    return reinterpret_cast<uintptr_t>(hMods[i]);
-                }
-            }
-        }
+    std::string matchedModuleName;
+    // Search for NDS cores: melonDS, melonDS DS, or DeSmuME
+    uintptr_t coreModuleBase = Core::Memory::findRemoteModule(m_processHandle, {"melon", "desmume"}, &matchedModuleName);
+    if (coreModuleBase == 0) {
+        return 0;
     }
-    return 0;
+
+    std::string lowerName = matchedModuleName;
+    for (char& c : lowerName) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    if (lowerName.find("desmume") != std::string::npos) {
+        m_foundCoreName = "DeSmuME";
+    } else if (lowerName.find("melon") != std::string::npos) {
+        m_foundCoreName = "melonDS";
+    } else {
+        m_foundCoreName = QString::fromStdString(matchedModuleName);
+    }
+
+    // Query the active NDS core directly via retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM = 2)
+    return Core::Memory::callRemoteRetroGetMemoryData(m_processHandle, coreModuleBase, 2);
 }
 
 } // namespace PointerFinder2::Emulators::EmulatorManager

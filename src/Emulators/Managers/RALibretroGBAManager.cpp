@@ -10,7 +10,7 @@ QString RALibretroGBAManager::getEmulatorName() const { return "RALibretro (GBA 
 
 uint32_t RALibretroGBAManager::getMainMemoryStart() const { return GBA_EWRAM_START; }
 
-uint32_t RALibretroGBAManager::getMainMemorySize() const { return GBA_TOTAL_SIZE; }
+uint32_t RALibretroGBAManager::getMainMemorySize() const { return static_cast<uint32_t>(GBA_TOTAL_SIZE); }
 
 QString RALibretroGBAManager::getRetroAchievementsPrefix() const { return "O"; }
 
@@ -23,7 +23,7 @@ bool RALibretroGBAManager::attach(uint32_t processId) {
         return false;
     }
 
-    m_memoryBasePC = findGbaRamBase();
+    m_memoryBasePC = resolveGbaRamBase();
     if (m_memoryBasePC == 0) {
         detach();
         return false;
@@ -35,7 +35,7 @@ bool RALibretroGBAManager::attach(uint32_t processId) {
 bool RALibretroGBAManager::verifyAttachment() {
     if (!isAttached())
         return false;
-    uintptr_t currentBase = findGbaRamBase();
+    uintptr_t currentBase = resolveGbaRamBase();
     return currentBase != 0 && m_memoryBasePC == currentBase;
 }
 
@@ -44,7 +44,7 @@ std::vector<uint8_t> RALibretroGBAManager::readMemory(uint32_t address, size_t c
         return {};
 
     // Handle reading the entire state dump (both EWRAM & IWRAM combined)
-    if (address == GBA_EWRAM_START && count == GBA_TOTAL_SIZE) {
+    if (address == GBA_EWRAM_START && count == static_cast<size_t>(GBA_TOTAL_SIZE)) {
         return Core::Memory::readBytes(m_processHandle, m_memoryBasePC, count);
     }
 
@@ -104,7 +104,7 @@ uint32_t RALibretroGBAManager::unnormalizeAddress(const QString& address) const 
         // Address is in the IWRAM range (starts at GBA 0x03000000)
         return GBA_IWRAM_START + parsed;
     }
-    if (parsed >= GBA_IWRAM_SIZE && parsed < GBA_TOTAL_SIZE) {
+    if (parsed >= GBA_IWRAM_SIZE && parsed < static_cast<uint32_t>(GBA_TOTAL_SIZE)) {
         // Address is in the EWRAM range (starts at GBA 0x02000000)
         return GBA_EWRAM_START + (parsed - GBA_IWRAM_SIZE);
     }
@@ -142,16 +142,17 @@ int64_t RALibretroGBAManager::getIndexForStateDump(uint32_t address) const {
 
 QString RALibretroGBAManager::getPlatformPointerTypeDescription(uint32_t) const { return "[32-bit] Pointer"; }
 
-uintptr_t RALibretroGBAManager::findGbaRamBase() {
-    std::vector<uintptr_t> foundAddresses;
-    auto regions = Core::Memory::queryMemoryRegions(m_processHandle);
-    for (const auto& region : regions) {
-        if (region.isCommitted && static_cast<int64_t>(region.size) == GBA_TOTAL_SIZE) {
-            foundAddresses.push_back(region.baseAddress);
-        }
+uintptr_t RALibretroGBAManager::resolveGbaRamBase() {
+    if (!m_processHandle)
+        return 0;
+
+    uintptr_t coreModuleBase = Core::Memory::findRemoteModule(m_processHandle, {"mgba"});
+    if (coreModuleBase == 0) {
+        return 0;
     }
-    // Return the first matched region (lowest virtual address) to align with active GBA RAM
-    return !foundAddresses.empty() ? foundAddresses.front() : 0;
+
+    // Query the GBA core directly via retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM = 2)
+    return Core::Memory::callRemoteRetroGetMemoryData(m_processHandle, coreModuleBase, 2);
 }
 
 } // namespace PointerFinder2::Emulators::EmulatorManager

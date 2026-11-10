@@ -5,6 +5,8 @@
 #include <psapi.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cwctype>
 #include <cstring>
 
 namespace PointerFinder2::Core {
@@ -12,7 +14,10 @@ namespace PointerFinder2::Core {
 // Opens a safe connection handle to another running program using its Process ID (PID)
 // so that our scanner can read its memory banks.
 PlatformHandle Memory::openProcessHandle(uint32_t processId) {
-    HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, static_cast<DWORD>(processId));
+    HANDLE hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION, FALSE, static_cast<DWORD>(processId));
+    if (!hProcess) {
+        hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, static_cast<DWORD>(processId));
+    }
     return static_cast<PlatformHandle>(hProcess);
 }
 
@@ -126,7 +131,7 @@ uintptr_t Memory::findExportedAddress(PlatformHandle handle, uintptr_t baseAddre
         std::string currentExportName = readString(handle, baseAddress + nameRVA, 64);
 
         if (std::equal(exportName.begin(), exportName.end(), currentExportName.begin(), currentExportName.end(),
-                       [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+                       [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); })) {
 
             uint16_t ordinal = 0;
             std::memcpy(&ordinal, &ordinalTable[i * 2], sizeof(uint16_t));
@@ -189,6 +194,193 @@ std::vector<MemoryRegion> Memory::queryMemoryRegions(PlatformHandle handle) {
     }
 
     return regions;
+}
+
+bool Memory::isProcess64Bit(PlatformHandle handle) {
+    if (!handle)
+        return false;
+
+    SYSTEM_INFO si;
+    GetNativeSystemInfo(&si);
+    if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_INTEL) {
+        return false;
+    }
+
+    BOOL isWow64 = FALSE;
+    if (IsWow64Process(static_cast<HANDLE>(handle), &isWow64)) {
+        return !isWow64;
+    }
+    return sizeof(void*) == 8;
+}
+
+uintptr_t Memory::findRemoteModule(PlatformHandle handle, const std::vector<std::string>& moduleSubstrings, std::string* outModuleName) {
+    if (!handle)
+        return 0;
+
+    HMODULE hMods[1024];
+    DWORD cbNeeded = 0;
+    HANDLE hProcess = static_cast<HANDLE>(handle);
+
+    if (EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
+        int count = static_cast<int>(std::min<size_t>(cbNeeded / sizeof(HMODULE), sizeof(hMods) / sizeof(HMODULE)));
+        for (int i = 0; i < count; ++i) {
+            wchar_t szModPath[MAX_PATH];
+            if (GetModuleFileNameExW(hProcess, hMods[i], szModPath, MAX_PATH)) {
+                std::wstring wpath(szModPath);
+                for (wchar_t& wc : wpath) {
+                    wc = static_cast<wchar_t>(std::towlower(wc));
+                }
+
+                for (const auto& sub : moduleSubstrings) {
+                    std::wstring wsub;
+                    wsub.reserve(sub.length());
+                    for (char c : sub) {
+                        wsub.push_back(static_cast<wchar_t>(std::towlower(static_cast<unsigned char>(c))));
+                    }
+
+                    if (wpath.find(wsub) != std::wstring::npos) {
+                        if (outModuleName) {
+                            std::wstring rawPath(szModPath);
+                            size_t lastSlash = rawPath.find_last_of(L"\\/");
+                            std::wstring fileName = (lastSlash != std::wstring::npos) ? rawPath.substr(lastSlash + 1) : rawPath;
+
+                            int len = WideCharToMultiByte(CP_UTF8, 0, fileName.c_str(), static_cast<int>(fileName.length()), NULL, 0, NULL, NULL);
+                            if (len > 0) {
+                                outModuleName->resize(len);
+                                WideCharToMultiByte(CP_UTF8, 0, fileName.c_str(), static_cast<int>(fileName.length()), &(*outModuleName)[0], len, NULL, NULL);
+                            } else {
+                                outModuleName->clear();
+                            }
+                        }
+                        return reinterpret_cast<uintptr_t>(hMods[i]);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+uintptr_t Memory::callRemoteRetroGetMemoryData(PlatformHandle handle, uintptr_t coreModuleBase, uint32_t memoryId) {
+    if (!handle || coreModuleBase == 0)
+        return 0;
+
+    bool is64 = isProcess64Bit(handle);
+    uintptr_t funcAddr = findExportedAddress(handle, coreModuleBase, "retro_get_memory_data", is64);
+    if (funcAddr == 0)
+        return 0;
+
+    HANDLE hProcess = static_cast<HANDLE>(handle);
+    LPVOID remoteMem = VirtualAllocEx(hProcess, NULL, 0x1000, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!remoteMem)
+        return 0;
+
+    uintptr_t resultAddr = reinterpret_cast<uintptr_t>(remoteMem) + 0x800;
+    uint64_t zeroVal = 0;
+    WriteProcessMemory(hProcess, reinterpret_cast<LPVOID>(resultAddr), &zeroVal, sizeof(zeroVal), NULL);
+
+    std::vector<uint8_t> stub;
+    if (is64) {
+        uint64_t func64 = static_cast<uint64_t>(funcAddr);
+        uint64_t result64 = static_cast<uint64_t>(resultAddr);
+
+        // x64 Calling Convention:
+        // sub rsp, 0x28
+        stub.push_back(0x48); stub.push_back(0x83); stub.push_back(0xEC); stub.push_back(0x28);
+        // mov ecx, memoryId
+        stub.push_back(0xB9);
+        stub.push_back(static_cast<uint8_t>(memoryId & 0xFF));
+        stub.push_back(static_cast<uint8_t>((memoryId >> 8) & 0xFF));
+        stub.push_back(static_cast<uint8_t>((memoryId >> 16) & 0xFF));
+        stub.push_back(static_cast<uint8_t>((memoryId >> 24) & 0xFF));
+        // mov rax, funcAddr
+        stub.push_back(0x48); stub.push_back(0xB8);
+        for (int b = 0; b < 8; ++b) {
+            stub.push_back(static_cast<uint8_t>((func64 >> (b * 8)) & 0xFF));
+        }
+        // call rax
+        stub.push_back(0xFF); stub.push_back(0xD0);
+        // mov rdx, resultAddr
+        stub.push_back(0x48); stub.push_back(0xBA);
+        for (int b = 0; b < 8; ++b) {
+            stub.push_back(static_cast<uint8_t>((result64 >> (b * 8)) & 0xFF));
+        }
+        // mov [rdx], rax
+        stub.push_back(0x48); stub.push_back(0x89); stub.push_back(0x02);
+        // add rsp, 0x28
+        stub.push_back(0x48); stub.push_back(0x83); stub.push_back(0xC4); stub.push_back(0x28);
+        // xor eax, eax
+        stub.push_back(0x31); stub.push_back(0xC0);
+        // ret
+        stub.push_back(0xC3);
+    } else {
+        uint32_t func32 = static_cast<uint32_t>(funcAddr);
+        uint32_t result32 = static_cast<uint32_t>(resultAddr);
+
+        // x86 Calling Convention (__cdecl for retro_get_memory_data, __stdcall for ThreadProc):
+        // push memoryId
+        if (memoryId <= 0x7F) {
+            stub.push_back(0x6A);
+            stub.push_back(static_cast<uint8_t>(memoryId));
+        } else {
+            stub.push_back(0x68);
+            stub.push_back(static_cast<uint8_t>(memoryId & 0xFF));
+            stub.push_back(static_cast<uint8_t>((memoryId >> 8) & 0xFF));
+            stub.push_back(static_cast<uint8_t>((memoryId >> 16) & 0xFF));
+            stub.push_back(static_cast<uint8_t>((memoryId >> 24) & 0xFF));
+        }
+        // mov eax, funcAddr
+        stub.push_back(0xB8);
+        for (int b = 0; b < 4; ++b) {
+            stub.push_back(static_cast<uint8_t>((func32 >> (b * 8)) & 0xFF));
+        }
+        // call eax
+        stub.push_back(0xFF); stub.push_back(0xD0);
+        // add esp, 4
+        stub.push_back(0x83); stub.push_back(0xC4); stub.push_back(0x04);
+        // mov edx, resultAddr
+        stub.push_back(0xBA);
+        for (int b = 0; b < 4; ++b) {
+            stub.push_back(static_cast<uint8_t>((result32 >> (b * 8)) & 0xFF));
+        }
+        // mov [edx], eax
+        stub.push_back(0x89); stub.push_back(0x02);
+        // xor eax, eax
+        stub.push_back(0x31); stub.push_back(0xC0);
+        // ret 4
+        stub.push_back(0xC2); stub.push_back(0x04); stub.push_back(0x00);
+    }
+
+    SIZE_T bytesWritten = 0;
+    if (!WriteProcessMemory(hProcess, remoteMem, stub.data(), stub.size(), &bytesWritten) || bytesWritten != stub.size()) {
+        VirtualFreeEx(hProcess, remoteMem, 0, MEM_RELEASE);
+        return 0;
+    }
+
+    FlushInstructionCache(hProcess, remoteMem, stub.size());
+
+    HANDLE hThread = CreateRemoteThread(hProcess, NULL, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(remoteMem), NULL, 0, NULL);
+    if (!hThread) {
+        VirtualFreeEx(hProcess, remoteMem, 0, MEM_RELEASE);
+        return 0;
+    }
+
+    WaitForSingleObject(hThread, 2000);
+    CloseHandle(hThread);
+
+    uintptr_t resolvedBase = 0;
+    if (is64) {
+        uint64_t val64 = 0;
+        ReadProcessMemory(hProcess, reinterpret_cast<LPCVOID>(resultAddr), &val64, sizeof(val64), NULL);
+        resolvedBase = static_cast<uintptr_t>(val64);
+    } else {
+        uint32_t val32 = 0;
+        ReadProcessMemory(hProcess, reinterpret_cast<LPCVOID>(resultAddr), &val32, sizeof(val32), NULL);
+        resolvedBase = static_cast<uintptr_t>(val32);
+    }
+
+    VirtualFreeEx(hProcess, remoteMem, 0, MEM_RELEASE);
+    return resolvedBase;
 }
 
 } // namespace PointerFinder2::Core
