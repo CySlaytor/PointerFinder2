@@ -4,12 +4,14 @@
 #include "Managers/DuckStationManager.h"
 #include "Managers/Pcsx2Manager.h"
 #include "Managers/PpssppManager.h"
+#include "Managers/RALibretroDCManager.h"
 #include "Managers/RALibretroGBAManager.h"
 #include "Managers/RALibretroNDSManager.h"
 #include "Strategies/DolphinStateBasedScanner.h"
 #include "Strategies/DuckStationStateBasedScanner.h"
 #include "Strategies/Pcsx2StateBasedScanner.h"
 #include "Strategies/PpssppStateBasedScanner.h"
+#include "Strategies/RALibretroDCStateBasedScanner.h"
 #include "Strategies/RALibretroGBAStateBasedScanner.h"
 #include "Strategies/RALibretroNDSStateBasedScanner.h"
 
@@ -57,6 +59,12 @@ const std::vector<EmulatorProfile>& EmulatorProfileRegistry::getProfiles() {
                                                            {"RALibretro"},
                                                            []() { return std::make_unique<RALibretroGBAManager>(); },
                                                            []() { return std::make_unique<RALibretroGBAStateBasedScanner>(); },
+                                                           false},
+                                                          {"RALibretro (Dreamcast)",
+                                                           EmulatorTarget::RALibretroDC,
+                                                           {"RALibretro", "flycast"},
+                                                           []() { return std::make_unique<RALibretroDCManager>(); },
+                                                           []() { return std::make_unique<RALibretroDCStateBasedScanner>(); },
                                                            false}};
     return profiles;
 }

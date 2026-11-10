@@ -4,7 +4,10 @@
 
 #include <windows.h>
 
+#include <psapi.h>
 #include <tlhelp32.h>
+
+#include <QFileInfo>
 
 #include <algorithm>
 
@@ -67,6 +70,30 @@ QString getWindowTitleOfProcess(uint32_t processId) {
     }
     return QString();
 }
+
+std::vector<QString> getLoadedModuleNames(DWORD pid) {
+    std::vector<QString> modules;
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (!hProc) {
+        hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    }
+    if (!hProc)
+        return modules;
+
+    HMODULE hMods[1024];
+    DWORD cbNeeded = 0;
+    if (EnumProcessModules(hProc, hMods, sizeof(hMods), &cbNeeded)) {
+        int count = static_cast<int>(cbNeeded / sizeof(HMODULE));
+        for (int i = 0; i < count; ++i) {
+            wchar_t szModName[MAX_PATH];
+            if (GetModuleFileNameExW(hProc, hMods[i], szModName, MAX_PATH)) {
+                modules.push_back(QFileInfo(QString::fromWCharArray(szModName)).fileName().toLower());
+            }
+        }
+    }
+    CloseHandle(hProc);
+    return modules;
+}
 } // namespace
 
 namespace PointerFinder2::Core {
@@ -113,18 +140,49 @@ std::vector<DetectedEmulatorInstance> ProcessScanner::scanForRunningEmulators() 
 
                         // Distinguish between GBA and NDS core instances under the same RALibretro process name
                         if (prof.processNames.contains("RALibretro", Qt::CaseInsensitive)) {
-                            QString title = inst.windowTitle.toLower();
-                            if (!title.isEmpty()) {
-                                bool isGba = title.contains("mgba") || title.contains("gameboy") || title.contains("advance");
-                                bool isNds = title.contains("desmume") || title.contains("melonds") || title.contains("nintendo ds");
+                            auto loadedModules = getLoadedModuleNames(inst.pid);
+                            bool hasFlycast = false;
+                            bool hasNds = false;
+                            bool hasGba = false;
 
-                                if (isGba) {
-                                    if (prof.target == PointerFinder2::DataModels::EmulatorTarget::RALibretroNDS) {
-                                        continue; // Skip NDS since GBA is explicitly active
+                            for (const auto& mod : loadedModules) {
+                                if (mod.contains("flycast_libretro")) {
+                                    hasFlycast = true;
+                                } else if (mod.contains("melondsds_libretro") || mod.contains("melonds_libretro") ||
+                                           mod.contains("desmume_libretro")) {
+                                    hasNds = true;
+                                } else if (mod.contains("mgba_libretro")) {
+                                    hasGba = true;
+                                }
+                            }
+
+                            // If loaded core DLLs are detected, use them as the primary source of truth
+                            if (hasFlycast || hasNds || hasGba) {
+                                if (hasFlycast && prof.target != PointerFinder2::DataModels::EmulatorTarget::RALibretroDC) {
+                                    continue;
+                                }
+                                if (hasNds && prof.target != PointerFinder2::DataModels::EmulatorTarget::RALibretroNDS) {
+                                    continue;
+                                }
+                                if (hasGba && prof.target != PointerFinder2::DataModels::EmulatorTarget::RALibretroGBA) {
+                                    continue;
+                                }
+                            } else {
+                                // Fallback to window caption heuristics if process module enumeration is unavailable
+                                QString title = inst.windowTitle.toLower();
+                                if (!title.isEmpty()) {
+                                    bool isDc = title.contains("flycast") || title.contains("dreamcast");
+                                    bool isGba = title.contains("mgba") || title.contains("gameboy");
+                                    bool isNds = title.contains("desmume") || title.contains("melonds") || title.contains("nintendo ds");
+
+                                    if (isDc && prof.target != PointerFinder2::DataModels::EmulatorTarget::RALibretroDC) {
+                                        continue;
                                     }
-                                } else if (isNds) {
-                                    if (prof.target == PointerFinder2::DataModels::EmulatorTarget::RALibretroGBA) {
-                                        continue; // Skip GBA since NDS is explicitly active
+                                    if (isGba && prof.target != PointerFinder2::DataModels::EmulatorTarget::RALibretroGBA) {
+                                        continue;
+                                    }
+                                    if (isNds && prof.target != PointerFinder2::DataModels::EmulatorTarget::RALibretroNDS) {
+                                        continue;
                                     }
                                 }
                             }

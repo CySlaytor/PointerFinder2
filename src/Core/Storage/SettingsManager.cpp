@@ -27,6 +27,8 @@ QString SettingsManager::getSectionName(EmulatorTarget target) {
         return "Scanner_PPSSPP";
     case EmulatorTarget::RALibretroGBA:
         return "Scanner_RALibretroGBA";
+    case EmulatorTarget::RALibretroDC:
+        return "Scanner_RALibretroDC";
     }
     return "Scanner_Unknown";
 }

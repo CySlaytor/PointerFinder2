@@ -100,6 +100,8 @@ QString StateCaptureDialog::getPlatformString() const {
         return "PS2";
     if (emu.contains("DuckStation", Qt::CaseInsensitive))
         return "PS1";
+    if (emu.contains("Dreamcast", Qt::CaseInsensitive) || emu.contains("Flycast", Qt::CaseInsensitive))
+        return "DC";
     if (emu.contains("GBA", Qt::CaseInsensitive))
         return "GBA";
     if (emu.contains("RALibretro", Qt::CaseInsensitive) || emu.contains("NDS", Qt::CaseInsensitive))
