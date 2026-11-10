@@ -47,6 +47,7 @@ class DolphinManager : public BaseEmulatorManager {
     uintptr_t m_mem2BasePC = 0;
 
     std::vector<uintptr_t> findCandidateAddresses(uintptr_t exactRegionSize);
+    bool isValidGameHeader(uintptr_t address, bool* outIsWii = nullptr);
 };
 
 } // namespace PointerFinder2::Emulators::EmulatorManager

@@ -3,7 +3,10 @@
 #include "../../Common/EndianUtils.h"
 #include "../../Models/PointerPath.h"
 
+#include <windows.h>
+
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 
 namespace PointerFinder2::Emulators::EmulatorManager {
@@ -27,6 +30,34 @@ uint32_t DolphinManager::getMainMemorySize() const { return m_detectedSystem == 
 
 QString DolphinManager::getRetroAchievementsPrefix() const { return "G"; }
 
+bool DolphinManager::isValidGameHeader(uintptr_t address, bool* outIsWii) {
+    if (!m_processHandle || address == 0)
+        return false;
+
+    // Read first 6 bytes for Game ID header (ASCII)
+    auto headerBytes = Core::Memory::readBytes(m_processHandle, address, 6);
+    if (headerBytes.size() < 6)
+        return false;
+
+    bool allPrintable = true;
+    for (uint8_t b : headerBytes) {
+        if (b < 32 || b > 126) {
+            allPrintable = false;
+            break;
+        }
+    }
+
+    if (!allPrintable)
+        return false;
+
+    char firstChar = static_cast<char>(std::toupper(headerBytes[0]));
+    if (outIsWii) {
+        // Standard Wii disc identifiers start with R, S, W, or H
+        *outIsWii = (firstChar == 'R' || firstChar == 'S' || firstChar == 'W' || firstChar == 'H');
+    }
+    return true;
+}
+
 bool DolphinManager::attach(uint32_t processId) {
     detach();
     m_processId = processId;
@@ -46,36 +77,59 @@ bool DolphinManager::attach(uint32_t processId) {
         mem2Candidates = findCandidateAddresses(64 * 1024 * 1024);
     }
 
-    if (mem1Candidates.empty()) {
+    // Locate verified MEM1 candidate by checking the game header
+    uintptr_t verifiedMem1 = 0;
+    bool headerIndicatesWii = false;
+
+    for (uintptr_t cand : mem1Candidates) {
+        bool isWii = false;
+        if (isValidGameHeader(cand, &isWii)) {
+            verifiedMem1 = cand;
+            headerIndicatesWii = isWii;
+            break;
+        }
+    }
+
+    if (verifiedMem1 == 0 && !mem1Candidates.empty()) {
+        verifiedMem1 = mem1Candidates.back();
+    }
+
+    if (verifiedMem1 == 0) {
         detach();
         return false;
     }
 
+    m_memoryBasePC = verifiedMem1;
+
     // Detect Wii mode by calculating the distance between discovered MEM1 and MEM2 pages.
+    // 1. First check Dolphin's Fastmem Arena where MEM2 is mapped at exactly MEM1 + 0x10000000 (256 MB)
+    uintptr_t fastmemMem2 = m_memoryBasePC + 0x10000000ULL;
+    MEMORY_BASIC_INFORMATION mbi;
+    if (VirtualQueryEx(static_cast<HANDLE>(m_processHandle), reinterpret_cast<LPCVOID>(fastmemMem2), &mbi, sizeof(mbi)) != 0 &&
+        mbi.State == MEM_COMMIT && static_cast<uint32_t>(mbi.RegionSize) >= MEM2_SIZE) {
+        m_mem2BasePC = fastmemMem2;
+        m_detectedSystem = SystemType::Wii;
+        return true;
+    }
+
+    // 2. Fallback: check discrete MEM2 candidate allocations
     if (!mem2Candidates.empty()) {
         bool wiiDetected = false;
-        for (uintptr_t m1 : mem1Candidates) {
-            for (uintptr_t m2 : mem2Candidates) {
-                int64_t diff = static_cast<int64_t>(m2) - static_cast<int64_t>(m1);
-                if (diff >= (24 * 1024 * 1024) && diff <= 0x10000000LL) {
-                    m_memoryBasePC = m1;
-                    m_mem2BasePC = m2;
-                    m_detectedSystem = SystemType::Wii;
-                    wiiDetected = true;
-                    break;
-                }
-            }
-            if (wiiDetected)
+        for (uintptr_t m2 : mem2Candidates) {
+            int64_t diff = static_cast<int64_t>(m2) - static_cast<int64_t>(m_memoryBasePC);
+            if (diff >= static_cast<int64_t>(MEM1_SIZE) && diff <= 0x10000000LL) {
+                m_mem2BasePC = m2;
+                m_detectedSystem = SystemType::Wii;
+                wiiDetected = true;
                 break;
+            }
         }
 
         if (!wiiDetected) {
-            m_memoryBasePC = mem1Candidates.back();
-            m_detectedSystem = SystemType::GameCube;
+            m_detectedSystem = headerIndicatesWii ? SystemType::Wii : SystemType::GameCube;
         }
     } else {
-        m_memoryBasePC = mem1Candidates.back();
-        m_detectedSystem = SystemType::GameCube;
+        m_detectedSystem = headerIndicatesWii ? SystemType::Wii : SystemType::GameCube;
     }
 
     return true;
@@ -86,33 +140,24 @@ bool DolphinManager::verifyAttachment() {
     if (!isAttached())
         return false;
 
-    auto mem1Candidates = findCandidateAddresses(MEM1_SIZE);
-    if (mem1Candidates.empty()) {
-        mem1Candidates = findCandidateAddresses(32 * 1024 * 1024);
-    }
-    if (mem1Candidates.empty())
+    MEMORY_BASIC_INFORMATION mbi;
+    if (VirtualQueryEx(static_cast<HANDLE>(m_processHandle), reinterpret_cast<LPCVOID>(m_memoryBasePC), &mbi, sizeof(mbi)) == 0) {
         return false;
+    }
+    if (mbi.State != MEM_COMMIT) {
+        return false;
+    }
 
-    if (m_detectedSystem == SystemType::Wii) {
-        auto mem2Candidates = findCandidateAddresses(MEM2_SIZE);
-        if (mem2Candidates.empty()) {
-            mem2Candidates = findCandidateAddresses(64 * 1024 * 1024);
-        }
-        if (mem2Candidates.empty())
+    if (m_detectedSystem == SystemType::Wii && m_mem2BasePC != 0) {
+        if (VirtualQueryEx(static_cast<HANDLE>(m_processHandle), reinterpret_cast<LPCVOID>(m_mem2BasePC), &mbi, sizeof(mbi)) == 0) {
             return false;
-
-        for (uintptr_t m1 : mem1Candidates) {
-            for (uintptr_t m2 : mem2Candidates) {
-                int64_t diff = static_cast<int64_t>(m2) - static_cast<int64_t>(m1);
-                if (diff >= (24 * 1024 * 1024) && diff <= 0x10000000LL) {
-                    return m_memoryBasePC == m1 && m_mem2BasePC == m2;
-                }
-            }
         }
-        return false;
-    } else {
-        return m_memoryBasePC == mem1Candidates.back();
+        if (mbi.State != MEM_COMMIT) {
+            return false;
+        }
     }
+
+    return true;
 }
 
 // Reads active RAM blocks, stitching Wii MEM1 and MEM2 segments together if running a full dump.
