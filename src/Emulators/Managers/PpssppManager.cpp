@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <cstring>
+
 namespace PointerFinder2::Emulators::EmulatorManager {
 
 PpssppManager::PpssppManager() = default;
@@ -36,8 +38,12 @@ bool PpssppManager::attach(uint32_t processId) {
 bool PpssppManager::verifyAttachment() {
     if (!isAttached())
         return false;
-    uintptr_t currentBase = findPspRamBaseBySize();
-    return currentBase != 0 && m_memoryBasePC == currentBase;
+
+    MEMORY_BASIC_INFORMATION mbi;
+    if (VirtualQueryEx(static_cast<HANDLE>(m_processHandle), reinterpret_cast<LPCVOID>(m_memoryBasePC), &mbi, sizeof(mbi)) == 0) {
+        return false;
+    }
+    return (mbi.State == MEM_COMMIT) && (static_cast<int64_t>(mbi.RegionSize) >= PSP_SCAN_SIZE);
 }
 
 // Reads raw data directly from the emulator's active PSP memory block.
@@ -114,14 +120,31 @@ int64_t PpssppManager::getIndexForStateDump(uint32_t address) const {
 QString PpssppManager::getPlatformPointerTypeDescription(uint32_t) const { return "[32-bit & 0x1FFFFFF] Pointer"; }
 
 uintptr_t PpssppManager::findPspRamBaseBySize() {
-    std::vector<uintptr_t> foundAddresses;
     auto regions = Core::Memory::queryMemoryRegions(m_processHandle);
+
+    // Primary pass: Match the 31MB MAX_MMAP_SIZE region and verify the active PSP kernel header
     for (const auto& region : regions) {
         if (region.isCommitted && static_cast<int64_t>(region.size) == PSP_SCAN_SIZE) {
-            foundAddresses.push_back(region.baseAddress);
+            auto testBytes = Core::Memory::readBytes(m_processHandle, region.baseAddress, 8);
+            if (testBytes.size() == 8) {
+                uint32_t w0 = 0, w1 = 0;
+                std::memcpy(&w0, &testBytes[0], 4);
+                std::memcpy(&w1, &testBytes[4], 4);
+                if (w0 != 0 || w1 != 0) {
+                    return region.baseAddress;
+                }
+            }
         }
     }
-    return !foundAddresses.empty() ? foundAddresses.back() : 0;
+
+    // Fallback pass: If the memory was just reserved/mapped during boot before vectors were written
+    for (const auto& region : regions) {
+        if (region.isCommitted && static_cast<int64_t>(region.size) == PSP_SCAN_SIZE) {
+            return region.baseAddress;
+        }
+    }
+
+    return 0;
 }
 
 } // namespace PointerFinder2::Emulators::EmulatorManager
