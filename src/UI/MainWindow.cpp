@@ -835,7 +835,7 @@ void MainWindow::onCodeNoteConverterClicked() {
     m_codeNoteConverterDialog->show();
 }
 
-void MainWindow::onTutorialClicked() { QDesktopServices::openUrl(QUrl("https://youtu.be/QwHTML0kRtI")); }
+void MainWindow::onTutorialClicked() { QDesktopServices::openUrl(QUrl("https://youtube.com/playlist?list=PLcmSFK_5WBoc&si=Kg_ScwcMWNgP6Zaj")); }
 
 void MainWindow::onAboutClicked() {
     AboutDialog dialog(this);
