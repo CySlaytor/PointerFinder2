@@ -30,6 +30,7 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QSplitter>
+#include <QSplitterHandle>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -41,6 +42,140 @@ namespace PointerFinder2::UI {
 
 using namespace PointerFinder2::DataModels;
 using namespace PointerFinder2::Core;
+
+namespace {
+class LockedCenterSplitter;
+
+// Custom handle intercepting mouse drags to preserve the Memory Viewer's fixed width
+class LockedCenterHandle : public QSplitterHandle {
+  public:
+    LockedCenterHandle(Qt::Orientation orientation, LockedCenterSplitter* parent)
+        : QSplitterHandle(orientation, reinterpret_cast<QSplitter*>(parent)) {}
+
+  protected:
+    void mousePressEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton) {
+            m_mouseOffset = event->pos().x();
+        }
+        QSplitterHandle::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override;
+
+  private:
+    int m_mouseOffset = 0;
+};
+
+// Specialized horizontal splitter that locks the center panel (Memory Viewer) to a fixed width
+// while allowing dragging either splitter handle to redistribute space strictly between panels 0 and 2.
+class LockedCenterSplitter : public QSplitter {
+  public:
+    using QSplitter::QSplitter;
+
+    void setFixedCenterWidth(int width) {
+        m_fixedCenterWidth = width;
+    }
+
+    int fixedCenterWidth() const {
+        return m_fixedCenterWidth;
+    }
+
+    void applySplitterMove(int pos, int index) {
+        QList<int> currentSizes = sizes();
+        if (currentSizes.size() != 3 || m_fixedCenterWidth <= 0) {
+            return;
+        }
+
+        int fixedW = m_fixedCenterWidth;
+        int totalW = width() - (2 * handleWidth());
+        bool panel2Visible = (currentSizes[2] > 0);
+
+        if (!panel2Visible) {
+            setSizes({std::max(0, totalW - fixedW), fixedW, 0});
+            return;
+        }
+
+        int min0 = widget(0) ? widget(0)->minimumWidth() : 280;
+        int min2 = widget(2) ? widget(2)->minimumWidth() : 320;
+        if (min0 <= 0) min0 = 280;
+        if (min2 <= 0) min2 = 320;
+
+        int max0 = totalW - fixedW - min2;
+        if (max0 < min0) {
+            max0 = min0;
+        }
+
+        int new0 = currentSizes[0];
+        if (index == 1) {
+            // Dragging handle between Structure Hierarchy and Memory Viewer
+            new0 = qBound(min0, pos, max0);
+        } else if (index == 2) {
+            // Dragging handle between Memory Viewer and Code Notes
+            int candidate0 = pos - handleWidth() - fixedW;
+            new0 = qBound(min0, candidate0, max0);
+        }
+
+        int new2 = std::max(min2, totalW - new0 - fixedW);
+        setSizes({new0, fixedW, new2});
+    }
+
+  protected:
+    QSplitterHandle* createHandle() override {
+        return new LockedCenterHandle(orientation(), this);
+    }
+
+    void resizeEvent(QResizeEvent* event) override {
+        QSplitter::resizeEvent(event);
+        QList<int> s = sizes();
+        if (s.size() == 3 && m_fixedCenterWidth > 0) {
+            int total = width() - (2 * handleWidth());
+            if (s[2] > 0) {
+                int remaining = total - m_fixedCenterWidth;
+                int sum02 = s[0] + s[2];
+                if (sum02 > 0) {
+                    int min0 = widget(0) ? widget(0)->minimumWidth() : 280;
+                    int min2 = widget(2) ? widget(2)->minimumWidth() : 320;
+                    int new0 = std::max(min0, (remaining * s[0]) / sum02);
+                    int new2 = remaining - new0;
+                    if (new2 < min2 && remaining >= min0 + min2) {
+                        new2 = min2;
+                        new0 = remaining - new2;
+                    }
+                    setSizes({new0, m_fixedCenterWidth, std::max(0, new2)});
+                }
+            } else {
+                setSizes({std::max(0, total - m_fixedCenterWidth), m_fixedCenterWidth, 0});
+            }
+        }
+    }
+
+  private:
+    int m_fixedCenterWidth = 0;
+};
+
+void LockedCenterHandle::mouseMoveEvent(QMouseEvent* event) {
+    if (!(event->buttons() & Qt::LeftButton)) {
+        QSplitterHandle::mouseMoveEvent(event);
+        return;
+    }
+    auto* sp = static_cast<LockedCenterSplitter*>(splitter());
+    if (!sp) {
+        QSplitterHandle::mouseMoveEvent(event);
+        return;
+    }
+
+    int idx = 1;
+    for (int i = 1; i < sp->count(); ++i) {
+        if (sp->handle(i) == this) {
+            idx = i;
+            break;
+        }
+    }
+
+    int pos = parentWidget()->mapFromGlobal(event->globalPosition().toPoint()).x() - m_mouseOffset;
+    sp->applySplitterMove(pos, idx);
+}
+} // namespace
 
 StructureWorkspaceDialog::StructureWorkspaceDialog(Emulators::IEmulatorManager* manager, QWidget* parent)
     : QDialog(parent), m_manager(manager) {
@@ -138,7 +273,7 @@ void StructureWorkspaceDialog::setupLayout() {
     m_addressBar = new DissectAddressBar(contentWidget);
     contentLayout->addWidget(m_addressBar);
 
-    m_mainSplitter = new QSplitter(Qt::Horizontal, contentWidget);
+    m_mainSplitter = new LockedCenterSplitter(Qt::Horizontal, contentWidget);
 
     // --- Left Panel: Structure Editor ---
     m_hierarchyWidget = new StructureHierarchyWidget(m_mainSplitter);
@@ -165,7 +300,7 @@ void StructureWorkspaceDialog::setupLayout() {
     viewerTopRow->addWidget(m_refreshRamBtn);
 
     m_ramStatusLabel = new QLabel("No dump loaded.", m_middleContainer);
-    m_ramStatusLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+    m_ramStatusLabel->setObjectName("ramStatusLabel");
     m_ramStatusLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     m_ramStatusLabel->setMinimumWidth(0);
     viewerTopRow->addWidget(m_ramStatusLabel);
@@ -215,7 +350,8 @@ void StructureWorkspaceDialog::setupLayout() {
 
     // Enforce the 32-bit content width floor so the splitter cannot shrink Panel 2 past its grid
     int contentWidth32 = m_memoryViewer->getContentWidth32Bit();
-    m_middleContainer->setMinimumWidth(contentWidth32);
+    m_middleContainer->setFixedWidth(contentWidth32);
+    static_cast<LockedCenterSplitter*>(m_mainSplitter)->setFixedCenterWidth(contentWidth32);
 
     // Memory Controls Bar (positioned at bottom)
     auto* viewerBottomRow = new QHBoxLayout();
@@ -243,7 +379,6 @@ void StructureWorkspaceDialog::setupLayout() {
 
     m_navHistoryLabel = new QLabel("0/0", m_middleContainer);
     m_navHistoryLabel->setObjectName("navHistoryLabel");
-    m_navHistoryLabel->setStyleSheet("color: #8B949E; font-size: 11px; font-weight: bold; padding: 0 4px;");
     viewerBottomRow->addWidget(m_navHistoryLabel);
 
     viewerBottomRow->addStretch();
@@ -288,7 +423,7 @@ void StructureWorkspaceDialog::setupLayout() {
 
     m_statusLabel = new QLabel("Status: Ready", this);
     m_statusPermanentLabel = new QLabel(this);
-    m_statusPermanentLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+    m_statusPermanentLabel->setObjectName("statusPermanentLabel");
 
     m_statusBar->addWidget(m_statusLabel, 1);
     m_statusBar->addPermanentWidget(m_statusPermanentLabel);
@@ -1999,21 +2134,21 @@ void StructureWorkspaceDialog::onToggleCodeNotePanelClicked() {
     if (sizes.size() < 3)
         return;
 
+    int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
+
     if (sizes[2] > 0) {
         m_lastCodeNotePanelWidth = sizes[2];
         m_codeNoteEditor->setMinimumWidth(0);
         sizes[2] = 0;
-        // Distribute available space evenly (50/50) between Panel 0 and Panel 1 in compact mode
+        // Distribute available space to Panel 0 while strictly locking Panel 1 to fixed content width
         int totalAvailable = m_mainSplitter->width() - m_mainSplitter->handleWidth() * 2;
-        int half = totalAvailable / 2;
-        sizes[0] = half;
-        sizes[1] = totalAvailable - half;
+        sizes[0] = std::max(280, totalAvailable - contentW32);
+        sizes[1] = contentW32;
         m_mainSplitter->setSizes(sizes);
         m_addressBar->setCodeNotePanelButtonChecked(false);
         showStatusMessage("Code note panel collapsed.");
     } else {
         int restoreWidth = (m_lastCodeNotePanelWidth >= 320) ? m_lastCodeNotePanelWidth : 350;
-        int contentW32 = m_memoryViewer ? m_memoryViewer->getContentWidth32Bit() : 485;
 
         m_codeNoteEditor->setMinimumWidth(320);
 
@@ -2133,12 +2268,10 @@ void StructureWorkspaceDialog::loadWorkspaceSettings() {
     bool panelVisible = settings.value("codeNotePanelVisible", true).toBool();
 
     int hWidth = settings.value("panelHierarchyWidth", 380).toInt();
-    int mWidth = settings.value("panelMemoryViewWidth", contentW32).toInt();
     int cWidth = settings.value("panelCodeNoteWidth", 380).toInt();
 
     // Enforce healthy minimums
     hWidth = std::max(280, hWidth);
-    mWidth = std::max(contentW32, mWidth);
     if (panelVisible) {
         cWidth = std::max(320, cWidth);
         m_codeNoteEditor->setMinimumWidth(320);
@@ -2152,7 +2285,7 @@ void StructureWorkspaceDialog::loadWorkspaceSettings() {
     savedHeight = std::max(savedHeight, DEFAULT_WINDOW_HEIGHT);
     resize(savedWidth, savedHeight);
 
-    m_mainSplitter->setSizes({hWidth, mWidth, cWidth});
+    m_mainSplitter->setSizes({hWidth, contentW32, cWidth});
 
     if (isMax) {
         showMaximized();

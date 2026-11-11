@@ -192,7 +192,7 @@ void CloneStrideDialog::setupLayout() {
     m_strideSpin->setValue(static_cast<int>(detectedStride));
     m_strideSpin->setFixedWidth(90);
     m_strideHexLabel = new QLabel(QString("(+0x%1)").arg(QString::number(detectedStride, 16).toUpper()), this);
-    m_strideHexLabel->setStyleSheet("color: #58A6FF; font-weight: bold; font-family: Consolas;");
+    m_strideHexLabel->setObjectName("strideHexLabel");
     strideLayout->addWidget(m_strideSpin);
     strideLayout->addWidget(m_strideHexLabel);
     strideLayout->addStretch();
@@ -209,7 +209,7 @@ void CloneStrideDialog::setupLayout() {
     formGrid->addWidget(m_countSpin, 1, 1);
 
     QLabel* tokensHelpLabel = new QLabel("Tokens: <b>{INDEX}</b>, <b>{INDEX:02}</b>, <b>{OFFSET}</b>, <b>{NAME}</b>", this);
-    tokensHelpLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+    tokensHelpLabel->setObjectName("subTextDescLabel");
     formGrid->addWidget(tokensHelpLabel, 1, 2, 1, 2);
 
     // Row 2: Template String
@@ -226,7 +226,7 @@ void CloneStrideDialog::setupLayout() {
     tableDescLayout->setSpacing(2);
     tableDescLayout->addWidget(new QLabel("<b>Generated Code Notes (Excel-Style In-Cell Editing):</b>", this));
     auto* hintLabel = new QLabel("Double-click any cell to customize names/titles. Staged in memory until saved.", this);
-    hintLabel->setStyleSheet("color: #8B949E; font-size: 11px;");
+    hintLabel->setObjectName("subTextDescLabel");
     tableDescLayout->addWidget(hintLabel);
     tableHeaderLayout->addLayout(tableDescLayout);
     tableHeaderLayout->addStretch();

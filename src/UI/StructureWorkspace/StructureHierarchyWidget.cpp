@@ -508,7 +508,7 @@ void StructureHierarchyWidget::setupLayout() {
     m_metadataTree->addAction(removeKeyAction);
 
     m_offsetPreviewLabel = new QLabel("Select an address in Memory Viewer to calculate relative offset.", this);
-    m_offsetPreviewLabel->setStyleSheet("font-weight: bold; color: #58A6FF; padding: 4px; border: 1px solid #30363D; border-radius: 4px;");
+    m_offsetPreviewLabel->setObjectName("offsetPreviewLabel");
     leftLayout->addWidget(m_offsetPreviewLabel);
 
     auto* treeButtonsRow = new QHBoxLayout();
@@ -558,10 +558,11 @@ void StructureHierarchyWidget::setupLayout() {
     m_toggleMetadataBtn->setAutoDefault(false);
     m_toggleMetadataBtn->setDefault(false);
 
+    // Reordered exactly to: Add Variable | Add Pointer | Follow Pointer | Descriptions | Remove | Metadata
     treeButtonsRow->addWidget(m_addVariableBtn, 1);
     treeButtonsRow->addWidget(m_addPointerBtn, 1);
-    treeButtonsRow->addWidget(m_descriptionsBtn, 1);
     treeButtonsRow->addWidget(m_followPointerBtn, 1);
+    treeButtonsRow->addWidget(m_descriptionsBtn, 1);
     treeButtonsRow->addWidget(m_removeNodeBtn, 1);
     treeButtonsRow->addWidget(m_toggleMetadataBtn, 1);
     leftLayout->addLayout(treeButtonsRow);
@@ -1580,7 +1581,7 @@ void StructureHierarchyWidget::openSizeDropdown(QTreeWidgetItem* item, const QPo
     QString currentSize = metaItem->text(META_COL_SIZE).trimmed();
 
     QMenu menu(this);
-    menu.setStyleSheet("QMenu { font-family: 'Consolas', 'Segoe UI', monospace; font-size: 11px; }");
+    menu.setObjectName("sizeDropdownMenu");
 
     for (const auto& type : StandardRATypes) {
         QAction* act = menu.addAction(type);

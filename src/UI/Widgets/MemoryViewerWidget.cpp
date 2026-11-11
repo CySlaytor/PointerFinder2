@@ -268,79 +268,6 @@ void MemoryViewerWidget::updateRangeBanner() {
         return;
     }
 
-    bool isDark = (palette().color(QPalette::Base).lightness() < 128);
-    if (isDark) {
-        m_rangeBannerWidget->setStyleSheet("#rangeBannerWidget {"
-                                           "    background-color: #21162E;"
-                                           "    border: 1px solid #A371F7;"
-                                           "    border-radius: 5px;"
-                                           "    padding: 3px 6px;"
-                                           "}"
-                                           "QLabel {"
-                                           "    color: #E2D9F3;"
-                                           "    font-weight: bold;"
-                                           "    font-size: 11px;"
-                                           "}"
-                                           "QPushButton#defineArrayBtn {"
-                                           "    background-color: #7928CA;"
-                                           "    color: #ffffff;"
-                                           "    border: 1px solid #A371F7;"
-                                           "    border-radius: 3px;"
-                                           "    font-weight: bold;"
-                                           "    font-size: 11px;"
-                                           "    padding: 2px 10px;"
-                                           "}"
-                                           "QPushButton#defineArrayBtn:hover {"
-                                           "    background-color: #8A3FFC;"
-                                           "}"
-                                           "QPushButton#closeBannerBtn {"
-                                           "    background: transparent;"
-                                           "    color: #b0a0cc;"
-                                           "    border: none;"
-                                           "    font-weight: bold;"
-                                           "    font-size: 12px;"
-                                           "    padding: 0 4px;"
-                                           "}"
-                                           "QPushButton#closeBannerBtn:hover {"
-                                           "    color: #ffffff;"
-                                           "}");
-    } else {
-        m_rangeBannerWidget->setStyleSheet("#rangeBannerWidget {"
-                                           "    background-color: #F3EBFF;"
-                                           "    border: 1px solid #A371F7;"
-                                           "    border-radius: 5px;"
-                                           "    padding: 3px 6px;"
-                                           "}"
-                                           "QLabel {"
-                                           "    color: #4C1D95;"
-                                           "    font-weight: bold;"
-                                           "    font-size: 11px;"
-                                           "}"
-                                           "QPushButton#defineArrayBtn {"
-                                           "    background-color: #7928CA;"
-                                           "    color: #ffffff;"
-                                           "    border: 1px solid #6B21A8;"
-                                           "    border-radius: 3px;"
-                                           "    font-weight: bold;"
-                                           "    font-size: 11px;"
-                                           "    padding: 2px 10px;"
-                                           "}"
-                                           "QPushButton#defineArrayBtn:hover {"
-                                           "    background-color: #6B21A8;"
-                                           "}"
-                                           "QPushButton#closeBannerBtn {"
-                                           "    background: transparent;"
-                                           "    color: #7C3AED;"
-                                           "    border: none;"
-                                           "    font-weight: bold;"
-                                           "    font-size: 12px;"
-                                           "    padding: 0 4px;"
-                                           "}"
-                                           "QPushButton#closeBannerBtn:hover {"
-                                           "    color: #4C1D95;"
-                                           "}");
-    }
-
     QString text = QString("Selected: 0x%1 - 0x%2 (%3 bytes / 0x%4)")
                        .arg(QString("%1").arg(m_rangeStart, 8, 16, QChar('0')).toUpper())
                        .arg(QString("%1").arg(m_rangeEnd, 8, 16, QChar('0')).toUpper())
@@ -887,7 +814,7 @@ void MemoryViewerWidget::keyPressEvent(QKeyEvent* event) {
             int regIdx = static_cast<int>(curReg - &m_regions.front());
             if (regIdx > 0) {
                 const auto& prevReg = m_regions[regIdx - 1];
-                uint32_t targetEnd = prevReg.startAddress + static_cast<uint32_t>(prevReg.size) - step;
+                uint32_t targetEnd = prevReg.startAddress + static_cast<uint32_t>(prevReg.size) - 16 - step;
                 setSelectedAddress(targetEnd, false, false);
             }
         }

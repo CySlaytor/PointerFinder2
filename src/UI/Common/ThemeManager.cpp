@@ -154,16 +154,6 @@ void ThemeManager::loadStylesheet(QApplication& app, const QString& resourcePath
         QTextStream stream(&file);
         QString stylesheet = stream.readAll();
         file.close();
-
-        // Enforce explicit QToolTip styling to prevent custom Windows themes (such as Rectify11) from overriding tooltip background colors
-        bool isLight = resourcePath.contains("light", Qt::CaseInsensitive);
-        if (isLight) {
-            stylesheet.append("\nQToolTip { background-color: #F8F8F8; color: #202020; border: 1px solid #C8C8C8; border-radius: 3px; "
-                              "padding: 2px 4px; font-size: 11px; margin: 0px; }\n");
-        } else {
-            stylesheet.append("\nQToolTip { background-color: #202020; color: #F0F0F0; border: 1px solid #3A3A3A; border-radius: 3px; "
-                              "padding: 2px 4px; font-size: 11px; margin: 0px; }\n");
-        }
         app.setStyleSheet(stylesheet);
     } else {
         app.setStyleSheet("");

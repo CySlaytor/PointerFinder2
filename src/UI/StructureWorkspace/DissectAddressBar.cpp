@@ -3,9 +3,11 @@
 #include "Models/GlobalSettings.h"
 #include "UI/Common/ThemeManager.h"
 
+#include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListView>
+#include <QProxyStyle>
 #include <QTimer>
 
 #include <algorithm>
@@ -14,6 +16,22 @@ namespace PointerFinder2::UI {
 
 using namespace PointerFinder2::Core;
 using namespace PointerFinder2::DataModels;
+
+namespace {
+// Enforces classic Win32/WinForms dropdown behavior: drops DOWN directly below the combobox,
+// respects maxVisibleItems, enables native slide animation, and prevents popping over the widget.
+class Win32ComboBoxStyle : public QProxyStyle {
+  public:
+    using QProxyStyle::QProxyStyle;
+    int styleHint(StyleHint hint, const QStyleOption* option = nullptr, const QWidget* widget = nullptr,
+                  QStyleHintReturn* returnData = nullptr) const override {
+        if (hint == QStyle::SH_ComboBox_Popup) {
+            return 0; // 0 = false: classic Windows dropdown below control
+        }
+        return QProxyStyle::styleHint(hint, option, widget, returnData);
+    }
+};
+} // namespace
 
 DissectAddressBar::DissectAddressBar(QWidget* parent) : QWidget(parent) { setupLayout(); }
 
@@ -44,6 +62,10 @@ void DissectAddressBar::setupLayout() {
     m_addressSelectCombo->setMinimumWidth(280);
     m_addressSelectCombo->setFixedHeight(26);
 
+    // Apply Win32 style hint so the dropdown drops down below the box and animates smoothly
+    m_addressSelectCombo->setStyle(new Win32ComboBoxStyle(m_addressSelectCombo->style()));
+    QApplication::setEffectEnabled(Qt::UI_AnimateCombo, true);
+
     // Model and filter proxy setup for real-time dropdown shrinking
     m_addressSourceModel = new QStandardItemModel(this);
     m_addressProxyModel = new AddressFilterProxyModel(this);
@@ -53,38 +75,10 @@ void DissectAddressBar::setupLayout() {
     // Win32 classic compact dropdown appearance configuration
     m_addressSelectCombo->setMaxVisibleItems(14);
     auto* popupView = new QListView(m_addressSelectCombo);
+    popupView->setObjectName("addressSelectPopupView");
     popupView->setUniformItemSizes(true);
     popupView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     popupView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-
-    bool isDark = (GlobalSettings::activeTheme.compare("Light", Qt::CaseInsensitive) != 0);
-    popupView->setStyleSheet(QString("QListView {"
-                                     "    background-color: %1;"
-                                     "    color: %2;"
-                                     "    border: 1px solid %3;"
-                                     "    padding: 1px;"
-                                     "    outline: 0;"
-                                     "    font-family: 'Consolas', 'Segoe UI', monospace;"
-                                     "    font-size: 11px;"
-                                     "}"
-                                     "QListView::item {"
-                                     "    height: 19px;"
-                                     "    min-height: 19px;"
-                                     "    padding: 1px 4px;"
-                                     "}"
-                                     "QListView::item:hover {"
-                                     "    background-color: %6;"
-                                     "}"
-                                     "QListView::item:selected {"
-                                     "    background-color: %4;"
-                                     "    color: %5;"
-                                     "}")
-                                 .arg(isDark ? "#1a1a1a" : "#ffffff")
-                                 .arg(isDark ? "#ffffff" : "#2b2b2b")
-                                 .arg(isDark ? "#383838" : "#c0c0c0")
-                                 .arg(isDark ? "#3b4252" : "#d2def5")
-                                 .arg(isDark ? "#ffffff" : "#1e1e1e")
-                                 .arg(isDark ? "#2c2c2c" : "#f0f0f0"));
 
     m_addressSelectCombo->setView(popupView);
     topToolbar->addWidget(m_addressSelectCombo);
