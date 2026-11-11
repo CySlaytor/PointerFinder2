@@ -102,7 +102,7 @@ void NewAddressDialog::setupLayout(uint32_t defaultAddress) {
 
     // Live Generated Header Preview
     m_previewLabel = new QLabel(this);
-    m_previewLabel->setStyleSheet("font-weight: bold; color: #D2A8FF; padding: 4px; border: 1px solid #30363D; border-radius: 4px;");
+    m_previewLabel->setObjectName("newAddressPreviewLabel");
     mainLayout->addWidget(m_previewLabel);
 
     // Bottom Action Buttons

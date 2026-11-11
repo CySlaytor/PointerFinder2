@@ -3,7 +3,6 @@
 #include "Models/GlobalSettings.h"
 #include "UI/Common/ThemeManager.h"
 
-#include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListView>
@@ -19,7 +18,7 @@ using namespace PointerFinder2::DataModels;
 
 namespace {
 // Enforces classic Win32/WinForms dropdown behavior: drops DOWN directly below the combobox,
-// respects maxVisibleItems, enables native slide animation, and prevents popping over the widget.
+// respects maxVisibleItems, and prevents popping over the widget.
 class Win32ComboBoxStyle : public QProxyStyle {
   public:
     using QProxyStyle::QProxyStyle;
@@ -62,9 +61,8 @@ void DissectAddressBar::setupLayout() {
     m_addressSelectCombo->setMinimumWidth(280);
     m_addressSelectCombo->setFixedHeight(26);
 
-    // Apply Win32 style hint so the dropdown drops down below the box and animates smoothly
+    // Apply Win32 style hint so the dropdown drops down below the box
     m_addressSelectCombo->setStyle(new Win32ComboBoxStyle(m_addressSelectCombo->style()));
-    QApplication::setEffectEnabled(Qt::UI_AnimateCombo, true);
 
     // Model and filter proxy setup for real-time dropdown shrinking
     m_addressSourceModel = new QStandardItemModel(this);

@@ -103,7 +103,7 @@ void SettingsDialog::setupGeneralTab() {
     layout->addStretch();
 
     m_resetAllButton = new QPushButton("Reset All Settings to Default...", tab);
-    m_resetAllButton->setStyleSheet("color: #FF5555; font-weight: bold; padding: 4px;");
+    m_resetAllButton->setObjectName("resetAllButton");
     m_resetAllButton->setAutoDefault(false);
     m_resetAllButton->setDefault(false);
     layout->addWidget(m_resetAllButton);
@@ -189,7 +189,7 @@ void SettingsDialog::onCodeNoteHelpClicked() {
     layout->setSpacing(6);
 
     auto* titleLabel = new QLabel("<b>Hierarchical Code Note Standards</b>", &helpDialog);
-    titleLabel->setStyleSheet("font-size: 13px;");
+    titleLabel->setObjectName("settingsHelpTitleLabel");
     layout->addWidget(titleLabel);
 
     bool isDark = (GlobalSettings::activeTheme.compare("Light", Qt::CaseInsensitive) != 0);

@@ -650,6 +650,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
                 event->accept();
             } else {
                 event->ignore();
+                return;
             }
         } else if (reply == QMessageBox::No) {
             QSettings settings;
@@ -659,6 +660,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
             event->accept();
         } else {
             event->ignore();
+            return;
         }
     } else {
         QSettings settings;
@@ -667,6 +669,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         settings.endGroup();
         event->accept();
     }
+
+    // Clean up background operations, close child windows, and shut down application completely
+    detachAndReset();
+    QApplication::closeAllWindows();
+    QApplication::quit();
 }
 
 bool MainWindow::onSaveSessionClicked() {

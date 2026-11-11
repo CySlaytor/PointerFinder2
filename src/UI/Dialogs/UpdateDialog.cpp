@@ -43,7 +43,7 @@ void UpdateDialog::setupLayout(const QString& currentVer, const QString& latestV
 
     auto* buttonLayout = new QHBoxLayout();
     m_downloadButton = new QPushButton("Download Update", this);
-    m_downloadButton->setStyleSheet("font-weight: bold; min-width: 120px;");
+    m_downloadButton->setObjectName("downloadButton");
     m_closeButton = new QPushButton("Close", this);
     m_closeButton->setObjectName("cancelButton");
 

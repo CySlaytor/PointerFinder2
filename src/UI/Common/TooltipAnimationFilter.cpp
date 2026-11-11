@@ -10,10 +10,10 @@ TooltipAnimationFilter::TooltipAnimationFilter(QObject* parent) : QObject(parent
 
 bool TooltipAnimationFilter::eventFilter(QObject* obj, QEvent* event) {
 #ifdef Q_OS_WIN
-    // Hardware-accelerated symmetric fade-in and fade-out for all application tooltips
+    // Hardware-accelerated symmetric fade-in and fade-out strictly for genuine QToolTip labels
     if (obj && obj->isWidgetType()) {
         auto* w = static_cast<QWidget*>(obj);
-        if ((w->windowFlags() & Qt::WindowType_Mask) == Qt::ToolTip) {
+        if (w->inherits("QTipLabel")) {
             if (event->type() == QEvent::Show) {
                 auto* existingAnim = w->findChild<QPropertyAnimation*>("tooltip_anim");
                 if (existingAnim) {
@@ -69,11 +69,6 @@ bool TooltipAnimationFilter::eventFilter(QObject* obj, QEvent* event) {
                     anim->start(QAbstractAnimation::DeleteWhenStopped);
                 }
                 return true;
-            } else if (event->type() == QEvent::DeferredDelete) {
-                // Prevent Qt from destroying the tooltip widget immediately before the fade-out animation completes
-                if (!w->property("pf_allow_close").toBool()) {
-                    return true;
-                }
             }
         }
     }
