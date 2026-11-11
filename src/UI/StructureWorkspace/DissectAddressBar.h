@@ -23,12 +23,7 @@ class AddressFilterProxyModel : public QSortFilterProxyModel {
 
     void setSearchFilter(const QString& filter) {
         m_filterWords = filter.trimmed().split(' ', Qt::SkipEmptyParts);
-#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
-        beginFilterChange();
-        endFilterChange();
-#else
         invalidateFilter();
-#endif
     }
 
   protected:
