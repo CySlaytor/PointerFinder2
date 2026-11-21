@@ -274,6 +274,15 @@ QTreeWidgetItem* StructureHierarchyWidget::getTemplateSourceItem(QTreeWidgetItem
     return static_cast<QTreeWidgetItem*>(hierItem->data(0, ROLE_TEMPLATE_SOURCE_ITEM).value<void*>());
 }
 
+QTreeWidgetItem* StructureHierarchyWidget::getConsumedTemplateItem(QTreeWidgetItem* item) const {
+    if (!item)
+        return nullptr;
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    if (!hierItem)
+        return nullptr;
+    return static_cast<QTreeWidgetItem*>(hierItem->data(0, ROLE_CONSUMED_TEMPLATE_ITEM).value<void*>());
+}
+
 bool StructureHierarchyWidget::isPointerItem(QTreeWidgetItem* item) const {
     if (!item)
         return false;
@@ -764,6 +773,7 @@ void StructureHierarchyWidget::clearInheritedTemplateChildren() {
         int count = parent ? parent->childCount() : m_structureTree->topLevelItemCount();
         for (int i = count - 1; i >= 0; --i) {
             QTreeWidgetItem* child = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
+            child->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant());
             if (child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
                 QTreeWidgetItem* meta = getTwinItem(child);
                 delete child;
@@ -903,6 +913,7 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
                 int32_t elemOffset = (containerStride > 0) ? static_cast<int32_t>(rel % containerStride) : static_cast<int32_t>(rel);
                 auto it = templateMap.find(elemOffset);
                 if (it != templateMap.end() && it->second != sibling) {
+                    sibling->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(it->second)));
                     cloneTemplateSubtree(it->second, sibling);
                     sibling->setExpanded(false);
                     if (auto* metaSibling = getTwinItem(sibling)) {
@@ -913,16 +924,17 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
         }
     };
 
-    // Sub-case A: Root-level array declaration in headerComment
-    uint32_t rootTotalBytes = 0;
-    uint32_t rootStride = 0;
-    if (!headerComment.trimmed().isEmpty() && parseArrayDimensionsFromText(headerComment, rootTotalBytes, rootStride)) {
-        applyToContainer(nullptr, 0, rootTotalBytes, rootStride, true);
-    }
-
-    // Traverse all container parents recursively for inline array siblings and pointer-to-array parents
+    // Process all container parents bottom-up (post-order) so nested arrays within arrays
+    // resolve inner templates before outer arrays clone them across sibling pointers.
     std::function<void(QTreeWidgetItem*)> processNode = [&](QTreeWidgetItem* parent) {
         int count = parent ? parent->childCount() : m_structureTree->topLevelItemCount();
+
+        for (int i = 0; i < count; ++i) {
+            QTreeWidgetItem* child = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
+            if (!child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+                processNode(child);
+            }
+        }
 
         // Sub-case B: Inline array sibling(s) under `parent` providing templates to sibling pointers within their range
         for (int i = 0; i < count; ++i) {
@@ -965,6 +977,7 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
                                 (arrStride > 0) ? static_cast<int32_t>(rel % arrStride) : static_cast<int32_t>(rel);
                             auto it = templateMap.find(elemOffset);
                             if (it != templateMap.end()) {
+                                sibling->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(it->second)));
                                 cloneTemplateSubtree(it->second, sibling);
                                 sibling->setExpanded(false);
                                 if (auto* metaSibling = getTwinItem(sibling)) {
@@ -985,16 +998,16 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
                 applyToContainer(parent, 0, pTotalBytes, pStride, true);
             }
         }
-
-        for (int i = 0; i < count; ++i) {
-            QTreeWidgetItem* child = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
-            if (!child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
-                processNode(child);
-            }
-        }
     };
 
     processNode(nullptr);
+
+    // Sub-case A: Root-level array declaration in headerComment
+    uint32_t rootTotalBytes = 0;
+    uint32_t rootStride = 0;
+    if (!headerComment.trimmed().isEmpty() && parseArrayDimensionsFromText(headerComment, rootTotalBytes, rootStride)) {
+        applyToContainer(nullptr, 0, rootTotalBytes, rootStride, true);
+    }
 
     m_isSyncingExpand = false;
     m_structureTree->blockSignals(false);
@@ -1802,15 +1815,36 @@ void StructureHierarchyWidget::updateOffsetPreview(uint32_t selectedAddr, const 
 void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description,
                                                  bool isArrayElement) {
     QTreeWidgetItem* hierParent = parentScope ? ((parentScope->treeWidget() == m_metadataTree) ? getTwinItem(parentScope) : parentScope) : nullptr;
-    if (hierParent && hierParent->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
-        if (auto* srcTmpl = getTemplateSourceItem(hierParent)) {
-            hierParent = srcTmpl;
+
+    // Always define nested nodes at the top-level array template so changes propagate across all consuming entries
+    if (hierParent) {
+        if (hierParent->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+            if (auto* srcTmpl = getTemplateSourceItem(hierParent)) {
+                hierParent = srcTmpl;
+            }
+        } else if (auto* consumedTmpl = getConsumedTemplateItem(hierParent)) {
+            hierParent = consumedTmpl;
         }
     }
+
     QTreeWidgetItem* metaParent = hierParent ? getTwinItem(hierParent) : nullptr;
 
     QTreeWidget* tree = m_structureTree;
     int childCount = hierParent ? hierParent->childCount() : tree->topLevelItemCount();
+
+    // If a non-inherited child already exists at this exact offset in the target scope, update it in-place
+    for (int i = 0; i < childCount; ++i) {
+        QTreeWidgetItem* existing = hierParent ? hierParent->child(i) : tree->topLevelItem(i);
+        if (existing->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+            continue;
+        int32_t existingOffset = existing->data(2, Qt::UserRole).isValid() ? existing->data(2, Qt::UserRole).toInt()
+                                                                           : existing->data(1, Qt::UserRole).toInt();
+        if (existingOffset == offset) {
+            updateNodeDescription(existing, description);
+            tree->setCurrentItem(existing);
+            return;
+        }
+    }
 
     int insertIndex = childCount;
     for (int i = 0; i < childCount; ++i) {
@@ -2287,9 +2321,12 @@ void StructureHierarchyWidget::openSizeDropdown(QTreeWidgetItem* item, const QPo
 
             int updatedCount = 0;
             for (auto* itm : selected) {
-                if (!isPointerItem(itm) && !isTemplateInheritedItem(itm)) {
-                    applySizeToItem(itm, type);
-                    updatedCount++;
+                if (!isPointerItem(itm)) {
+                    QTreeWidgetItem* target = isTemplateInheritedItem(itm) ? getTemplateSourceItem(itm) : itm;
+                    if (target) {
+                        applySizeToItem(target, type);
+                        updatedCount++;
+                    }
                 }
             }
 
@@ -2322,10 +2359,6 @@ void StructureHierarchyWidget::onMetadataItemDoubleClicked(QTreeWidgetItem* item
         hierItem = item;
 
     if (column == META_COL_SIZE) {
-        if (isTemplateInheritedItem(hierItem)) {
-            emit statusMessageRequested("Inherited from array template — edit the size under the [Array] template node.");
-            return;
-        }
         if (isPointerItem(hierItem)) {
             QString emuName = m_manager ? m_manager->getEmulatorName() : "Emulator";
             QString ptrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
@@ -2393,7 +2426,7 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
     menu.addSeparator();
 
     // Context menu option to add or edit value descriptions for non-pointer variables
-    if (!isPointerItem(clickedItem) && !isTemplateInheritedItem(clickedItem)) {
+    if (!isPointerItem(clickedItem)) {
         auto* descAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Value Descriptions... (D)", this,
                                        &StructureHierarchyWidget::manageDescriptionsClicked);
         descAct->setProperty("iconPath", ":/icons/copy_note.svg");

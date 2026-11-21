@@ -1581,6 +1581,14 @@ void StructureWorkspaceDialog::onDefineArrayRequested(uint32_t startAddress, uin
                                : QString::number(startAddress + byteCount - 1, 16).toUpper();
 
     if (targetNode) {
+        if (m_hierarchyWidget->isTemplateInheritedItem(targetNode)) {
+            if (auto* srcTmpl = m_hierarchyWidget->getTemplateSourceItem(targetNode)) {
+                targetNode = srcTmpl;
+            }
+        } else if (auto* consumedTmpl = m_hierarchyWidget->getConsumedTemplateItem(targetNode)) {
+            targetNode = consumedTmpl;
+        }
+
         // Standardized array formatting: ++0x78=[128 bytes] Pointer to Array
         QString arrayFormatText = QString("[%1 bytes] Pointer to Array").arg(byteCount);
 
@@ -2094,7 +2102,8 @@ void StructureWorkspaceDialog::onAddPointerClicked() {
         return;
     }
 
-    AddPointerDialog dialog("Pointer", this);
+    QString initialPtrName = (existingItem && !existingItem->text(0).trimmed().isEmpty()) ? existingItem->text(0).trimmed() : "Pointer";
+    AddPointerDialog dialog(initialPtrName, this);
     if (dialog.exec() != QDialog::Accepted)
         return;
 
@@ -2133,30 +2142,33 @@ void StructureWorkspaceDialog::onManageDescriptionsClicked() {
         return;
     }
 
-    if (m_hierarchyWidget->isTemplateInheritedItem(current)) {
-        showStatusMessage("Inherited from array template — edit descriptions under the [Array] template node.");
+    QTreeWidgetItem* targetItem = m_hierarchyWidget->isTemplateInheritedItem(current)
+                                      ? m_hierarchyWidget->getTemplateSourceItem(current)
+                                      : current;
+    if (!targetItem) {
+        showStatusMessage("Please select a variable in the Structure Hierarchy.");
         return;
     }
 
-    auto* meta = static_cast<QTreeWidgetItem*>(current->data(0, Qt::UserRole + 10).value<void*>());
+    auto* meta = static_cast<QTreeWidgetItem*>(targetItem->data(0, Qt::UserRole + 10).value<void*>());
     QString sizeTag = meta ? meta->text(StructureHierarchyWidget::META_COL_SIZE) : "8-bit";
 
-    if (current->childCount() > 0 || current->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+    if (targetItem->childCount() > 0 || targetItem->text(0).contains("Pointer", Qt::CaseInsensitive) ||
         sizeTag.contains("Pointer", Qt::CaseInsensitive)) {
         showStatusMessage("Value descriptions can only be attached to variables, not pointers.");
         return;
     }
 
-    QStringList initialNotes = current->data(0, Qt::UserRole + 2).toStringList();
+    QStringList initialNotes = targetItem->data(0, Qt::UserRole + 2).toStringList();
 
-    EditValueDescriptionsDialog dialog(current->text(0), initialNotes, this);
+    EditValueDescriptionsDialog dialog(targetItem->text(0), initialNotes, this);
     if (dialog.exec() == QDialog::Accepted) {
         QStringList updatedDescriptions = dialog.getDescriptions();
-        current->setData(0, Qt::UserRole + 2, updatedDescriptions);
-        current->setToolTip(0, updatedDescriptions.join("\n"));
+        targetItem->setData(0, Qt::UserRole + 2, updatedDescriptions);
+        targetItem->setToolTip(0, updatedDescriptions.join("\n"));
 
         onTreeDataChanged();
-        showStatusMessage(QString("Updated %1 value description(s) for '%2'").arg(updatedDescriptions.size()).arg(current->text(0)));
+        showStatusMessage(QString("Updated %1 value description(s) for '%2'").arg(updatedDescriptions.size()).arg(targetItem->text(0)));
     }
 }
 

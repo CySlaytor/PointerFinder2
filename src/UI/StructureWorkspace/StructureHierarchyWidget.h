@@ -41,6 +41,7 @@ class StructureHierarchyWidget : public QWidget {
     static constexpr int ROLE_TEMPLATE_SOURCE_ITEM = Qt::UserRole + 8;
     static constexpr int ROLE_CACHED_RESOLVED_ADDR = Qt::UserRole + 9;
     static constexpr int ROLE_TWIN_ITEM = Qt::UserRole + 10;
+    static constexpr int ROLE_CONSUMED_TEMPLATE_ITEM = Qt::UserRole + 11;
 
     explicit StructureHierarchyWidget(QWidget* parent = nullptr);
     ~StructureHierarchyWidget() override;
@@ -96,6 +97,7 @@ class StructureHierarchyWidget : public QWidget {
     bool isInlineArrayItem(QTreeWidgetItem* item) const;
     bool isTemplateInheritedItem(QTreeWidgetItem* item) const;
     QTreeWidgetItem* getTemplateSourceItem(QTreeWidgetItem* item) const;
+    QTreeWidgetItem* getConsumedTemplateItem(QTreeWidgetItem* item) const;
 
     std::optional<DataModels::PointerPath> getPathForTreeItem(QTreeWidgetItem* item, uint32_t currentBaseAddress,
                                                               const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
