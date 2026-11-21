@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <map>
 
 namespace PointerFinder2::UI {
 
@@ -49,7 +50,7 @@ void parseSizeAndDescription(const QString& rawDesc, QString& outSize, QString& 
         QString tag = match.captured(1).trimmed();
         // Validate whether the bracket represents a memory size, data type, bitfield, mask, or byte span
         static const QRegularExpression sizePatternRx(
-            R"((\d+-bit|\d+\s*x\s*\d+\s*bytes|\d+\s*bytes|float|double|byte|bit\d*|pointer|\&|lower|upper|mbf))",
+            R"((\d+-bit|\d+\s*x\s*\d+\s*bytes|\d+\s*bytes|float|double|byte|bit\d*|pointer|\&|lower|upper|mbf|ascii))",
             QRegularExpression::CaseInsensitiveOption);
         if (sizePatternRx.match(tag).hasMatch()) {
             outSize = tag; // Clean representation without brackets
@@ -75,6 +76,50 @@ uint32_t extractMaskValueFromText(const QString& text) {
         }
     }
     return 0;
+}
+
+bool parseArrayDimensionsFromText(const QString& text, uint32_t& outTotalBytes, uint32_t& outStride) {
+    static const QRegularExpression arrayDimRx(R"((?:\[)?(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes(?:\])?)",
+                                               QRegularExpression::CaseInsensitiveOption);
+    auto match = arrayDimRx.match(text);
+    if (!match.hasMatch())
+        return false;
+
+    if (!match.captured(1).isEmpty() && !match.captured(2).isEmpty()) {
+        uint32_t count = match.captured(1).toUInt();
+        uint32_t stride = match.captured(2).toUInt();
+        outTotalBytes = count * stride;
+        outStride = stride;
+        return outTotalBytes > 0;
+    }
+    if (!match.captured(3).isEmpty()) {
+        outTotalBytes = match.captured(3).toUInt();
+        outStride = 0;
+        return outTotalBytes > 0;
+    }
+    return false;
+}
+
+uint32_t resolveVarSizeFromTag(const QString& sizeTag) {
+    QString tagLower = sizeTag.trimmed().toLower();
+    if (tagLower.startsWith('[') && tagLower.endsWith(']')) {
+        tagLower = tagLower.mid(1, tagLower.length() - 2).trimmed();
+    }
+
+    if (tagLower.startsWith("8-bit") || tagLower == "8bit" || tagLower == "byte" || tagLower.startsWith("bit") ||
+        tagLower.contains("bitflag") || tagLower == "lower4" || tagLower == "upper4") {
+        return 1;
+    }
+    if (tagLower.startsWith("16-bit") || tagLower == "16bit" || tagLower == "short") {
+        return 2;
+    }
+    if (tagLower.startsWith("24-bit") || tagLower == "24bit") {
+        return 3;
+    }
+    if (tagLower.startsWith("64-bit") || tagLower == "64bit" || tagLower.contains("double")) {
+        return 8;
+    }
+    return 4;
 }
 
 // Standard RetroAchievements memory data types (>= 8-bit allocation sizes)
@@ -139,6 +184,7 @@ QList<QTreeWidgetItem*> StructureHierarchyWidget::selectedItemsInOrder() const {
 QTreeWidget* StructureHierarchyWidget::treeWidget() const { return m_structureTree; }
 
 void StructureHierarchyWidget::clearTree() {
+    m_dynamicProjection = DynamicArrayProjection{};
     if (m_structureTree) {
         m_structureTree->blockSignals(true);
         m_structureTree->clear();
@@ -154,22 +200,92 @@ void StructureHierarchyWidget::clearTree() {
 QTreeWidgetItem* StructureHierarchyWidget::getTwinItem(QTreeWidgetItem* item) const {
     if (!item)
         return nullptr;
-    return static_cast<QTreeWidgetItem*>(item->data(0, Qt::UserRole + 10).value<void*>());
+    return static_cast<QTreeWidgetItem*>(item->data(0, ROLE_TWIN_ITEM).value<void*>());
 }
 
 void StructureHierarchyWidget::setTwinItems(QTreeWidgetItem* leftItem, QTreeWidgetItem* rightItem) {
     if (!leftItem || !rightItem)
         return;
-    leftItem->setData(0, Qt::UserRole + 10, QVariant::fromValue(static_cast<void*>(rightItem)));
-    rightItem->setData(0, Qt::UserRole + 10, QVariant::fromValue(static_cast<void*>(leftItem)));
+    leftItem->setData(0, ROLE_TWIN_ITEM, QVariant::fromValue(static_cast<void*>(rightItem)));
+    rightItem->setData(0, ROLE_TWIN_ITEM, QVariant::fromValue(static_cast<void*>(leftItem)));
+}
+
+bool StructureHierarchyWidget::parseArrayDimensions(QTreeWidgetItem* item, uint32_t& outTotalBytes, uint32_t& outStride) const {
+    outTotalBytes = 0;
+    outStride = 0;
+    if (!item)
+        return false;
+
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    QTreeWidgetItem* meta = hierItem ? getTwinItem(hierItem) : item;
+    if (!hierItem)
+        return false;
+
+    QString desc = hierItem->text(0).trimmed();
+    QString sizeText = meta ? meta->text(META_COL_SIZE).trimmed() : "";
+
+    if (parseArrayDimensionsFromText(desc, outTotalBytes, outStride) ||
+        parseArrayDimensionsFromText(sizeText, outTotalBytes, outStride)) {
+        return true;
+    }
+
+    uint32_t storedSize = hierItem->data(0, Qt::UserRole + 5).toUInt();
+    if (hierItem->data(0, Qt::UserRole + 6).toBool() && storedSize > 0) {
+        outTotalBytes = storedSize;
+        outStride = 0;
+        return true;
+    }
+    return false;
+}
+
+bool StructureHierarchyWidget::isArrayItem(QTreeWidgetItem* item) const {
+    uint32_t totalBytes = 0;
+    uint32_t stride = 0;
+    return parseArrayDimensions(item, totalBytes, stride);
+}
+
+bool StructureHierarchyWidget::isInlineArrayItem(QTreeWidgetItem* item) const {
+    if (!item)
+        return false;
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    QTreeWidgetItem* meta = hierItem ? getTwinItem(hierItem) : item;
+    if (!hierItem || !isArrayItem(hierItem))
+        return false;
+
+    QString sizeText = meta ? meta->text(META_COL_SIZE) : "";
+    bool explicitlyPointer = hierItem->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+                             sizeText.contains("Pointer", Qt::CaseInsensitive) || sizeText.contains("&");
+    return !explicitlyPointer;
+}
+
+bool StructureHierarchyWidget::isTemplateInheritedItem(QTreeWidgetItem* item) const {
+    if (!item)
+        return false;
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    return hierItem && hierItem->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool();
+}
+
+QTreeWidgetItem* StructureHierarchyWidget::getTemplateSourceItem(QTreeWidgetItem* item) const {
+    if (!item)
+        return nullptr;
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    if (!hierItem)
+        return nullptr;
+    return static_cast<QTreeWidgetItem*>(hierItem->data(0, ROLE_TEMPLATE_SOURCE_ITEM).value<void*>());
 }
 
 bool StructureHierarchyWidget::isPointerItem(QTreeWidgetItem* item) const {
     if (!item)
         return false;
-    QTreeWidgetItem* meta = (item->treeWidget() == m_metadataTree) ? item : getTwinItem(item);
+    QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
+    if (!hierItem)
+        return false;
+    if (isInlineArrayItem(hierItem)) {
+        return false;
+    }
+    QTreeWidgetItem* meta = getTwinItem(hierItem);
     QString sizeText = meta ? meta->text(META_COL_SIZE) : "";
-    return (item->childCount() > 0 || item->text(0).contains("Pointer", Qt::CaseInsensitive) ||
+    return (hierItem->childCount() > 0 || hierItem->text(0).contains("Pointer", Qt::CaseInsensitive) ||
             sizeText.contains("Pointer", Qt::CaseInsensitive) || sizeText.contains("&"));
 }
 
@@ -626,7 +742,8 @@ bool StructureHierarchyWidget::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-void StructureHierarchyWidget::populateFromNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes) {
+void StructureHierarchyWidget::populateFromNodes(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, const QString& headerComment) {
+    m_dynamicProjection = DynamicArrayProjection{};
     m_structureTree->blockSignals(true);
     m_metadataTree->blockSignals(true);
     m_structureTree->clear();
@@ -636,6 +753,250 @@ void StructureHierarchyWidget::populateFromNodes(const std::vector<std::shared_p
 
     m_structureTree->expandAll();
     m_metadataTree->expandAll();
+    m_structureTree->blockSignals(false);
+    m_metadataTree->blockSignals(false);
+
+    applyArrayTemplates(headerComment);
+}
+
+void StructureHierarchyWidget::clearInheritedTemplateChildren() {
+    std::function<void(QTreeWidgetItem*)> purge = [&](QTreeWidgetItem* parent) {
+        int count = parent ? parent->childCount() : m_structureTree->topLevelItemCount();
+        for (int i = count - 1; i >= 0; --i) {
+            QTreeWidgetItem* child = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
+            if (child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+                QTreeWidgetItem* meta = getTwinItem(child);
+                delete child;
+                if (meta) {
+                    delete meta;
+                }
+            } else {
+                purge(child);
+            }
+        }
+    };
+    purge(nullptr);
+}
+
+void StructureHierarchyWidget::cloneTemplateSubtree(QTreeWidgetItem* templateParent, QTreeWidgetItem* targetParent) {
+    if (!templateParent || !targetParent)
+        return;
+
+    QTreeWidgetItem* targetMetaParent = getTwinItem(targetParent);
+    if (!targetMetaParent)
+        return;
+
+    for (int i = 0; i < templateParent->childCount(); ++i) {
+        QTreeWidgetItem* srcLeft = templateParent->child(i);
+        if (srcLeft->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+            continue;
+        QTreeWidgetItem* srcRight = getTwinItem(srcLeft);
+
+        int32_t offsetVal = srcLeft->data(2, Qt::UserRole).isValid() ? srcLeft->data(2, Qt::UserRole).toInt()
+                                                                     : srcLeft->data(1, Qt::UserRole).toInt();
+        QString delimiter = srcLeft->data(2, Qt::UserRole + 1).isValid() ? srcLeft->data(2, Qt::UserRole + 1).toString()
+                                                                         : srcLeft->data(1, Qt::UserRole + 1).toString();
+        QString sizeStr = srcRight ? srcRight->text(META_COL_SIZE) : "";
+
+        auto* dstLeft = new QTreeWidgetItem(targetParent);
+        dstLeft->setText(0, srcLeft->text(0));
+        dstLeft->setFlags(dstLeft->flags() & ~Qt::ItemIsEditable);
+
+        auto* dstRight = new QTreeWidgetItem(targetMetaParent);
+        dstRight->setText(META_COL_SIZE, sizeStr);
+
+        QString offsetHex = QString("%1").arg(std::abs(offsetVal), 2, 16, QChar('0')).toUpper();
+        QString displayOffset = (offsetVal < 0 ? "-0x" : "+0x") + offsetHex;
+        dstRight->setText(META_COL_OFFSET, displayOffset);
+
+        setTwinItems(dstLeft, dstRight);
+
+        dstLeft->setData(1, Qt::UserRole, offsetVal);
+        dstLeft->setData(2, Qt::UserRole, offsetVal);
+        dstLeft->setData(1, Qt::UserRole + 1, delimiter);
+        dstLeft->setData(2, Qt::UserRole + 1, delimiter);
+        dstLeft->setData(1, Qt::UserRole + 3, false);
+        dstLeft->setData(2, Qt::UserRole + 3, false);
+
+        dstRight->setData(1, Qt::UserRole, offsetVal);
+        dstRight->setData(2, Qt::UserRole, offsetVal);
+        dstRight->setData(1, Qt::UserRole + 1, delimiter);
+        dstRight->setData(2, Qt::UserRole + 1, delimiter);
+        dstRight->setData(1, Qt::UserRole + 3, false);
+        dstRight->setData(2, Qt::UserRole + 3, false);
+
+        QVariant notesVar = srcLeft->data(0, Qt::UserRole + 2);
+        if (notesVar.isValid()) {
+            dstLeft->setData(0, Qt::UserRole + 2, notesVar);
+            dstLeft->setToolTip(0, notesVar.toStringList().join("\n"));
+        }
+
+        if (srcLeft->data(0, Qt::UserRole + 6).toBool()) {
+            dstLeft->setData(0, Qt::UserRole + 5, srcLeft->data(0, Qt::UserRole + 5));
+            dstLeft->setData(0, Qt::UserRole + 6, true);
+        }
+
+        dstLeft->setData(0, ROLE_IS_TEMPLATE_INHERITED, true);
+        dstLeft->setData(0, ROLE_TEMPLATE_SOURCE_ITEM, QVariant::fromValue(static_cast<void*>(srcLeft)));
+        dstRight->setData(0, ROLE_IS_TEMPLATE_INHERITED, true);
+        dstRight->setData(0, ROLE_TEMPLATE_SOURCE_ITEM, QVariant::fromValue(static_cast<void*>(srcLeft)));
+
+        cloneTemplateSubtree(srcLeft, dstLeft);
+        dstLeft->setExpanded(true);
+        dstRight->setExpanded(true);
+    }
+}
+
+void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment) {
+    if (!m_structureTree || !m_metadataTree)
+        return;
+
+    m_structureTree->blockSignals(true);
+    m_metadataTree->blockSignals(true);
+    m_isSyncingExpand = true;
+
+    clearInheritedTemplateChildren();
+
+    auto applyToContainer = [&](QTreeWidgetItem* parentNode, uint32_t containerArrOffset, uint32_t containerTotalBytes,
+                                uint32_t containerStride, bool useArrayElemTemplates) {
+        int count = parentNode ? parentNode->childCount() : m_structureTree->topLevelItemCount();
+        std::map<int32_t, QTreeWidgetItem*> templateMap;
+
+        for (int i = 0; i < count; ++i) {
+            QTreeWidgetItem* child = parentNode ? parentNode->child(i) : m_structureTree->topLevelItem(i);
+            if (child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                continue;
+
+            bool isArrElem = child->data(2, Qt::UserRole + 3).isValid() ? child->data(2, Qt::UserRole + 3).toBool()
+                                                                        : child->data(1, Qt::UserRole + 3).toBool();
+            if (useArrayElemTemplates && !isArrElem)
+                continue;
+            if (child->childCount() == 0 || !isPointerItem(child))
+                continue;
+
+            int32_t tOffset = child->data(2, Qt::UserRole).isValid() ? child->data(2, Qt::UserRole).toInt()
+                                                                     : child->data(1, Qt::UserRole).toInt();
+            if (templateMap.find(tOffset) == templateMap.end()) {
+                templateMap[tOffset] = child;
+            }
+        }
+
+        if (templateMap.empty() || containerTotalBytes == 0)
+            return;
+
+        for (int i = 0; i < count; ++i) {
+            QTreeWidgetItem* sibling = parentNode ? parentNode->child(i) : m_structureTree->topLevelItem(i);
+            if (sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                continue;
+            if (sibling->childCount() > 0 || !isPointerItem(sibling))
+                continue;
+
+            bool isArrElem = sibling->data(2, Qt::UserRole + 3).isValid() ? sibling->data(2, Qt::UserRole + 3).toBool()
+                                                                          : sibling->data(1, Qt::UserRole + 3).toBool();
+            if (useArrayElemTemplates && isArrElem)
+                continue;
+
+            int32_t sOffset = sibling->data(2, Qt::UserRole).isValid() ? sibling->data(2, Qt::UserRole).toInt()
+                                                                       : sibling->data(1, Qt::UserRole).toInt();
+            int64_t rel = static_cast<int64_t>(sOffset) - static_cast<int64_t>(containerArrOffset);
+            if (rel >= 0 && rel < static_cast<int64_t>(containerTotalBytes)) {
+                int32_t elemOffset = (containerStride > 0) ? static_cast<int32_t>(rel % containerStride) : static_cast<int32_t>(rel);
+                auto it = templateMap.find(elemOffset);
+                if (it != templateMap.end() && it->second != sibling) {
+                    cloneTemplateSubtree(it->second, sibling);
+                    sibling->setExpanded(false);
+                    if (auto* metaSibling = getTwinItem(sibling)) {
+                        metaSibling->setExpanded(false);
+                    }
+                }
+            }
+        }
+    };
+
+    // Sub-case A: Root-level array declaration in headerComment
+    uint32_t rootTotalBytes = 0;
+    uint32_t rootStride = 0;
+    if (!headerComment.trimmed().isEmpty() && parseArrayDimensionsFromText(headerComment, rootTotalBytes, rootStride)) {
+        applyToContainer(nullptr, 0, rootTotalBytes, rootStride, true);
+    }
+
+    // Traverse all container parents recursively for inline array siblings and pointer-to-array parents
+    std::function<void(QTreeWidgetItem*)> processNode = [&](QTreeWidgetItem* parent) {
+        int count = parent ? parent->childCount() : m_structureTree->topLevelItemCount();
+
+        // Sub-case B: Inline array sibling(s) under `parent` providing templates to sibling pointers within their range
+        for (int i = 0; i < count; ++i) {
+            QTreeWidgetItem* item = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
+            if (item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                continue;
+
+            uint32_t arrTotalBytes = 0;
+            uint32_t arrStride = 0;
+            if (isInlineArrayItem(item) && item->childCount() > 0 && parseArrayDimensions(item, arrTotalBytes, arrStride)) {
+                int32_t arrOffset = item->data(2, Qt::UserRole).isValid() ? item->data(2, Qt::UserRole).toInt()
+                                                                          : item->data(1, Qt::UserRole).toInt();
+
+                // Collect templates from inside the inline array `item`
+                std::map<int32_t, QTreeWidgetItem*> templateMap;
+                for (int c = 0; c < item->childCount(); ++c) {
+                    QTreeWidgetItem* tmpl = item->child(c);
+                    if (tmpl->childCount() == 0 || !isPointerItem(tmpl))
+                        continue;
+                    int32_t tOffset = tmpl->data(2, Qt::UserRole).isValid() ? tmpl->data(2, Qt::UserRole).toInt()
+                                                                            : tmpl->data(1, Qt::UserRole).toInt();
+                    if (templateMap.find(tOffset) == templateMap.end()) {
+                        templateMap[tOffset] = tmpl;
+                    }
+                }
+
+                if (!templateMap.empty()) {
+                    for (int s = 0; s < count; ++s) {
+                        QTreeWidgetItem* sibling = parent ? parent->child(s) : m_structureTree->topLevelItem(s);
+                        if (sibling == item || sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                            continue;
+                        if (sibling->childCount() > 0 || !isPointerItem(sibling))
+                            continue;
+
+                        int32_t sOffset = sibling->data(2, Qt::UserRole).isValid() ? sibling->data(2, Qt::UserRole).toInt()
+                                                                                   : sibling->data(1, Qt::UserRole).toInt();
+                        int64_t rel = static_cast<int64_t>(sOffset) - static_cast<int64_t>(arrOffset);
+                        if (rel >= 0 && rel < static_cast<int64_t>(arrTotalBytes)) {
+                            int32_t elemOffset =
+                                (arrStride > 0) ? static_cast<int32_t>(rel % arrStride) : static_cast<int32_t>(rel);
+                            auto it = templateMap.find(elemOffset);
+                            if (it != templateMap.end()) {
+                                cloneTemplateSubtree(it->second, sibling);
+                                sibling->setExpanded(false);
+                                if (auto* metaSibling = getTwinItem(sibling)) {
+                                    metaSibling->setExpanded(false);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sub-case C: Pointer-to-array parent containing both template |0x.. and sibling +0x.. children
+        if (parent != nullptr && isArrayItem(parent) && isPointerItem(parent)) {
+            uint32_t pTotalBytes = 0;
+            uint32_t pStride = 0;
+            if (parseArrayDimensions(parent, pTotalBytes, pStride)) {
+                applyToContainer(parent, 0, pTotalBytes, pStride, true);
+            }
+        }
+
+        for (int i = 0; i < count; ++i) {
+            QTreeWidgetItem* child = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
+            if (!child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+                processNode(child);
+            }
+        }
+    };
+
+    processNode(nullptr);
+
+    m_isSyncingExpand = false;
     m_structureTree->blockSignals(false);
     m_metadataTree->blockSignals(false);
 }
@@ -746,8 +1107,29 @@ void StructureHierarchyWidget::populateTreeFromHierarchyNodes(const std::vector<
     }
 }
 
-std::optional<uint32_t> StructureHierarchyWidget::readMemoryDword(uint32_t address, const std::vector<uint8_t>& snapshotMemory) {
+std::optional<uint32_t> StructureHierarchyWidget::readMemoryDword(uint32_t address, const std::vector<uint8_t>& snapshotMemory) const {
     return StructureAnalyzer::readMemoryDword(address, m_manager, snapshotMemory);
+}
+
+bool StructureHierarchyWidget::isValidPointerForNode(uint32_t rawVal, QTreeWidgetItem* ptrNode) const {
+    if (rawVal == 0 || !m_manager)
+        return false;
+    if (m_manager->isValidPointerTarget(rawVal))
+        return true;
+
+    if (ptrNode) {
+        for (int c = 0; c < ptrNode->childCount(); ++c) {
+            QTreeWidgetItem* child = ptrNode->child(c);
+            QTreeWidgetItem* childMeta = getTwinItem(child);
+            QString cSize = childMeta ? childMeta->text(META_COL_SIZE).toLower() : "";
+            QString cDesc = child->text(0).toLower();
+            if (cSize.contains("ascii") || cSize.contains("8-bit") || cSize.contains("16-bit") || cSize.contains("byte") ||
+                cDesc.contains("[ascii]")) {
+                return m_manager->isValidPointerTarget(rawVal & ~3U);
+            }
+        }
+    }
+    return false;
 }
 
 uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uint32_t currentBaseAddress,
@@ -788,7 +1170,7 @@ uint32_t StructureHierarchyWidget::resolveNodeAddress(QTreeWidgetItem* item, uin
 
         if (node != hierItem && isPointerItem(node)) {
             auto ptrVal = readMemoryDword(currentAddress, snapshotMemory);
-            if (ptrVal.has_value() && m_manager && m_manager->isValidPointerTarget(ptrVal.value())) {
+            if (ptrVal.has_value() && isValidPointerForNode(ptrVal.value(), node)) {
                 currentAddress = m_manager->unnormalizeAddress(QString::number(ptrVal.value(), 16));
             } else {
                 return 0;
@@ -804,13 +1186,23 @@ QTreeWidgetItem* StructureHierarchyWidget::findItemForAddress(uint32_t address, 
         return nullptr;
 
     QTreeWidgetItem* targetItem = nullptr;
+    QTreeWidgetItem* fallbackInlineArrayMatch = nullptr;
+
     std::function<void(QTreeWidgetItem*)> search = [&](QTreeWidgetItem* item) {
         if (targetItem)
             return;
-        uint32_t resolved = resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
+        QVariant cachedVar = item->data(0, ROLE_CACHED_RESOLVED_ADDR);
+        uint32_t resolved = cachedVar.isValid() ? cachedVar.toUInt()
+                                                : resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
         if (resolved == address) {
-            targetItem = item;
-            return;
+            if (isInlineArrayItem(item) && item->childCount() > 0) {
+                if (!fallbackInlineArrayMatch) {
+                    fallbackInlineArrayMatch = item;
+                }
+            } else {
+                targetItem = item;
+                return;
+            }
         }
         for (int i = 0; i < item->childCount(); ++i) {
             search(item->child(i));
@@ -822,7 +1214,7 @@ QTreeWidgetItem* StructureHierarchyWidget::findItemForAddress(uint32_t address, 
         if (targetItem)
             break;
     }
-    return targetItem;
+    return targetItem ? targetItem : fallbackInlineArrayMatch;
 }
 
 bool StructureHierarchyWidget::locateAndSelectAddress(uint32_t address, uint32_t currentBaseAddress,
@@ -890,6 +1282,8 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
         QTreeWidgetItem* meta = getTwinItem(node);
 
         if (!parentValid || parentBase == 0) {
+            node->setData(0, ROLE_CACHED_RESOLVED_ADDR, 0U);
+            node->setData(0, Qt::UserRole + 4, 0U);
             if (meta) {
                 meta->setText(META_COL_RESOLVED, "N/A");
                 meta->setText(META_COL_VALUE, "N/A");
@@ -905,6 +1299,7 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
 
         int32_t offset = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt() : node->data(1, Qt::UserRole).toInt();
         uint32_t resolved = parentBase + static_cast<uint32_t>(offset);
+        node->setData(0, ROLE_CACHED_RESOLVED_ADDR, resolved);
 
         QString displayAddr = m_manager->formatDisplayAddress(resolved);
         if (meta) {
@@ -925,7 +1320,7 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
             }
 
             if (isPointerItem(node)) {
-                if (rawVal != 0 && m_manager->isValidPointerTarget(rawVal)) {
+                if (isValidPointerForNode(rawVal, node)) {
                     nextBase = m_manager->unnormalizeAddress(QString::number(rawVal, 16));
                     nextValid = true;
                     node->setData(0, Qt::UserRole + 4, nextBase);
@@ -933,13 +1328,22 @@ void StructureHierarchyWidget::recalculateTreeAddresses(uint32_t currentBaseAddr
                     nextValid = false;
                     node->setData(0, Qt::UserRole + 4, 0);
                 }
+            } else if (isInlineArrayItem(node)) {
+                nextBase = resolved;
+                nextValid = true;
+                node->setData(0, Qt::UserRole + 4, 0);
             }
         } else {
             if (meta) {
                 meta->setText(META_COL_VALUE, "N/A");
                 meta->setForeground(META_COL_VALUE, QColor(140, 140, 140));
             }
-            nextValid = false;
+            if (isInlineArrayItem(node)) {
+                nextBase = resolved;
+                nextValid = true;
+            } else {
+                nextValid = false;
+            }
             node->setData(0, Qt::UserRole + 4, 0);
         }
 
@@ -960,30 +1364,16 @@ void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candid
                                              const std::vector<uint8_t>& snapshotMemory, bool rootArr) {
     std::function<void(QTreeWidgetItem*, int)> collect = [&](QTreeWidgetItem* item, int depth) {
         uint32_t derefBase = item->data(0, Qt::UserRole + 4).toUInt();
-        QString desc = item->text(0).trimmed();
-        QTreeWidgetItem* meta = getTwinItem(item);
-        QString sizeTag = meta ? meta->text(META_COL_SIZE).trimmed() : "";
-
-        static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
-        auto match = arrayTagRx.match(desc);
-        if (!match.hasMatch()) {
-            match = arrayTagRx.match(sizeTag);
-        }
-
-        bool isArray = item->data(0, Qt::UserRole + 6).toBool() || match.hasMatch();
-        uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
-        if (arraySize == 0 && match.hasMatch()) {
-            if (!match.captured(1).isEmpty() && !match.captured(2).isEmpty()) {
-                arraySize = match.captured(1).toUInt() * match.captured(2).toUInt();
-            } else if (!match.captured(3).isEmpty()) {
-                arraySize = match.captured(3).toUInt();
-            }
-        }
+        uint32_t arraySize = 0;
+        uint32_t arrayStride = 0;
+        bool isArray = parseArrayDimensions(item, arraySize, arrayStride);
 
         if (derefBase != 0) {
             candidateScopes.push_back({item, derefBase, depth, isArray, arraySize});
         } else if (isArray && arraySize > 0) {
-            uint32_t nodeAddr = resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
+            QVariant cachedVar = item->data(0, ROLE_CACHED_RESOLVED_ADDR);
+            uint32_t nodeAddr = cachedVar.isValid() ? cachedVar.toUInt()
+                                                    : resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
             if (nodeAddr != 0) {
                 candidateScopes.push_back({item, nodeAddr, depth, true, arraySize});
             }
@@ -999,6 +1389,230 @@ void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candid
     }
 }
 
+void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr, uint32_t currentBaseAddress,
+                                                           const std::vector<uint8_t>& snapshotMemory, bool rootArr,
+                                                           const QString& /*headerComment*/) {
+    if (!m_manager || selectedAddr == 0 || currentBaseAddress == 0) {
+        m_dynamicProjection = DynamicArrayProjection{};
+        return;
+    }
+
+    // Keep current dynamic projection alive while navigating inside its projected target chain
+    if (m_dynamicProjection.templateFieldItem != nullptr && m_dynamicProjection.elementFieldAddr != 0) {
+        if (selectedAddr == m_dynamicProjection.elementFieldAddr) {
+            return;
+        }
+        for (uint32_t projAddr : m_dynamicProjection.activeAddresses) {
+            if (selectedAddr >= projAddr && selectedAddr < projAddr + 4) {
+                return;
+            }
+        }
+    }
+
+    // Check if selectedAddr falls inside any defined array that has a matching element template
+    QTreeWidgetItem* matchedArray = nullptr;
+    QTreeWidgetItem* matchedTemplate = nullptr;
+    uint32_t matchedElemFieldAddr = 0;
+    int32_t matchedOffsetInArray = 0;
+
+    std::function<void(QTreeWidgetItem*)> scanArrays = [&](QTreeWidgetItem* item) {
+        if (item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+            return;
+
+        uint32_t arrSize = 0;
+        uint32_t arrStride = 0;
+        if (parseArrayDimensions(item, arrSize, arrStride) && arrSize > 0 && arrStride > 0 && item->childCount() > 0) {
+            uint32_t arrBase = item->data(0, Qt::UserRole + 4).toUInt();
+            if (arrBase == 0 && isInlineArrayItem(item)) {
+                QVariant cachedVar = item->data(0, ROLE_CACHED_RESOLVED_ADDR);
+                arrBase = cachedVar.isValid() ? cachedVar.toUInt()
+                                              : resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
+            }
+
+            if (arrBase != 0 && selectedAddr >= arrBase && selectedAddr < arrBase + arrSize) {
+                uint32_t delta = selectedAddr - arrBase;
+                int32_t elemFieldOff = static_cast<int32_t>(delta % arrStride);
+                uint32_t fieldAddr = selectedAddr;
+                if (arrStride >= 4) {
+                    elemFieldOff &= ~3;
+                    fieldAddr = arrBase + (delta - (delta % arrStride)) + static_cast<uint32_t>(elemFieldOff);
+                }
+
+                for (int c = 0; c < item->childCount(); ++c) {
+                    QTreeWidgetItem* tmpl = item->child(c);
+                    if (tmpl->childCount() == 0 || !isPointerItem(tmpl))
+                        continue;
+                    int32_t tOffset = tmpl->data(2, Qt::UserRole).isValid() ? tmpl->data(2, Qt::UserRole).toInt()
+                                                                            : tmpl->data(1, Qt::UserRole).toInt();
+                    if (tOffset == elemFieldOff) {
+                        matchedArray = item;
+                        matchedTemplate = tmpl;
+                        matchedElemFieldAddr = fieldAddr;
+                        matchedOffsetInArray = static_cast<int32_t>(fieldAddr - arrBase);
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < item->childCount(); ++i) {
+            scanArrays(item->child(i));
+        }
+    };
+
+    for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
+        scanArrays(m_structureTree->topLevelItem(i));
+    }
+
+    if (matchedArray && matchedTemplate && matchedElemFieldAddr != 0) {
+        // If this exact element address is already explicitly documented in the hierarchy, no dynamic fallback is needed
+        QTreeWidgetItem* explicitNode = findItemForAddress(matchedElemFieldAddr, currentBaseAddress, snapshotMemory, rootArr);
+        if (explicitNode && explicitNode != matchedTemplate) {
+            m_dynamicProjection = DynamicArrayProjection{};
+            return;
+        }
+
+        m_dynamicProjection = DynamicArrayProjection{};
+        m_dynamicProjection.arrayItem = matchedArray;
+        m_dynamicProjection.templateFieldItem = matchedTemplate;
+        m_dynamicProjection.elementFieldAddr = matchedElemFieldAddr;
+        m_dynamicProjection.offsetInArray = matchedOffsetInArray;
+
+        // Precompute projected addresses for persistence across pointer hops
+        std::function<void(QTreeWidgetItem*, uint32_t)> collectProjectedAddrs = [&](QTreeWidgetItem* ptrNode, uint32_t ptrAddr) {
+            auto valOpt = readMemoryDword(ptrAddr, snapshotMemory);
+            if (!valOpt.has_value() || !isValidPointerForNode(valOpt.value(), ptrNode))
+                return;
+            uint32_t targetBase = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
+            if (targetBase == 0)
+                return;
+
+            for (int c = 0; c < ptrNode->childCount(); ++c) {
+                QTreeWidgetItem* child = ptrNode->child(c);
+                int32_t cOff = child->data(2, Qt::UserRole).isValid() ? child->data(2, Qt::UserRole).toInt()
+                                                                       : child->data(1, Qt::UserRole).toInt();
+                uint32_t cAddr = targetBase + static_cast<uint32_t>(cOff);
+                m_dynamicProjection.activeAddresses.push_back(cAddr);
+                if (isPointerItem(child)) {
+                    collectProjectedAddrs(child, cAddr);
+                }
+            }
+        };
+        collectProjectedAddrs(matchedTemplate, matchedElemFieldAddr);
+    } else {
+        m_dynamicProjection = DynamicArrayProjection{};
+    }
+}
+
+void StructureHierarchyWidget::clearDynamicArraySelection() { m_dynamicProjection = DynamicArrayProjection{}; }
+
+bool StructureHierarchyWidget::collectDynamicArrayScopes(std::vector<Core::ScopeCandidate>& candidateScopes, uint32_t /*currentBaseAddress*/,
+                                                         const std::vector<uint8_t>& snapshotMemory, bool /*rootArr*/) const {
+    if (!m_manager || !m_dynamicProjection.templateFieldItem || m_dynamicProjection.elementFieldAddr == 0)
+        return false;
+
+    std::function<void(QTreeWidgetItem*, uint32_t, int)> collectDyn = [&](QTreeWidgetItem* ptrNode, uint32_t ptrAddr, int depth) {
+        auto valOpt = readMemoryDword(ptrAddr, snapshotMemory);
+        if (!valOpt.has_value() || !isValidPointerForNode(valOpt.value(), ptrNode))
+            return;
+
+        uint32_t targetBase = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
+        if (targetBase == 0)
+            return;
+
+        candidateScopes.push_back({ptrNode, targetBase, depth, false, 0});
+
+        for (int c = 0; c < ptrNode->childCount(); ++c) {
+            QTreeWidgetItem* child = ptrNode->child(c);
+            if (!isPointerItem(child))
+                continue;
+            int32_t cOff = child->data(2, Qt::UserRole).isValid() ? child->data(2, Qt::UserRole).toInt()
+                                                                   : child->data(1, Qt::UserRole).toInt();
+            collectDyn(child, targetBase + static_cast<uint32_t>(cOff), depth + 1);
+        }
+    };
+
+    collectDyn(m_dynamicProjection.templateFieldItem, m_dynamicProjection.elementFieldAddr, 200);
+    return true;
+}
+
+std::optional<PointerPath> StructureHierarchyWidget::buildPathForDynamicScope(void* scopeIdentifier, int32_t finalOffset,
+                                                                            uint32_t finalAddr, uint32_t currentBaseAddress,
+                                                                            const std::vector<uint8_t>& /*snapshotMemory*/,
+                                                                            bool rootArr) const {
+    if (!m_dynamicProjection.templateFieldItem || !m_dynamicProjection.arrayItem || currentBaseAddress == 0)
+        return std::nullopt;
+
+    auto* matchedNode = static_cast<QTreeWidgetItem*>(scopeIdentifier);
+    if (!matchedNode)
+        return std::nullopt;
+
+    // Verify matchedNode belongs to m_dynamicProjection.templateFieldItem's subtree
+    std::vector<QTreeWidgetItem*> subLineage;
+    bool inDynamicSubtree = false;
+    for (QTreeWidgetItem* curr = matchedNode; curr != nullptr; curr = curr->parent()) {
+        subLineage.push_back(curr);
+        if (curr == m_dynamicProjection.templateFieldItem) {
+            inDynamicSubtree = true;
+            break;
+        }
+    }
+    if (!inDynamicSubtree)
+        return std::nullopt;
+    std::reverse(subLineage.begin(), subLineage.end());
+
+    // Build prefix lineage down to m_dynamicProjection.arrayItem
+    std::vector<QTreeWidgetItem*> prefixLineage;
+    for (QTreeWidgetItem* curr = m_dynamicProjection.arrayItem; curr != nullptr; curr = curr->parent()) {
+        prefixLineage.push_back(curr);
+    }
+    std::reverse(prefixLineage.begin(), prefixLineage.end());
+
+    PointerPath path;
+    int32_t pendingOffset = 0;
+
+    if (rootArr && !prefixLineage.empty()) {
+        int32_t arrOff = prefixLineage[0]->data(2, Qt::UserRole).isValid() ? prefixLineage[0]->data(2, Qt::UserRole).toInt()
+                                                                           : prefixLineage[0]->data(1, Qt::UserRole).toInt();
+        path.baseAddress = currentBaseAddress + static_cast<uint32_t>(arrOff + m_dynamicProjection.offsetInArray);
+        for (size_t i = 1; i < prefixLineage.size(); ++i) {
+            int32_t off = prefixLineage[i]->data(2, Qt::UserRole).isValid() ? prefixLineage[i]->data(2, Qt::UserRole).toInt()
+                                                                            : prefixLineage[i]->data(1, Qt::UserRole).toInt();
+            if (isPointerItem(prefixLineage[i])) {
+                path.offsets.push_back(pendingOffset + off);
+                pendingOffset = 0;
+            } else {
+                pendingOffset += off;
+            }
+        }
+    } else {
+        path.baseAddress = currentBaseAddress;
+        for (auto* node : prefixLineage) {
+            int32_t off = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt()
+                                                                : node->data(1, Qt::UserRole).toInt();
+            if (isPointerItem(node)) {
+                path.offsets.push_back(pendingOffset + off);
+                pendingOffset = 0;
+            } else {
+                pendingOffset += off;
+            }
+        }
+    }
+
+    // Add the dynamic array element offset
+    path.offsets.push_back(pendingOffset + m_dynamicProjection.offsetInArray);
+
+    // Add subLineage offsets after templateFieldItem
+    for (size_t i = 1; i < subLineage.size(); ++i) {
+        int32_t off = subLineage[i]->data(2, Qt::UserRole).isValid() ? subLineage[i]->data(2, Qt::UserRole).toInt()
+                                                                     : subLineage[i]->data(1, Qt::UserRole).toInt();
+        path.offsets.push_back(off);
+    }
+
+    path.offsets.push_back(finalOffset);
+    path.finalAddress = finalAddr;
+    return path;
+}
+
 void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Widgets::MemoryViewerWidget::HighlightInfo>& highlights,
                                                 std::vector<Widgets::MemoryViewerWidget::DefinedArrayInfo>& definedArrays,
                                                 uint32_t currentBaseAddress, bool rootArr, const std::vector<uint8_t>& snapshotMemory,
@@ -1009,35 +1623,22 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
     QTreeWidgetItem* activeItem = m_structureTree->currentItem();
 
     std::function<void(QTreeWidgetItem*)> gather = [&](QTreeWidgetItem* item) {
-        uint32_t resolved = resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
-        if (resolved != 0) {
+        QVariant cachedVar = item->data(0, ROLE_CACHED_RESOLVED_ADDR);
+        uint32_t resolved = cachedVar.isValid() ? cachedVar.toUInt()
+                                                : resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
+        QTreeWidgetItem* meta = getTwinItem(item);
+        bool inlineArr = isInlineArrayItem(item);
+
+        if (resolved != 0 && !inlineArr) {
             uint32_t nativeAddr = m_manager->unnormalizeAddress(QString::number(resolved, 16));
             Widgets::MemoryViewerWidget::HighlightInfo info;
 
-            QTreeWidgetItem* meta = getTwinItem(item);
             QString sizeTag = meta ? meta->text(META_COL_SIZE).trimmed() : "";
             if (sizeTag.isEmpty()) {
                 sizeTag = item->text(0).trimmed();
             }
 
-            uint32_t varSize = 4;
-            QString tagLower = sizeTag.toLower();
-            if (tagLower.startsWith('[') && tagLower.endsWith(']')) {
-                tagLower = tagLower.mid(1, tagLower.length() - 2).trimmed();
-            }
-
-            if (tagLower.startsWith("8-bit") || tagLower == "8bit" || tagLower == "byte" || tagLower.startsWith("bit") ||
-                tagLower.contains("bitflag") || tagLower == "lower4" || tagLower == "upper4") {
-                varSize = 1;
-            } else if (tagLower.startsWith("16-bit") || tagLower == "16bit" || tagLower == "short") {
-                varSize = 2;
-            } else if (tagLower.startsWith("24-bit") || tagLower == "24bit") {
-                varSize = 3;
-            } else if (tagLower.startsWith("64-bit") || tagLower == "64bit" || tagLower.contains("double")) {
-                varSize = 8;
-            } else if (tagLower.startsWith("32-bit") || tagLower == "32bit" || tagLower.contains("float") || tagLower.contains("pointer")) {
-                varSize = 4;
-            }
+            uint32_t varSize = resolveVarSizeFromTag(sizeTag);
 
             info.name = item->text(0).trimmed();
             info.offset = meta ? meta->text(META_COL_OFFSET).trimmed() : "";
@@ -1069,23 +1670,9 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
 
         // Identify defined array boundaries across the hierarchy
         QString desc = item->text(0).trimmed();
-        QTreeWidgetItem* meta = getTwinItem(item);
-        QString sizeTagStr = meta ? meta->text(META_COL_SIZE).trimmed() : "";
-        static const QRegularExpression arrayTagRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
-        auto arrayMatch = arrayTagRx.match(desc);
-        if (!arrayMatch.hasMatch()) {
-            arrayMatch = arrayTagRx.match(sizeTagStr);
-        }
-
-        bool isArray = item->data(0, Qt::UserRole + 6).toBool() || arrayMatch.hasMatch();
-        uint32_t arraySize = item->data(0, Qt::UserRole + 5).toUInt();
-        if (arraySize == 0 && arrayMatch.hasMatch()) {
-            if (!arrayMatch.captured(1).isEmpty() && !arrayMatch.captured(2).isEmpty()) {
-                arraySize = arrayMatch.captured(1).toUInt() * arrayMatch.captured(2).toUInt();
-            } else if (!arrayMatch.captured(3).isEmpty()) {
-                arraySize = arrayMatch.captured(3).toUInt();
-            }
-        }
+        uint32_t arraySize = 0;
+        uint32_t arrayStride = 0;
+        bool isArray = parseArrayDimensions(item, arraySize, arrayStride);
 
         if (isArray && arraySize > 0) {
             uint32_t targetBase = item->data(0, Qt::UserRole + 4).toUInt();
@@ -1110,6 +1697,70 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
 
     for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
         gather(m_structureTree->topLevelItem(i));
+    }
+
+    // Project dynamic array element template highlights when inspecting an undocumented array element
+    if (m_dynamicProjection.templateFieldItem != nullptr && m_dynamicProjection.elementFieldAddr != 0) {
+        std::function<void(QTreeWidgetItem*, uint32_t)> gatherDynamic = [&](QTreeWidgetItem* tmplNode, uint32_t nodeAddr) {
+            QTreeWidgetItem* meta = getTwinItem(tmplNode);
+            QString sizeTag = meta ? meta->text(META_COL_SIZE).trimmed() : "";
+            if (sizeTag.isEmpty()) {
+                sizeTag = tmplNode->text(0).trimmed();
+            }
+
+            uint32_t varSize = resolveVarSizeFromTag(sizeTag);
+            uint32_t nativeAddr = m_manager->unnormalizeAddress(QString::number(nodeAddr, 16));
+            if (nativeAddr != 0) {
+                Widgets::MemoryViewerWidget::HighlightInfo info;
+                info.name = tmplNode->text(0).trimmed();
+                int32_t tOff = tmplNode->data(2, Qt::UserRole).isValid() ? tmplNode->data(2, Qt::UserRole).toInt()
+                                                                          : tmplNode->data(1, Qt::UserRole).toInt();
+                if (tmplNode == m_dynamicProjection.templateFieldItem) {
+                    QString offHex = QString("%1").arg(std::abs(m_dynamicProjection.offsetInArray), 2, 16, QChar('0')).toUpper();
+                    info.offset = "|0x" + offHex;
+                } else {
+                    QString offHex = QString("%1").arg(std::abs(tOff), 2, 16, QChar('0')).toUpper();
+                    info.offset = (tOff < 0 ? "-0x" : "+0x") + offHex;
+                }
+                info.label = info.name + " (" + info.offset + ")";
+                info.startAddress = nativeAddr;
+                info.size = varSize;
+                info.isPointer = isPointerItem(tmplNode);
+                info.isChildOfActive = true;
+
+                if (info.isPointer) {
+                    uint32_t mask = extractMaskValueFromText(meta ? meta->text(META_COL_SIZE) : "");
+                    if (mask == 0) {
+                        mask = extractMaskValueFromText(tmplNode->text(0));
+                    }
+                    if (mask == 0 && !headerComment.isEmpty()) {
+                        mask = extractMaskValueFromText(headerComment);
+                    }
+                    info.pointerMask = (mask != 0) ? mask : 0xFFFFFFFF;
+                }
+
+                for (uint32_t b = 0; b < varSize; ++b) {
+                    highlights[nativeAddr + b] = info;
+                }
+            }
+
+            if (isPointerItem(tmplNode) && tmplNode->childCount() > 0) {
+                auto valOpt = readMemoryDword(nodeAddr, snapshotMemory);
+                if (valOpt.has_value() && isValidPointerForNode(valOpt.value(), tmplNode)) {
+                    uint32_t nextBase = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
+                    if (nextBase != 0) {
+                        for (int c = 0; c < tmplNode->childCount(); ++c) {
+                            QTreeWidgetItem* child = tmplNode->child(c);
+                            int32_t cOff = child->data(2, Qt::UserRole).isValid() ? child->data(2, Qt::UserRole).toInt()
+                                                                                   : child->data(1, Qt::UserRole).toInt();
+                            gatherDynamic(child, nextBase + static_cast<uint32_t>(cOff));
+                        }
+                    }
+                }
+            }
+        };
+
+        gatherDynamic(m_dynamicProjection.templateFieldItem, m_dynamicProjection.elementFieldAddr);
     }
 }
 
@@ -1151,6 +1802,11 @@ void StructureHierarchyWidget::updateOffsetPreview(uint32_t selectedAddr, const 
 void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, int32_t offset, const QString& description,
                                                  bool isArrayElement) {
     QTreeWidgetItem* hierParent = parentScope ? ((parentScope->treeWidget() == m_metadataTree) ? getTwinItem(parentScope) : parentScope) : nullptr;
+    if (hierParent && hierParent->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+        if (auto* srcTmpl = getTemplateSourceItem(hierParent)) {
+            hierParent = srcTmpl;
+        }
+    }
     QTreeWidgetItem* metaParent = hierParent ? getTwinItem(hierParent) : nullptr;
 
     QTreeWidget* tree = m_structureTree;
@@ -1159,6 +1815,8 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
     int insertIndex = childCount;
     for (int i = 0; i < childCount; ++i) {
         QTreeWidgetItem* existing = hierParent ? hierParent->child(i) : tree->topLevelItem(i);
+        if (existing->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+            continue;
         int32_t existingOffset = existing->data(2, Qt::UserRole).isValid() ? existing->data(2, Qt::UserRole).toInt()
                                                                            : existing->data(1, Qt::UserRole).toInt();
         if (existingOffset > offset) {
@@ -1233,7 +1891,12 @@ void StructureHierarchyWidget::updateNodeDescription(QTreeWidgetItem* item, cons
         return;
 
     QTreeWidgetItem* hierItem = (item->treeWidget() == m_metadataTree) ? getTwinItem(item) : item;
-    QTreeWidgetItem* metaItem = (item->treeWidget() == m_metadataTree) ? item : getTwinItem(item);
+    if (hierItem && hierItem->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+        if (auto* srcTmpl = getTemplateSourceItem(hierItem)) {
+            hierItem = srcTmpl;
+        }
+    }
+    QTreeWidgetItem* metaItem = hierItem ? getTwinItem(hierItem) : nullptr;
 
     QString sizeStr;
     QString cleanDesc;
@@ -1253,6 +1916,10 @@ void StructureHierarchyWidget::removeDocumentationAtAddress(uint32_t address, ui
         return;
 
     QTreeWidgetItem* targetItem = findItemForAddress(address, currentBaseAddress, snapshotMemory, rootArr);
+    if (targetItem && targetItem->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+        emit statusMessageRequested("Inherited from array template — edit or remove under the [Array] template node.");
+        return;
+    }
 
     if (targetItem) {
         QTreeWidgetItem* meta = getTwinItem(targetItem);
@@ -1271,6 +1938,9 @@ QString StructureHierarchyWidget::generateCodeNoteFromTree(bool useUnicode, bool
 
         for (int i = 0; i < count; ++i) {
             QTreeWidgetItem* item = parent ? parent->child(i) : m_structureTree->topLevelItem(i);
+            if (item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool()) {
+                continue;
+            }
             int32_t offset = item->data(2, Qt::UserRole).isValid() ? item->data(2, Qt::UserRole).toInt() : item->data(1, Qt::UserRole).toInt();
             QString offsetHex = QString("%1").arg(std::abs(offset), 2, 16, QChar('0')).toLower();
             QString delimiter = item->data(2, Qt::UserRole + 1).isValid() ? item->data(2, Qt::UserRole + 1).toString()
@@ -1363,6 +2033,7 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
     std::reverse(lineage.begin(), lineage.end());
 
     PointerPath path;
+    int32_t pendingOffset = 0;
 
     // In static array structures, the top-level element offset represents a direct offset in static RAM,
     // not an additional indirect pointer chain level.
@@ -1373,8 +2044,15 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
 
         // Append offsets within the pointed instance
         for (size_t i = 1; i < lineage.size(); ++i) {
-            path.offsets.push_back(lineage[i]->data(2, Qt::UserRole).isValid() ? lineage[i]->data(2, Qt::UserRole).toInt()
-                                                                               : lineage[i]->data(1, Qt::UserRole).toInt());
+            int32_t off = lineage[i]->data(2, Qt::UserRole).isValid() ? lineage[i]->data(2, Qt::UserRole).toInt()
+                                                                      : lineage[i]->data(1, Qt::UserRole).toInt();
+            bool isLast = (i == lineage.size() - 1);
+            if (!isLast && !isPointerItem(lineage[i])) {
+                pendingOffset += off;
+            } else {
+                path.offsets.push_back(pendingOffset + off);
+                pendingOffset = 0;
+            }
         }
 
         // If the element itself is selected, target offset is 0
@@ -1383,9 +2061,17 @@ std::optional<PointerPath> StructureHierarchyWidget::getPathForTreeItem(QTreeWid
         }
     } else {
         path.baseAddress = currentBaseAddress;
-        for (auto* node : lineage) {
-            path.offsets.push_back(node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt()
-                                                                         : node->data(1, Qt::UserRole).toInt());
+        for (size_t i = 0; i < lineage.size(); ++i) {
+            auto* node = lineage[i];
+            int32_t off = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt()
+                                                                : node->data(1, Qt::UserRole).toInt();
+            bool isLast = (i == lineage.size() - 1);
+            if (!isLast && !isPointerItem(node)) {
+                pendingOffset += off;
+            } else {
+                path.offsets.push_back(pendingOffset + off);
+                pendingOffset = 0;
+            }
         }
     }
 
@@ -1601,7 +2287,7 @@ void StructureHierarchyWidget::openSizeDropdown(QTreeWidgetItem* item, const QPo
 
             int updatedCount = 0;
             for (auto* itm : selected) {
-                if (!isPointerItem(itm)) {
+                if (!isPointerItem(itm) && !isTemplateInheritedItem(itm)) {
                     applySizeToItem(itm, type);
                     updatedCount++;
                 }
@@ -1636,6 +2322,10 @@ void StructureHierarchyWidget::onMetadataItemDoubleClicked(QTreeWidgetItem* item
         hierItem = item;
 
     if (column == META_COL_SIZE) {
+        if (isTemplateInheritedItem(hierItem)) {
+            emit statusMessageRequested("Inherited from array template — edit the size under the [Array] template node.");
+            return;
+        }
         if (isPointerItem(hierItem)) {
             QString emuName = m_manager ? m_manager->getEmulatorName() : "Emulator";
             QString ptrDesc = m_manager ? m_manager->getPlatformPointerTypeDescription() : "[32-bit] Pointer";
@@ -1703,7 +2393,7 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
     menu.addSeparator();
 
     // Context menu option to add or edit value descriptions for non-pointer variables
-    if (!isPointerItem(clickedItem)) {
+    if (!isPointerItem(clickedItem) && !isTemplateInheritedItem(clickedItem)) {
         auto* descAct = menu.addAction(getThemeIcon(":/icons/copy_note.svg"), "Value Descriptions... (D)", this,
                                        &StructureHierarchyWidget::manageDescriptionsClicked);
         descAct->setProperty("iconPath", ":/icons/copy_note.svg");
@@ -1716,13 +2406,17 @@ void StructureHierarchyWidget::onTreeCustomContextMenu(const QPoint& pos) {
 
     if (hasPointerVal) {
         auto* followAct = menu.addAction(getThemeIcon(":/icons/follow_pointer.svg"), "Follow Pointer", this,
-                                         &StructureHierarchyWidget::followPointerClicked);
+                                         &StructureHierarchyWidget::followPointerTargetRequested);
         followAct->setProperty("iconPath", ":/icons/follow_pointer.svg");
-        menu.addSeparator();
+        if (!isTemplateInheritedItem(clickedItem)) {
+            menu.addSeparator();
+        }
     }
 
-    auto* removeAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove", this, &StructureHierarchyWidget::removeNodeClicked);
-    removeAct->setProperty("iconPath", ":/icons/delete.svg");
+    if (!isTemplateInheritedItem(clickedItem)) {
+        auto* removeAct = menu.addAction(getThemeIcon(":/icons/delete.svg"), "Remove", this, &StructureHierarchyWidget::removeNodeClicked);
+        removeAct->setProperty("iconPath", ":/icons/delete.svg");
+    }
 
     menu.exec(m_structureTree->viewport()->mapToGlobal(pos));
 }

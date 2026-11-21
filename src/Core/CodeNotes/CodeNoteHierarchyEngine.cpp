@@ -236,7 +236,8 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
                                                      bool useUnicodeTree, bool indentDescriptions, const QString& headerComment,
                                                      std::vector<bool> ancestorIsLast, int parentNestingLevel,
                                                      const QString& delimiterSuffix, bool autoPopulateTemplate,
-                                                     const QString& pointerTypeTemplate, const QString& indentPrefix) {
+                                                     const QString& pointerTypeTemplate, const QString& indentPrefix,
+                                                     int ancestorPipeLevel) {
     QString sb = "";
 
     // Resolve active delimiter: prefer explicit parameter, fall back to global setting, then "="
@@ -302,6 +303,7 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
 
         QString prefix = "";
         int nextNestingLevel = 0;
+        int childPipeLevel = ancestorPipeLevel;
 
         if (useUnicodeTree) {
             if (isAttachedNote) {
@@ -338,11 +340,22 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
                 }
             } else {
                 // Array element offsets (|0x..) align directly at root without plusses, or to child depth.
-                // If the node already contains a pipe prefix (e.g., "|0x" or "|+0x"), do not prepend extra plusses.
+                // If the node already contains a pipe prefix (e.g., "|0x" or "|+0x"), preserve nested prefix depth.
                 if (node->content.startsWith('|')) {
-                    prefix = "";
+                    if (node->content.startsWith("|+") || node->content.startsWith("|-")) {
+                        prefix = (indentLevel > 1) ? QString(indentLevel - 1, indentChar) : "";
+                        childPipeLevel = (indentLevel > 1) ? (indentLevel - 1) : 0;
+                    } else {
+                        prefix = (indentLevel > 0) ? QString(indentLevel, indentChar) : "";
+                        childPipeLevel = indentLevel;
+                    }
+                } else if (ancestorPipeLevel >= 0) {
+                    int remainingPlusses = std::max(0, indentLevel - ancestorPipeLevel - 1);
+                    prefix = QString(ancestorPipeLevel, indentChar) + "|" + QString(remainingPlusses, indentChar);
+                    childPipeLevel = ancestorPipeLevel;
                 } else {
                     prefix = indentLevel > 0 ? QString(indentLevel, indentChar) : "";
+                    childPipeLevel = -1;
                 }
 
                 // Dynamically calculate the exact character width before the hexadecimal offset starts
@@ -403,7 +416,8 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
                 nextAncestors.push_back(isLastChild);
             }
             sb.append(rebuildTextFromTree(node->children, indentLevel + 1, useUnicodeTree, indentDescriptions, "", nextAncestors,
-                                          nextNestingLevel, effectiveDelimiter, autoPopulateTemplate, pointerTypeTemplate, indentPrefix));
+                                          nextNestingLevel, effectiveDelimiter, autoPopulateTemplate, pointerTypeTemplate, indentPrefix,
+                                          childPipeLevel));
         }
     }
     return sb;
@@ -413,10 +427,11 @@ QString CodeNoteHierarchyEngine::rebuildTextFromTree(const std::vector<std::shar
                                                      const QString& style, bool indentDescriptions, const QString& headerComment,
                                                      std::vector<bool> ancestorIsLast, int parentNestingLevel,
                                                      const QString& delimiterSuffix, bool autoPopulateTemplate,
-                                                     const QString& pointerTypeTemplate, const QString& indentPrefix) {
+                                                     const QString& pointerTypeTemplate, const QString& indentPrefix,
+                                                     int ancestorPipeLevel) {
     bool useUnicode = style.startsWith("Unicode Tree", Qt::CaseInsensitive);
     return rebuildTextFromTree(nodes, indentLevel, useUnicode, indentDescriptions, headerComment, ancestorIsLast, parentNestingLevel,
-                               delimiterSuffix, autoPopulateTemplate, pointerTypeTemplate, indentPrefix);
+                               delimiterSuffix, autoPopulateTemplate, pointerTypeTemplate, indentPrefix, ancestorPipeLevel);
 }
 
 } // namespace PointerFinder2::Core

@@ -27,12 +27,14 @@ class CodeNoteHierarchyEngine {
     static QString rebuildTextFromTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, int indentLevel, bool useUnicodeTree,
                                        bool indentDescriptions, const QString& headerComment = "", std::vector<bool> ancestorIsLast = {},
                                        int parentNestingLevel = 0, const QString& delimiterSuffix = "", bool autoPopulateTemplate = false,
-                                       const QString& pointerTypeTemplate = "", const QString& indentPrefix = "");
+                                       const QString& pointerTypeTemplate = "", const QString& indentPrefix = "",
+                                       int ancestorPipeLevel = -1);
 
     static QString rebuildTextFromTree(const std::vector<std::shared_ptr<CodeNoteNode>>& nodes, int indentLevel, const QString& style,
                                        bool indentDescriptions, const QString& headerComment = "", std::vector<bool> ancestorIsLast = {},
                                        int parentNestingLevel = 0, const QString& delimiterSuffix = "", bool autoPopulateTemplate = false,
-                                       const QString& pointerTypeTemplate = "", const QString& indentPrefix = "");
+                                       const QString& pointerTypeTemplate = "", const QString& indentPrefix = "",
+                                       int ancestorPipeLevel = -1);
 };
 
 } // namespace PointerFinder2::Core

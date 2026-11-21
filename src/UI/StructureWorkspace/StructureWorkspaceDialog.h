@@ -54,6 +54,8 @@ class StructureWorkspaceDialog : public QDialog {
     void onAddVariableClicked();
     void onAddPointerClicked();
     void onFollowPointerClicked();
+    void onFollowPointerInViewerTriggered();
+    void onFollowTreePointerTargetRequested();
     void onRemoveNodeClicked();
     void onManageDescriptionsClicked();
     void onLocateInHierarchyClicked();

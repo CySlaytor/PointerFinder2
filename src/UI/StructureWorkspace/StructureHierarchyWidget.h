@@ -37,12 +37,18 @@ class StructureHierarchyWidget : public QWidget {
     static constexpr int META_COL_RESOLVED = 2;
     static constexpr int META_COL_VALUE = 3;
 
+    static constexpr int ROLE_IS_TEMPLATE_INHERITED = Qt::UserRole + 7;
+    static constexpr int ROLE_TEMPLATE_SOURCE_ITEM = Qt::UserRole + 8;
+    static constexpr int ROLE_CACHED_RESOLVED_ADDR = Qt::UserRole + 9;
+    static constexpr int ROLE_TWIN_ITEM = Qt::UserRole + 10;
+
     explicit StructureHierarchyWidget(QWidget* parent = nullptr);
     ~StructureHierarchyWidget() override;
 
     void setEmulatorManager(Emulators::IEmulatorManager* manager);
 
-    void populateFromNodes(const std::vector<std::shared_ptr<Core::CodeNoteNode>>& nodes);
+    void populateFromNodes(const std::vector<std::shared_ptr<Core::CodeNoteNode>>& nodes, const QString& headerComment = "");
+    void applyArrayTemplates(const QString& headerComment = "");
     void clearTree();
 
     void recalculateTreeAddresses(uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory, bool rootArr);
@@ -68,6 +74,15 @@ class StructureHierarchyWidget : public QWidget {
                           bool rootArr, const std::vector<uint8_t>& snapshotMemory,
                           const QString& headerComment = "");
 
+    void updateDynamicArraySelection(uint32_t selectedAddr, uint32_t currentBaseAddress, const std::vector<uint8_t>& snapshotMemory,
+                                     bool rootArr, const QString& headerComment);
+    void clearDynamicArraySelection();
+    bool collectDynamicArrayScopes(std::vector<Core::ScopeCandidate>& candidateScopes, uint32_t currentBaseAddress,
+                                   const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
+    std::optional<DataModels::PointerPath> buildPathForDynamicScope(void* scopeIdentifier, int32_t finalOffset, uint32_t finalAddr,
+                                                                    uint32_t currentBaseAddress,
+                                                                    const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
+
     QString generateCodeNoteFromTree(bool useUnicode, bool indentDesc, const QString& headerComment) const;
     QString generateCodeNoteFromTree(const QString& style, bool indentDesc, const QString& headerComment) const;
 
@@ -77,6 +92,10 @@ class StructureHierarchyWidget : public QWidget {
 
     QTreeWidgetItem* getTwinItem(QTreeWidgetItem* item) const;
     bool isPointerItem(QTreeWidgetItem* item) const;
+    bool isArrayItem(QTreeWidgetItem* item) const;
+    bool isInlineArrayItem(QTreeWidgetItem* item) const;
+    bool isTemplateInheritedItem(QTreeWidgetItem* item) const;
+    QTreeWidgetItem* getTemplateSourceItem(QTreeWidgetItem* item) const;
 
     std::optional<DataModels::PointerPath> getPathForTreeItem(QTreeWidgetItem* item, uint32_t currentBaseAddress,
                                                               const std::vector<uint8_t>& snapshotMemory, bool rootArr) const;
@@ -94,6 +113,7 @@ class StructureHierarchyWidget : public QWidget {
     void addVariableClicked();
     void addPointerClicked();
     void followPointerClicked();
+    void followPointerTargetRequested();
     void removeNodeClicked();
     void manageDescriptionsClicked();
     void treeSelectionChanged();
@@ -118,6 +138,14 @@ class StructureHierarchyWidget : public QWidget {
     void onToggleMetadataClicked();
 
   private:
+    struct DynamicArrayProjection {
+        QTreeWidgetItem* arrayItem = nullptr;
+        QTreeWidgetItem* templateFieldItem = nullptr;
+        uint32_t elementFieldAddr = 0;
+        int32_t offsetInArray = 0;
+        std::vector<uint32_t> activeAddresses;
+    };
+
     Emulators::IEmulatorManager* m_manager = nullptr;
 
     QSplitter* m_innerSplitter = nullptr;
@@ -142,6 +170,7 @@ class StructureHierarchyWidget : public QWidget {
     bool m_isSyncingScroll = false;
     bool m_isSyncingExpand = false;
     int m_lastMetadataWidth = 320;
+    DynamicArrayProjection m_dynamicProjection;
 
     int getColumnMinWidth(int column) const;
     void adjustColumnWidths();
@@ -150,7 +179,11 @@ class StructureHierarchyWidget : public QWidget {
     void populateTreeFromHierarchyNodes(const std::vector<std::shared_ptr<Core::CodeNoteNode>>& nodes,
                                         QTreeWidgetItem* parentItem = nullptr,
                                         QTreeWidgetItem* metaParentItem = nullptr);
-    std::optional<uint32_t> readMemoryDword(uint32_t address, const std::vector<uint8_t>& snapshotMemory);
+    std::optional<uint32_t> readMemoryDword(uint32_t address, const std::vector<uint8_t>& snapshotMemory) const;
+    bool isValidPointerForNode(uint32_t rawVal, QTreeWidgetItem* ptrNode) const;
+    bool parseArrayDimensions(QTreeWidgetItem* item, uint32_t& outTotalBytes, uint32_t& outStride) const;
+    void clearInheritedTemplateChildren();
+    void cloneTemplateSubtree(QTreeWidgetItem* templateParent, QTreeWidgetItem* targetParent);
 
     void setTwinItems(QTreeWidgetItem* leftItem, QTreeWidgetItem* rightItem);
     void openSizeDropdown(QTreeWidgetItem* item, const QPoint& globalPos);
