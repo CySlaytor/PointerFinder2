@@ -122,6 +122,12 @@ uint32_t resolveVarSizeFromTag(const QString& sizeTag) {
     return 4;
 }
 
+int32_t getNodeOffsetValue(QTreeWidgetItem* item) {
+    if (!item)
+        return 0;
+    return item->data(2, Qt::UserRole).isValid() ? item->data(2, Qt::UserRole).toInt() : item->data(1, Qt::UserRole).toInt();
+}
+
 // Standard RetroAchievements memory data types (>= 8-bit allocation sizes)
 static const QStringList StandardRATypes = {
     "8-bit",      "16-bit",     "24-bit",     "32-bit",
@@ -789,7 +795,7 @@ void StructureHierarchyWidget::clearInheritedTemplateChildren() {
 }
 
 void StructureHierarchyWidget::cloneTemplateSubtree(QTreeWidgetItem* templateParent, QTreeWidgetItem* targetParent) {
-    if (!templateParent || !targetParent)
+    if (!templateParent || !targetParent || templateParent == targetParent)
         return;
 
     QTreeWidgetItem* targetMetaParent = getTwinItem(targetParent);
@@ -798,8 +804,6 @@ void StructureHierarchyWidget::cloneTemplateSubtree(QTreeWidgetItem* templatePar
 
     for (int i = 0; i < templateParent->childCount(); ++i) {
         QTreeWidgetItem* srcLeft = templateParent->child(i);
-        if (srcLeft->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
-            continue;
         QTreeWidgetItem* srcRight = getTwinItem(srcLeft);
 
         int32_t offsetVal = srcLeft->data(2, Qt::UserRole).isValid() ? srcLeft->data(2, Qt::UserRole).toInt()
@@ -846,10 +850,21 @@ void StructureHierarchyWidget::cloneTemplateSubtree(QTreeWidgetItem* templatePar
             dstLeft->setData(0, Qt::UserRole + 6, true);
         }
 
+        bool srcIsInherited = srcLeft->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool();
+        QTreeWidgetItem* realSource = srcIsInherited ? getTemplateSourceItem(srcLeft) : srcLeft;
+        if (!realSource) {
+            realSource = srcLeft;
+        }
+
         dstLeft->setData(0, ROLE_IS_TEMPLATE_INHERITED, true);
-        dstLeft->setData(0, ROLE_TEMPLATE_SOURCE_ITEM, QVariant::fromValue(static_cast<void*>(srcLeft)));
+        dstLeft->setData(0, ROLE_TEMPLATE_SOURCE_ITEM, QVariant::fromValue(static_cast<void*>(realSource)));
         dstRight->setData(0, ROLE_IS_TEMPLATE_INHERITED, true);
-        dstRight->setData(0, ROLE_TEMPLATE_SOURCE_ITEM, QVariant::fromValue(static_cast<void*>(srcLeft)));
+        dstRight->setData(0, ROLE_TEMPLATE_SOURCE_ITEM, QVariant::fromValue(static_cast<void*>(realSource)));
+
+        if (auto* consumed = getConsumedTemplateItem(srcLeft)) {
+            dstLeft->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(consumed)));
+            dstRight->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(consumed)));
+        }
 
         cloneTemplateSubtree(srcLeft, dstLeft);
         dstLeft->setExpanded(true);
@@ -867,61 +882,93 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
 
     clearInheritedTemplateChildren();
 
+    struct ArrayMember {
+        QTreeWidgetItem* item = nullptr;
+        int64_t relOffset = 0;
+    };
+
+    auto applyInheritanceToMembers = [&](std::vector<ArrayMember>& members, uint32_t arrayStride) {
+        if (members.empty())
+            return;
+
+        std::stable_sort(members.begin(), members.end(),
+                         [](const ArrayMember& a, const ArrayMember& b) { return a.relOffset < b.relOffset; });
+
+        QTreeWidgetItem* primaryTemplate = nullptr;
+        std::map<int64_t, QTreeWidgetItem*> slotTemplates;
+
+        for (const auto& m : members) {
+            if (!m.item || m.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                continue;
+            if (m.item->childCount() == 0 || !isPointerItem(m.item))
+                continue;
+
+            if (!primaryTemplate) {
+                primaryTemplate = m.item;
+            }
+            if (arrayStride > 0) {
+                int64_t slotOff = m.relOffset % static_cast<int64_t>(arrayStride);
+                if (slotTemplates.find(slotOff) == slotTemplates.end()) {
+                    slotTemplates[slotOff] = m.item;
+                }
+            }
+        }
+
+        if (!primaryTemplate)
+            return;
+
+        for (const auto& m : members) {
+            QTreeWidgetItem* sibling = m.item;
+            if (!sibling || sibling == primaryTemplate || sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                continue;
+            if (sibling->childCount() > 0 || !isPointerItem(sibling))
+                continue;
+
+            QTreeWidgetItem* tmpl = nullptr;
+            if (arrayStride > 0) {
+                int64_t slotOff = m.relOffset % static_cast<int64_t>(arrayStride);
+                auto it = slotTemplates.find(slotOff);
+                if (it != slotTemplates.end()) {
+                    tmpl = it->second;
+                }
+            }
+            if (!tmpl) {
+                tmpl = primaryTemplate;
+            }
+
+            if (tmpl && tmpl != sibling) {
+                sibling->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(tmpl)));
+                cloneTemplateSubtree(tmpl, sibling);
+                sibling->setExpanded(false);
+                if (auto* metaSibling = getTwinItem(sibling)) {
+                    metaSibling->setExpanded(false);
+                }
+            }
+        }
+    };
+
     auto applyToContainer = [&](QTreeWidgetItem* parentNode, uint32_t containerArrOffset, uint32_t containerTotalBytes,
-                                uint32_t containerStride, bool useArrayElemTemplates) {
+                                uint32_t containerStride) {
+        if (containerTotalBytes == 0)
+            return;
+
         int count = parentNode ? parentNode->childCount() : m_structureTree->topLevelItemCount();
-        std::map<int32_t, QTreeWidgetItem*> templateMap;
+        std::vector<ArrayMember> members;
+        members.reserve(static_cast<size_t>(count));
 
         for (int i = 0; i < count; ++i) {
             QTreeWidgetItem* child = parentNode ? parentNode->child(i) : m_structureTree->topLevelItem(i);
             if (child->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
                 continue;
 
-            bool isArrElem = child->data(2, Qt::UserRole + 3).isValid() ? child->data(2, Qt::UserRole + 3).toBool()
-                                                                        : child->data(1, Qt::UserRole + 3).toBool();
-            if (useArrayElemTemplates && !isArrElem)
-                continue;
-            if (child->childCount() == 0 || !isPointerItem(child))
-                continue;
-
-            int32_t tOffset = child->data(2, Qt::UserRole).isValid() ? child->data(2, Qt::UserRole).toInt()
-                                                                     : child->data(1, Qt::UserRole).toInt();
-            if (templateMap.find(tOffset) == templateMap.end()) {
-                templateMap[tOffset] = child;
-            }
-        }
-
-        if (templateMap.empty() || containerTotalBytes == 0)
-            return;
-
-        for (int i = 0; i < count; ++i) {
-            QTreeWidgetItem* sibling = parentNode ? parentNode->child(i) : m_structureTree->topLevelItem(i);
-            if (sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
-                continue;
-            if (sibling->childCount() > 0 || !isPointerItem(sibling))
-                continue;
-
-            bool isArrElem = sibling->data(2, Qt::UserRole + 3).isValid() ? sibling->data(2, Qt::UserRole + 3).toBool()
-                                                                          : sibling->data(1, Qt::UserRole + 3).toBool();
-            if (useArrayElemTemplates && isArrElem)
-                continue;
-
-            int32_t sOffset = sibling->data(2, Qt::UserRole).isValid() ? sibling->data(2, Qt::UserRole).toInt()
-                                                                       : sibling->data(1, Qt::UserRole).toInt();
+            int32_t sOffset = getNodeOffsetValue(child);
             int64_t rel = static_cast<int64_t>(sOffset) - static_cast<int64_t>(containerArrOffset);
             if (rel >= 0 && rel < static_cast<int64_t>(containerTotalBytes)) {
-                int32_t elemOffset = (containerStride > 0) ? static_cast<int32_t>(rel % containerStride) : static_cast<int32_t>(rel);
-                auto it = templateMap.find(elemOffset);
-                if (it != templateMap.end() && it->second != sibling) {
-                    sibling->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(it->second)));
-                    cloneTemplateSubtree(it->second, sibling);
-                    sibling->setExpanded(false);
-                    if (auto* metaSibling = getTwinItem(sibling)) {
-                        metaSibling->setExpanded(false);
-                    }
-                }
+                members.push_back({child, rel});
             }
         }
+
+        applyInheritanceToMembers(members, containerStride);
     };
 
     // Process all container parents bottom-up (post-order) so nested arrays within arrays
@@ -944,49 +991,31 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
 
             uint32_t arrTotalBytes = 0;
             uint32_t arrStride = 0;
-            if (isInlineArrayItem(item) && item->childCount() > 0 && parseArrayDimensions(item, arrTotalBytes, arrStride)) {
-                int32_t arrOffset = item->data(2, Qt::UserRole).isValid() ? item->data(2, Qt::UserRole).toInt()
-                                                                          : item->data(1, Qt::UserRole).toInt();
+            if (isInlineArrayItem(item) && parseArrayDimensions(item, arrTotalBytes, arrStride) && arrTotalBytes > 0) {
+                int32_t arrOffset = getNodeOffsetValue(item);
+                std::vector<ArrayMember> members;
 
-                // Collect templates from inside the inline array `item`
-                std::map<int32_t, QTreeWidgetItem*> templateMap;
                 for (int c = 0; c < item->childCount(); ++c) {
-                    QTreeWidgetItem* tmpl = item->child(c);
-                    if (tmpl->childCount() == 0 || !isPointerItem(tmpl))
+                    QTreeWidgetItem* arrChild = item->child(c);
+                    if (arrChild->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
                         continue;
-                    int32_t tOffset = tmpl->data(2, Qt::UserRole).isValid() ? tmpl->data(2, Qt::UserRole).toInt()
-                                                                            : tmpl->data(1, Qt::UserRole).toInt();
-                    if (templateMap.find(tOffset) == templateMap.end()) {
-                        templateMap[tOffset] = tmpl;
+                    int64_t rel = static_cast<int64_t>(getNodeOffsetValue(arrChild));
+                    if (rel >= 0 && rel < static_cast<int64_t>(arrTotalBytes)) {
+                        members.push_back({arrChild, rel});
                     }
                 }
 
-                if (!templateMap.empty()) {
-                    for (int s = 0; s < count; ++s) {
-                        QTreeWidgetItem* sibling = parent ? parent->child(s) : m_structureTree->topLevelItem(s);
-                        if (sibling == item || sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
-                            continue;
-                        if (sibling->childCount() > 0 || !isPointerItem(sibling))
-                            continue;
-
-                        int32_t sOffset = sibling->data(2, Qt::UserRole).isValid() ? sibling->data(2, Qt::UserRole).toInt()
-                                                                                   : sibling->data(1, Qt::UserRole).toInt();
-                        int64_t rel = static_cast<int64_t>(sOffset) - static_cast<int64_t>(arrOffset);
-                        if (rel >= 0 && rel < static_cast<int64_t>(arrTotalBytes)) {
-                            int32_t elemOffset =
-                                (arrStride > 0) ? static_cast<int32_t>(rel % arrStride) : static_cast<int32_t>(rel);
-                            auto it = templateMap.find(elemOffset);
-                            if (it != templateMap.end()) {
-                                sibling->setData(0, ROLE_CONSUMED_TEMPLATE_ITEM, QVariant::fromValue(static_cast<void*>(it->second)));
-                                cloneTemplateSubtree(it->second, sibling);
-                                sibling->setExpanded(false);
-                                if (auto* metaSibling = getTwinItem(sibling)) {
-                                    metaSibling->setExpanded(false);
-                                }
-                            }
-                        }
+                for (int s = 0; s < count; ++s) {
+                    QTreeWidgetItem* sibling = parent ? parent->child(s) : m_structureTree->topLevelItem(s);
+                    if (sibling == item || sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool() || isInlineArrayItem(sibling))
+                        continue;
+                    int64_t rel = static_cast<int64_t>(getNodeOffsetValue(sibling)) - static_cast<int64_t>(arrOffset);
+                    if (rel >= 0 && rel < static_cast<int64_t>(arrTotalBytes)) {
+                        members.push_back({sibling, rel});
                     }
                 }
+
+                applyInheritanceToMembers(members, arrStride);
             }
         }
 
@@ -995,7 +1024,7 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
             uint32_t pTotalBytes = 0;
             uint32_t pStride = 0;
             if (parseArrayDimensions(parent, pTotalBytes, pStride)) {
-                applyToContainer(parent, 0, pTotalBytes, pStride, true);
+                applyToContainer(parent, 0, pTotalBytes, pStride);
             }
         }
     };
@@ -1006,7 +1035,7 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
     uint32_t rootTotalBytes = 0;
     uint32_t rootStride = 0;
     if (!headerComment.trimmed().isEmpty() && parseArrayDimensionsFromText(headerComment, rootTotalBytes, rootStride)) {
-        applyToContainer(nullptr, 0, rootTotalBytes, rootStride, true);
+        applyToContainer(nullptr, 0, rootTotalBytes, rootStride);
     }
 
     m_isSyncingExpand = false;
@@ -1404,7 +1433,7 @@ void StructureHierarchyWidget::collectScopes(std::vector<ScopeCandidate>& candid
 
 void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr, uint32_t currentBaseAddress,
                                                            const std::vector<uint8_t>& snapshotMemory, bool rootArr,
-                                                           const QString& /*headerComment*/) {
+                                                           const QString& headerComment) {
     if (!m_manager || selectedAddr == 0 || currentBaseAddress == 0) {
         m_dynamicProjection = DynamicArrayProjection{};
         return;
@@ -1423,60 +1452,166 @@ void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr
     }
 
     // Check if selectedAddr falls inside any defined array that has a matching element template
+    bool matchedIsRoot = false;
     QTreeWidgetItem* matchedArray = nullptr;
     QTreeWidgetItem* matchedTemplate = nullptr;
     uint32_t matchedElemFieldAddr = 0;
     int32_t matchedOffsetInArray = 0;
+    int bestDepth = -1;
 
-    std::function<void(QTreeWidgetItem*)> scanArrays = [&](QTreeWidgetItem* item) {
+    struct CandidateTemplate {
+        QTreeWidgetItem* item = nullptr;
+        int64_t relOffset = 0;
+    };
+
+    auto evaluateArrayMatch = [&](bool isRoot, QTreeWidgetItem* arrayNode, uint32_t arrBase, uint32_t arrSize, uint32_t arrStride,
+                                  std::vector<CandidateTemplate>& candidates, int depth) {
+        if (arrBase == 0 || arrSize == 0 || selectedAddr < arrBase || selectedAddr >= arrBase + arrSize)
+            return;
+        if (candidates.empty() || depth < bestDepth)
+            return;
+
+        std::stable_sort(candidates.begin(), candidates.end(),
+                         [](const CandidateTemplate& a, const CandidateTemplate& b) { return a.relOffset < b.relOffset; });
+
+        QTreeWidgetItem* firstTemplate = nullptr;
+        for (const auto& c : candidates) {
+            if (c.item && !c.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool() && c.item->childCount() > 0 && isPointerItem(c.item)) {
+                firstTemplate = c.item;
+                break;
+            }
+        }
+        if (!firstTemplate)
+            return;
+
+        uint32_t delta = selectedAddr - arrBase;
+        uint32_t fieldAddr = selectedAddr;
+        QTreeWidgetItem* chosenTemplate = nullptr;
+
+        if (arrStride > 0) {
+            int32_t elemFieldOff = static_cast<int32_t>(delta % arrStride);
+            if (arrStride >= 4) {
+                elemFieldOff &= ~3;
+                fieldAddr = arrBase + (delta - (delta % arrStride)) + static_cast<uint32_t>(elemFieldOff);
+            }
+
+            for (const auto& c : candidates) {
+                if (!c.item || c.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool() || c.item->childCount() == 0 || !isPointerItem(c.item))
+                    continue;
+                if ((c.relOffset % static_cast<int64_t>(arrStride)) == elemFieldOff) {
+                    chosenTemplate = c.item;
+                    break;
+                }
+            }
+
+            if (!chosenTemplate) {
+                fieldAddr = arrBase + (delta & ~3U);
+                auto valOpt = readMemoryDword(fieldAddr, snapshotMemory);
+                if (valOpt.has_value() && isValidPointerForNode(valOpt.value(), firstTemplate)) {
+                    chosenTemplate = firstTemplate;
+                }
+            }
+        } else {
+            fieldAddr = arrBase + (delta & ~3U);
+            chosenTemplate = firstTemplate;
+        }
+
+        if (chosenTemplate) {
+            bestDepth = depth;
+            matchedIsRoot = isRoot;
+            matchedArray = arrayNode;
+            matchedTemplate = chosenTemplate;
+            matchedElemFieldAddr = fieldAddr;
+            matchedOffsetInArray = static_cast<int32_t>(fieldAddr - arrBase);
+        }
+    };
+
+    uint32_t rootHeaderArrSize = 0;
+    uint32_t rootHeaderArrStride = 0;
+    if (!headerComment.trimmed().isEmpty() && parseArrayDimensionsFromText(headerComment, rootHeaderArrSize, rootHeaderArrStride) &&
+        rootHeaderArrSize > 0) {
+        uint32_t base = m_manager->unnormalizeAddress(QString::number(currentBaseAddress, 16));
+        uint32_t rootArrBase = 0;
+        if (rootArr) {
+            rootArrBase = base;
+        } else if (base != 0) {
+            auto basePtr = readMemoryDword(base, snapshotMemory);
+            if (basePtr.has_value() && m_manager->isValidPointerTarget(basePtr.value())) {
+                rootArrBase = m_manager->unnormalizeAddress(QString::number(basePtr.value(), 16));
+            }
+        }
+
+        if (rootArrBase != 0) {
+            std::vector<CandidateTemplate> rootCandidates;
+            for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
+                QTreeWidgetItem* topItem = m_structureTree->topLevelItem(i);
+                if (topItem->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                    continue;
+                int64_t off = static_cast<int64_t>(getNodeOffsetValue(topItem));
+                if (off >= 0 && off < static_cast<int64_t>(rootHeaderArrSize)) {
+                    rootCandidates.push_back({topItem, off});
+                }
+            }
+            evaluateArrayMatch(true, nullptr, rootArrBase, rootHeaderArrSize, rootHeaderArrStride, rootCandidates, 0);
+        }
+    }
+
+    std::function<void(QTreeWidgetItem*, int)> scanArrays = [&](QTreeWidgetItem* item, int depth) {
         if (item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
             return;
 
         uint32_t arrSize = 0;
         uint32_t arrStride = 0;
-        if (parseArrayDimensions(item, arrSize, arrStride) && arrSize > 0 && arrStride > 0 && item->childCount() > 0) {
+        if (parseArrayDimensions(item, arrSize, arrStride) && arrSize > 0) {
+            bool isInline = isInlineArrayItem(item);
             uint32_t arrBase = item->data(0, Qt::UserRole + 4).toUInt();
-            if (arrBase == 0 && isInlineArrayItem(item)) {
+            if (arrBase == 0 && isInline) {
                 QVariant cachedVar = item->data(0, ROLE_CACHED_RESOLVED_ADDR);
                 arrBase = cachedVar.isValid() ? cachedVar.toUInt()
                                               : resolveNodeAddress(item, currentBaseAddress, snapshotMemory, rootArr);
             }
 
-            if (arrBase != 0 && selectedAddr >= arrBase && selectedAddr < arrBase + arrSize) {
-                uint32_t delta = selectedAddr - arrBase;
-                int32_t elemFieldOff = static_cast<int32_t>(delta % arrStride);
-                uint32_t fieldAddr = selectedAddr;
-                if (arrStride >= 4) {
-                    elemFieldOff &= ~3;
-                    fieldAddr = arrBase + (delta - (delta % arrStride)) + static_cast<uint32_t>(elemFieldOff);
-                }
-
+            if (arrBase != 0) {
+                std::vector<CandidateTemplate> candidates;
                 for (int c = 0; c < item->childCount(); ++c) {
-                    QTreeWidgetItem* tmpl = item->child(c);
-                    if (tmpl->childCount() == 0 || !isPointerItem(tmpl))
+                    QTreeWidgetItem* ch = item->child(c);
+                    if (ch->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
                         continue;
-                    int32_t tOffset = tmpl->data(2, Qt::UserRole).isValid() ? tmpl->data(2, Qt::UserRole).toInt()
-                                                                            : tmpl->data(1, Qt::UserRole).toInt();
-                    if (tOffset == elemFieldOff) {
-                        matchedArray = item;
-                        matchedTemplate = tmpl;
-                        matchedElemFieldAddr = fieldAddr;
-                        matchedOffsetInArray = static_cast<int32_t>(fieldAddr - arrBase);
+                    int64_t off = static_cast<int64_t>(getNodeOffsetValue(ch));
+                    if (off >= 0 && off < static_cast<int64_t>(arrSize)) {
+                        candidates.push_back({ch, off});
                     }
                 }
+
+                if (isInline) {
+                    QTreeWidgetItem* parent = item->parent();
+                    int sibCount = parent ? parent->childCount() : m_structureTree->topLevelItemCount();
+                    int32_t arrOffset = getNodeOffsetValue(item);
+                    for (int s = 0; s < sibCount; ++s) {
+                        QTreeWidgetItem* sib = parent ? parent->child(s) : m_structureTree->topLevelItem(s);
+                        if (sib == item || sib->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool() || isInlineArrayItem(sib))
+                            continue;
+                        int64_t rel = static_cast<int64_t>(getNodeOffsetValue(sib)) - static_cast<int64_t>(arrOffset);
+                        if (rel >= 0 && rel < static_cast<int64_t>(arrSize)) {
+                            candidates.push_back({sib, rel});
+                        }
+                    }
+                }
+
+                evaluateArrayMatch(false, item, arrBase, arrSize, arrStride, candidates, depth);
             }
         }
 
         for (int i = 0; i < item->childCount(); ++i) {
-            scanArrays(item->child(i));
+            scanArrays(item->child(i), depth + 1);
         }
     };
 
     for (int i = 0; i < m_structureTree->topLevelItemCount(); ++i) {
-        scanArrays(m_structureTree->topLevelItem(i));
+        scanArrays(m_structureTree->topLevelItem(i), 1);
     }
 
-    if (matchedArray && matchedTemplate && matchedElemFieldAddr != 0) {
+    if (matchedTemplate && matchedElemFieldAddr != 0) {
         // If this exact element address is already explicitly documented in the hierarchy, no dynamic fallback is needed
         QTreeWidgetItem* explicitNode = findItemForAddress(matchedElemFieldAddr, currentBaseAddress, snapshotMemory, rootArr);
         if (explicitNode && explicitNode != matchedTemplate) {
@@ -1485,13 +1620,16 @@ void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr
         }
 
         m_dynamicProjection = DynamicArrayProjection{};
+        m_dynamicProjection.isRootArray = matchedIsRoot;
         m_dynamicProjection.arrayItem = matchedArray;
         m_dynamicProjection.templateFieldItem = matchedTemplate;
         m_dynamicProjection.elementFieldAddr = matchedElemFieldAddr;
         m_dynamicProjection.offsetInArray = matchedOffsetInArray;
 
         // Precompute projected addresses for persistence across pointer hops
-        std::function<void(QTreeWidgetItem*, uint32_t)> collectProjectedAddrs = [&](QTreeWidgetItem* ptrNode, uint32_t ptrAddr) {
+        std::function<void(QTreeWidgetItem*, uint32_t, int)> collectProjectedAddrs = [&](QTreeWidgetItem* ptrNode, uint32_t ptrAddr, int depth) {
+            if (depth >= 16)
+                return;
             auto valOpt = readMemoryDword(ptrAddr, snapshotMemory);
             if (!valOpt.has_value() || !isValidPointerForNode(valOpt.value(), ptrNode))
                 return;
@@ -1506,11 +1644,11 @@ void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr
                 uint32_t cAddr = targetBase + static_cast<uint32_t>(cOff);
                 m_dynamicProjection.activeAddresses.push_back(cAddr);
                 if (isPointerItem(child)) {
-                    collectProjectedAddrs(child, cAddr);
+                    collectProjectedAddrs(child, cAddr, depth + 1);
                 }
             }
         };
-        collectProjectedAddrs(matchedTemplate, matchedElemFieldAddr);
+        collectProjectedAddrs(matchedTemplate, matchedElemFieldAddr, 0);
     } else {
         m_dynamicProjection = DynamicArrayProjection{};
     }
@@ -1524,6 +1662,8 @@ bool StructureHierarchyWidget::collectDynamicArrayScopes(std::vector<Core::Scope
         return false;
 
     std::function<void(QTreeWidgetItem*, uint32_t, int)> collectDyn = [&](QTreeWidgetItem* ptrNode, uint32_t ptrAddr, int depth) {
+        if (depth >= 216)
+            return;
         auto valOpt = readMemoryDword(ptrAddr, snapshotMemory);
         if (!valOpt.has_value() || !isValidPointerForNode(valOpt.value(), ptrNode))
             return;
@@ -1552,7 +1692,8 @@ std::optional<PointerPath> StructureHierarchyWidget::buildPathForDynamicScope(vo
                                                                             uint32_t finalAddr, uint32_t currentBaseAddress,
                                                                             const std::vector<uint8_t>& /*snapshotMemory*/,
                                                                             bool rootArr) const {
-    if (!m_dynamicProjection.templateFieldItem || !m_dynamicProjection.arrayItem || currentBaseAddress == 0)
+    if (!m_dynamicProjection.templateFieldItem || (!m_dynamicProjection.isRootArray && !m_dynamicProjection.arrayItem) ||
+        currentBaseAddress == 0)
         return std::nullopt;
 
     auto* matchedNode = static_cast<QTreeWidgetItem*>(scopeIdentifier);
@@ -1573,46 +1714,55 @@ std::optional<PointerPath> StructureHierarchyWidget::buildPathForDynamicScope(vo
         return std::nullopt;
     std::reverse(subLineage.begin(), subLineage.end());
 
-    // Build prefix lineage down to m_dynamicProjection.arrayItem
-    std::vector<QTreeWidgetItem*> prefixLineage;
-    for (QTreeWidgetItem* curr = m_dynamicProjection.arrayItem; curr != nullptr; curr = curr->parent()) {
-        prefixLineage.push_back(curr);
-    }
-    std::reverse(prefixLineage.begin(), prefixLineage.end());
-
     PointerPath path;
     int32_t pendingOffset = 0;
 
-    if (rootArr && !prefixLineage.empty()) {
-        int32_t arrOff = prefixLineage[0]->data(2, Qt::UserRole).isValid() ? prefixLineage[0]->data(2, Qt::UserRole).toInt()
-                                                                           : prefixLineage[0]->data(1, Qt::UserRole).toInt();
-        path.baseAddress = currentBaseAddress + static_cast<uint32_t>(arrOff + m_dynamicProjection.offsetInArray);
-        for (size_t i = 1; i < prefixLineage.size(); ++i) {
-            int32_t off = prefixLineage[i]->data(2, Qt::UserRole).isValid() ? prefixLineage[i]->data(2, Qt::UserRole).toInt()
-                                                                            : prefixLineage[i]->data(1, Qt::UserRole).toInt();
-            if (isPointerItem(prefixLineage[i])) {
-                path.offsets.push_back(pendingOffset + off);
-                pendingOffset = 0;
-            } else {
-                pendingOffset += off;
-            }
+    if (m_dynamicProjection.isRootArray) {
+        if (rootArr) {
+            path.baseAddress = currentBaseAddress + static_cast<uint32_t>(m_dynamicProjection.offsetInArray);
+        } else {
+            path.baseAddress = currentBaseAddress;
+            path.offsets.push_back(m_dynamicProjection.offsetInArray);
         }
     } else {
-        path.baseAddress = currentBaseAddress;
-        for (auto* node : prefixLineage) {
-            int32_t off = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt()
-                                                                : node->data(1, Qt::UserRole).toInt();
-            if (isPointerItem(node)) {
-                path.offsets.push_back(pendingOffset + off);
-                pendingOffset = 0;
-            } else {
-                pendingOffset += off;
+        // Build prefix lineage down to m_dynamicProjection.arrayItem
+        std::vector<QTreeWidgetItem*> prefixLineage;
+        for (QTreeWidgetItem* curr = m_dynamicProjection.arrayItem; curr != nullptr; curr = curr->parent()) {
+            prefixLineage.push_back(curr);
+        }
+        std::reverse(prefixLineage.begin(), prefixLineage.end());
+
+        if (rootArr && !prefixLineage.empty()) {
+            int32_t arrOff = prefixLineage[0]->data(2, Qt::UserRole).isValid() ? prefixLineage[0]->data(2, Qt::UserRole).toInt()
+                                                                               : prefixLineage[0]->data(1, Qt::UserRole).toInt();
+            path.baseAddress = currentBaseAddress + static_cast<uint32_t>(arrOff + m_dynamicProjection.offsetInArray);
+            for (size_t i = 1; i < prefixLineage.size(); ++i) {
+                int32_t off = prefixLineage[i]->data(2, Qt::UserRole).isValid() ? prefixLineage[i]->data(2, Qt::UserRole).toInt()
+                                                                                : prefixLineage[i]->data(1, Qt::UserRole).toInt();
+                if (isPointerItem(prefixLineage[i])) {
+                    path.offsets.push_back(pendingOffset + off);
+                    pendingOffset = 0;
+                } else {
+                    pendingOffset += off;
+                }
+            }
+        } else {
+            path.baseAddress = currentBaseAddress;
+            for (auto* node : prefixLineage) {
+                int32_t off = node->data(2, Qt::UserRole).isValid() ? node->data(2, Qt::UserRole).toInt()
+                                                                    : node->data(1, Qt::UserRole).toInt();
+                if (isPointerItem(node)) {
+                    path.offsets.push_back(pendingOffset + off);
+                    pendingOffset = 0;
+                } else {
+                    pendingOffset += off;
+                }
             }
         }
-    }
 
-    // Add the dynamic array element offset
-    path.offsets.push_back(pendingOffset + m_dynamicProjection.offsetInArray);
+        // Add the dynamic array element offset
+        path.offsets.push_back(pendingOffset + m_dynamicProjection.offsetInArray);
+    }
 
     // Add subLineage offsets after templateFieldItem
     for (size_t i = 1; i < subLineage.size(); ++i) {
@@ -1714,7 +1864,9 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
 
     // Project dynamic array element template highlights when inspecting an undocumented array element
     if (m_dynamicProjection.templateFieldItem != nullptr && m_dynamicProjection.elementFieldAddr != 0) {
-        std::function<void(QTreeWidgetItem*, uint32_t)> gatherDynamic = [&](QTreeWidgetItem* tmplNode, uint32_t nodeAddr) {
+        std::function<void(QTreeWidgetItem*, uint32_t, int)> gatherDynamic = [&](QTreeWidgetItem* tmplNode, uint32_t nodeAddr, int depth) {
+            if (depth >= 16)
+                return;
             QTreeWidgetItem* meta = getTwinItem(tmplNode);
             QString sizeTag = meta ? meta->text(META_COL_SIZE).trimmed() : "";
             if (sizeTag.isEmpty()) {
@@ -1766,14 +1918,14 @@ void StructureHierarchyWidget::gatherHighlights(std::unordered_map<uint32_t, Wid
                             QTreeWidgetItem* child = tmplNode->child(c);
                             int32_t cOff = child->data(2, Qt::UserRole).isValid() ? child->data(2, Qt::UserRole).toInt()
                                                                                    : child->data(1, Qt::UserRole).toInt();
-                            gatherDynamic(child, nextBase + static_cast<uint32_t>(cOff));
+                            gatherDynamic(child, nextBase + static_cast<uint32_t>(cOff), depth + 1);
                         }
                     }
                 }
             }
         };
 
-        gatherDynamic(m_dynamicProjection.templateFieldItem, m_dynamicProjection.elementFieldAddr);
+        gatherDynamic(m_dynamicProjection.templateFieldItem, m_dynamicProjection.elementFieldAddr, 0);
     }
 }
 
@@ -1822,7 +1974,8 @@ void StructureHierarchyWidget::insertNodeInScope(QTreeWidgetItem* parentScope, i
             if (auto* srcTmpl = getTemplateSourceItem(hierParent)) {
                 hierParent = srcTmpl;
             }
-        } else if (auto* consumedTmpl = getConsumedTemplateItem(hierParent)) {
+        }
+        if (auto* consumedTmpl = getConsumedTemplateItem(hierParent)) {
             hierParent = consumedTmpl;
         }
     }

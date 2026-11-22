@@ -44,6 +44,31 @@ using namespace PointerFinder2::DataModels;
 using namespace PointerFinder2::Core;
 
 namespace {
+bool parseHeaderArrayByteSize(const QString& headerComment, CodeNoteEditorWidget* codeNoteEditor, uint32_t* outSize, bool* outIsPointer) {
+    QString header = headerComment.trimmed();
+    if (header.isEmpty() && codeNoteEditor) {
+        header = codeNoteEditor->toPlainText().split('\n').value(0).trimmed();
+    }
+
+    if (outIsPointer) {
+        *outIsPointer = header.contains("Pointer", Qt::CaseInsensitive);
+    }
+
+    static const QRegularExpression arrayRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
+    auto match = arrayRx.match(header);
+    if (match.hasMatch()) {
+        if (outSize) {
+            if (!match.captured(1).isEmpty() && !match.captured(2).isEmpty()) {
+                *outSize = match.captured(1).toUInt() * match.captured(2).toUInt();
+            } else if (!match.captured(3).isEmpty()) {
+                *outSize = match.captured(3).toUInt();
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 class LockedCenterSplitter;
 
 // Custom handle intercepting mouse drags to preserve the Memory Viewer's fixed width
@@ -1830,6 +1855,24 @@ void StructureWorkspaceDialog::updateMemoryHighlights() {
             for (uint32_t b = 0; b < 4; ++b) {
                 highlights[base + b] = info;
             }
+
+            uint32_t rootPtrArrSize = 0;
+            bool rootPtrIsPtr = false;
+            if (parseHeaderArrayByteSize(m_headerComment, m_codeNoteEditor, &rootPtrArrSize, &rootPtrIsPtr) && rootPtrIsPtr &&
+                rootPtrArrSize > 0) {
+                auto targetOpt = StructureAnalyzer::readMemoryDword(base, m_manager, m_snapshotMemory);
+                if (targetOpt.has_value() && m_manager->isValidPointerTarget(targetOpt.value())) {
+                    uint32_t targetBase = m_manager->unnormalizeAddress(QString::number(targetOpt.value(), 16));
+                    if (targetBase != 0) {
+                        Widgets::MemoryViewerWidget::DefinedArrayInfo arrInfo;
+                        arrInfo.name = headerText;
+                        arrInfo.startAddress = targetBase;
+                        arrInfo.size = rootPtrArrSize;
+                        arrInfo.endAddress = targetBase + rootPtrArrSize - 1;
+                        definedArrays.push_back(arrInfo);
+                    }
+                }
+            }
         }
     } else if (m_hierarchyWidget->treeWidget()->topLevelItemCount() == 0 && m_currentBaseAddress != 0 && !rootArr) {
         // If this note has no sub-offsets and is a plain variable, document the root base address itself as a single variable
@@ -1888,21 +1931,11 @@ void StructureWorkspaceDialog::updateMemoryHighlights() {
 }
 
 bool StructureWorkspaceDialog::isRootArray(uint32_t* outSize) const {
-    QString header = m_headerComment.trimmed();
-    if (header.isEmpty() && m_codeNoteEditor) {
-        QString firstLine = m_codeNoteEditor->toPlainText().split('\n').value(0).trimmed();
-        header = firstLine;
-    }
-
-    static const QRegularExpression arrayRx(R"(\[(?:(\d+)\s*x\s*(\d+)|(\d+))\s*bytes\])", QRegularExpression::CaseInsensitiveOption);
-    auto match = arrayRx.match(header);
-    if (match.hasMatch()) {
+    bool isPtr = false;
+    uint32_t parsedSize = 0;
+    if (parseHeaderArrayByteSize(m_headerComment, m_codeNoteEditor, &parsedSize, &isPtr) && !isPtr) {
         if (outSize) {
-            if (!match.captured(1).isEmpty() && !match.captured(2).isEmpty()) {
-                *outSize = match.captured(1).toUInt() * match.captured(2).toUInt();
-            } else if (!match.captured(3).isEmpty()) {
-                *outSize = match.captured(3).toUInt();
-            }
+            *outSize = parsedSize;
         }
         return true;
     }
@@ -1912,13 +1945,22 @@ bool StructureWorkspaceDialog::isRootArray(uint32_t* outSize) const {
 ScopeMatch StructureWorkspaceDialog::findBestScopeForAddress(uint32_t selectedAddr) {
     uint32_t rootArrSize = 0;
     bool rootArr = isRootArray(&rootArrSize);
+    bool rootPtrIsArray = false;
+    if (!rootArr) {
+        uint32_t ptrArrSize = 0;
+        bool isPtr = false;
+        if (parseHeaderArrayByteSize(m_headerComment, m_codeNoteEditor, &ptrArrSize, &isPtr) && isPtr && ptrArrSize > 0) {
+            rootArrSize = ptrArrSize;
+            rootPtrIsArray = true;
+        }
+    }
 
     std::vector<ScopeCandidate> candidateScopes;
     m_hierarchyWidget->collectScopes(candidateScopes, m_currentBaseAddress, m_snapshotMemory, rootArr);
     m_hierarchyWidget->collectDynamicArrayScopes(candidateScopes, m_currentBaseAddress, m_snapshotMemory, rootArr);
 
     return StructureAnalyzer::findBestScopeForAddress(selectedAddr, m_currentBaseAddress, candidateScopes, m_manager, m_snapshotMemory,
-                                                      rootArr, rootArrSize);
+                                                      rootArr, rootArrSize, rootPtrIsArray);
 }
 
 void StructureWorkspaceDialog::updateOffsetPreview() {

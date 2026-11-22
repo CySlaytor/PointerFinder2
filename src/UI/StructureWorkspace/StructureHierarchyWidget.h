@@ -141,6 +141,7 @@ class StructureHierarchyWidget : public QWidget {
 
   private:
     struct DynamicArrayProjection {
+        bool isRootArray = false;
         QTreeWidgetItem* arrayItem = nullptr;
         QTreeWidgetItem* templateFieldItem = nullptr;
         uint32_t elementFieldAddr = 0;

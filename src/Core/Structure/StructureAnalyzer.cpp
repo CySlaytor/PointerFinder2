@@ -32,7 +32,7 @@ std::optional<uint32_t> StructureAnalyzer::readMemoryDword(uint32_t address, Emu
 ScopeMatch StructureAnalyzer::findBestScopeForAddress(uint32_t selectedAddr, uint32_t rootBaseAddress,
                                                       const std::vector<ScopeCandidate>& scopes, Emulators::IEmulatorManager* manager,
                                                       const std::vector<uint8_t>& snapshotMemory, bool rootIsArray,
-                                                      uint32_t rootArraySize) {
+                                                      uint32_t rootArraySize, bool rootPointerIsArray) {
     ScopeMatch best;
     if (!manager || selectedAddr == 0 || rootBaseAddress == 0)
         return best;
@@ -64,7 +64,7 @@ ScopeMatch StructureAnalyzer::findBestScopeForAddress(uint32_t selectedAddr, uin
     }
 
     std::vector<ScopeCandidate> allScopes;
-    allScopes.push_back({nullptr, initialParentBase, 0, rootIsArray, rootArraySize});
+    allScopes.push_back({nullptr, initialParentBase, 0, rootIsArray || rootPointerIsArray, rootArraySize});
     allScopes.insert(allScopes.end(), scopes.begin(), scopes.end());
 
     constexpr uint32_t MAX_STRUCT_SPAN = 0x10000; // 64 KB struct span

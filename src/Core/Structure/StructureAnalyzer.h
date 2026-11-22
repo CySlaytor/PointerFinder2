@@ -36,7 +36,7 @@ class StructureAnalyzer {
 
     static ScopeMatch findBestScopeForAddress(uint32_t selectedAddr, uint32_t rootBaseAddress, const std::vector<ScopeCandidate>& scopes,
                                               Emulators::IEmulatorManager* manager, const std::vector<uint8_t>& snapshotMemory,
-                                              bool rootIsArray = false, uint32_t rootArraySize = 0);
+                                              bool rootIsArray = false, uint32_t rootArraySize = 0, bool rootPointerIsArray = false);
 
     static QString suggestDefaultType(uint32_t address, Emulators::IEmulatorManager* manager, const std::vector<uint8_t>& snapshotMemory);
 };
