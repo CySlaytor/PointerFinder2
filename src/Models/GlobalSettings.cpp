@@ -11,5 +11,6 @@ bool GlobalSettings::codeNoteSuffixOnLastLineOnly = false;
 bool GlobalSettings::codeNoteAutoPopulatePointers = true;
 bool GlobalSettings::sortByLevelFirst = true;
 QString GlobalSettings::activeTheme = "Dark";
+QString GlobalSettings::skippedUpdateVersion = "";
 
 } // namespace PointerFinder2::DataModels

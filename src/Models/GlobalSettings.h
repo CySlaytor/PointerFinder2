@@ -17,6 +17,7 @@ class GlobalSettings {
     static bool codeNoteAutoPopulatePointers;
     static bool sortByLevelFirst;
     static QString activeTheme;
+    static QString skippedUpdateVersion;
 };
 
 } // namespace PointerFinder2::DataModels

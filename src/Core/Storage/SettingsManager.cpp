@@ -47,6 +47,7 @@ void SettingsManager::initializeGlobalSettings() {
     GlobalSettings::limitCpuUsage = ini.value("LimitCpuUsage", GlobalSettings::limitCpuUsage).toBool();
     GlobalSettings::sortByLevelFirst = ini.value("SortByLevelFirst", GlobalSettings::sortByLevelFirst).toBool();
     GlobalSettings::activeTheme = ini.value("ActiveTheme", GlobalSettings::activeTheme).toString();
+    GlobalSettings::skippedUpdateVersion = ini.value("SkippedUpdateVersion", GlobalSettings::skippedUpdateVersion).toString();
     ini.endGroup();
 
     ini.beginGroup("CodeNotes");
@@ -68,6 +69,7 @@ void SettingsManager::saveGlobalSettingsOnly() {
     ini.setValue("LimitCpuUsage", GlobalSettings::limitCpuUsage);
     ini.setValue("SortByLevelFirst", GlobalSettings::sortByLevelFirst);
     ini.setValue("ActiveTheme", GlobalSettings::activeTheme);
+    ini.setValue("SkippedUpdateVersion", GlobalSettings::skippedUpdateVersion);
     ini.endGroup();
 
     ini.beginGroup("CodeNotes");
@@ -169,6 +171,7 @@ AppSettings SettingsManager::load(EmulatorTarget target, const AppSettings& defa
     GlobalSettings::limitCpuUsage = ini.value("LimitCpuUsage", GlobalSettings::limitCpuUsage).toBool();
     GlobalSettings::sortByLevelFirst = ini.value("SortByLevelFirst", GlobalSettings::sortByLevelFirst).toBool();
     GlobalSettings::activeTheme = ini.value("ActiveTheme", GlobalSettings::activeTheme).toString();
+    GlobalSettings::skippedUpdateVersion = ini.value("SkippedUpdateVersion", GlobalSettings::skippedUpdateVersion).toString();
     ini.endGroup();
 
     ini.beginGroup("CodeNotes");

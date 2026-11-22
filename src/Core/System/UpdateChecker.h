@@ -3,6 +3,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 
 namespace PointerFinder2::Core {
@@ -16,6 +17,7 @@ class UpdateChecker : public QObject {
     ~UpdateChecker() override;
 
     void checkForUpdates(bool silentOnLatest = false);
+    void cancelManualCheck();
 
   signals:
     void updateCheckFinished(bool updateAvailable, const QString& latestVersion, const QString& releaseNotes, const QString& downloadUrl,
@@ -27,9 +29,9 @@ class UpdateChecker : public QObject {
 
   private:
     QNetworkAccessManager* m_networkManager = nullptr;
-    bool m_silentOnLatest = false;
+    QPointer<QNetworkReply> m_manualReply;
 
-    bool isVersionNewer(const QString& current, const QString& latest);
+    static bool isVersionNewer(const QString& current, const QString& latest);
 };
 
 } // namespace PointerFinder2::Core

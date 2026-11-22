@@ -10,6 +10,7 @@
 #include "UI/Common/TooltipAnimationFilter.h"
 #include "UI/Dialogs/CodeNoteConverterDialog.h"
 #include "UI/Dialogs/EmulatorSelectionDialog.h"
+#include "UI/Dialogs/UpdateDialog.h"
 #include "UI/StructureWorkspace/StructureWorkspaceDialog.h"
 #include "UI/Views/ArrayDetectionWidget.h"
 #include "UI/Views/BookmarksWidget.h"
@@ -132,6 +133,8 @@ class MainWindow : public QMainWindow {
     QPointer<StructureWorkspaceDialog> m_structureWorkspaceDialog;
     QPointer<QDialog> m_staticRangeFinderDialog;
     QPointer<QProgressDialog> m_updateProgressDialog;
+    QPointer<UpdateDialog> m_updateDialog;
+    bool m_updateCheckCanceled = false;
 
     TooltipAnimationFilter* m_tooltipFilter = nullptr;
     QFutureWatcher<Controls::ArrayDetectionResult> m_arrayWatcher;

@@ -12,6 +12,7 @@
 #include "Core/System/SoundManager.h"
 #include "Emulators/EmulatorProfileRegistry.h"
 #include "Models/CodeNoteSettings.h"
+#include "Models/GlobalSettings.h"
 #include "Models/SessionData.h"
 #include "UI/Common/ThemeManager.h"
 #include "UI/Dialogs/AboutDialog.h"
@@ -57,6 +58,17 @@ namespace PointerFinder2::UI {
 using namespace PointerFinder2::Core;
 using namespace PointerFinder2::Emulators;
 using namespace PointerFinder2::DataModels;
+
+namespace {
+
+QString NormalizeVersionTag(const QString& version) {
+    QString clean = version.trimmed();
+    if (clean.startsWith('v', Qt::CaseInsensitive))
+        clean.remove(0, 1);
+    return clean;
+}
+
+} // namespace
 
 const QString CURRENT_VERSION = VERSION_STRING;
 
@@ -854,10 +866,18 @@ void MainWindow::onCheckForUpdatesClicked() {
         return;
     }
 
+    m_updateCheckCanceled = false;
     m_updateProgressDialog = new QProgressDialog("Checking for updates...", "Cancel", 0, 0, this);
     m_updateProgressDialog->setWindowTitle("Software Update");
     m_updateProgressDialog->setWindowModality(Qt::WindowModal);
+    m_updateProgressDialog->setMinimumDuration(0);
+    m_updateProgressDialog->setAutoClose(false);
+    m_updateProgressDialog->setAutoReset(false);
     m_updateProgressDialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(m_updateProgressDialog, &QProgressDialog::canceled, this, [this]() {
+        m_updateCheckCanceled = true;
+        m_updateChecker.cancelManualCheck();
+    });
     m_updateProgressDialog->show();
 
     m_updateChecker.checkForUpdates(false);
@@ -865,29 +885,67 @@ void MainWindow::onCheckForUpdatesClicked() {
 
 void MainWindow::onUpdateCheckFinished(bool updateAvailable, const QString& latestVersion, const QString& releaseNotes,
                                        const QString& downloadUrl, bool silentOnLatest) {
-    if (m_updateProgressDialog) {
-        m_updateProgressDialog->close();
+    if (!silentOnLatest && m_updateProgressDialog) {
+        // Disconnect before hiding so QProgressDialog::closeEvent does not emit canceled().
+        m_updateProgressDialog->disconnect(this);
+        m_updateProgressDialog->hide();
+        m_updateProgressDialog->deleteLater();
+        m_updateProgressDialog = nullptr;
+    }
+
+    if (!silentOnLatest && m_updateCheckCanceled) {
+        return;
     }
 
     if (updateAvailable) {
-        auto* dialog = new UpdateDialog(CURRENT_VERSION, latestVersion, releaseNotes, downloadUrl, this);
-        dialog->setAttribute(Qt::WA_DeleteOnClose);
-        dialog->show();
-    } else {
-        if (!silentOnLatest) {
-            QMessageBox::information(
-                this, "Software Update",
-                QString("You are up to date!\n\nPointer Finder 2.0 %1 is currently the latest version.").arg(CURRENT_VERSION));
+        const QString normLatest = NormalizeVersionTag(latestVersion);
+        const QString normSkipped = NormalizeVersionTag(GlobalSettings::skippedUpdateVersion);
+
+        if (silentOnLatest && !normSkipped.isEmpty() && normLatest.compare(normSkipped, Qt::CaseInsensitive) == 0) {
+            return;
         }
+
+        if (m_updateDialog) {
+            m_updateDialog->raise();
+            m_updateDialog->activateWindow();
+            return;
+        }
+
+        m_updateDialog = new UpdateDialog(CURRENT_VERSION, latestVersion, releaseNotes, downloadUrl, this);
+        m_updateDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_updateDialog, &QDialog::finished, this, [this, latestVersion, normLatest](int) {
+            if (!m_updateDialog)
+                return;
+
+            const auto action = m_updateDialog->selectedAction();
+            if (action == UpdateDialog::Action::SkipUpdate) {
+                GlobalSettings::skippedUpdateVersion = latestVersion;
+                SettingsManager::saveGlobalSettingsOnly();
+            } else if (action == UpdateDialog::Action::RemindLater) {
+                const QString normSkippedCurrent = NormalizeVersionTag(GlobalSettings::skippedUpdateVersion);
+                if (!normSkippedCurrent.isEmpty() && normLatest.compare(normSkippedCurrent, Qt::CaseInsensitive) == 0) {
+                    GlobalSettings::skippedUpdateVersion.clear();
+                    SettingsManager::saveGlobalSettingsOnly();
+                }
+            }
+        });
+        m_updateDialog->show();
+    } else if (!silentOnLatest) {
+        QMessageBox::information(
+            this, "Software Update",
+            QString("You're running the latest version of Pointer Finder 2.0.\n\nCurrent Version: %1").arg(CURRENT_VERSION));
     }
 }
 
 void MainWindow::onUpdateCheckFailed(const QString& errorMessage, bool silentOnLatest) {
-    if (m_updateProgressDialog) {
-        m_updateProgressDialog->close();
+    if (!silentOnLatest && m_updateProgressDialog) {
+        m_updateProgressDialog->disconnect(this);
+        m_updateProgressDialog->hide();
+        m_updateProgressDialog->deleteLater();
+        m_updateProgressDialog = nullptr;
     }
 
-    if (!silentOnLatest) {
+    if (!silentOnLatest && !m_updateCheckCanceled) {
         QMessageBox::warning(this, "Update Check Failed", QString("Could not reach update server:\n%1").arg(errorMessage));
     }
 }

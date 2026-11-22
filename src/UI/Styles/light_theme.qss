@@ -188,9 +188,9 @@ QPushButton#resetAllButton {
     padding: 4px;
 }
 
-QPushButton#downloadButton {
+QPushButton#updateNowButton {
     font-weight: bold;
-    min-width: 120px;
+    padding: 2px 12px;
 }
 
 QGroupBox {
