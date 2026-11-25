@@ -1743,10 +1743,13 @@ void StructureWorkspaceDialog::onFollowPointerClicked() {
         bool rootArr = isRootArray(&rootArrSize);
         uint32_t resolved = m_hierarchyWidget->resolveNodeAddress(current, m_currentBaseAddress, m_snapshotMemory, rootArr);
         if (resolved != 0) {
-            if (m_memoryViewer && m_memoryViewer->getSelectedAddress() == resolved && m_hierarchyWidget->isPointerItem(current)) {
+            bool isFollowablePtr = m_hierarchyWidget->isPointerItem(current);
+            bool isInlineArr = m_hierarchyWidget->isInlineArrayItem(current);
+            if (m_memoryViewer && m_memoryViewer->getSelectedAddress() == resolved && (isFollowablePtr || isInlineArr)) {
                 auto valOpt = StructureAnalyzer::readMemoryDword(resolved, m_manager, m_snapshotMemory);
                 if (valOpt.has_value() && valOpt.value() != 0 && m_manager &&
-                    (m_manager->isValidPointerTarget(valOpt.value()) || m_manager->isValidPointerTarget(valOpt.value() & ~3U))) {
+                    (m_manager->isValidPointerTarget(valOpt.value()) ||
+                     (isFollowablePtr && m_manager->isValidPointerTarget(valOpt.value() & ~3U)))) {
                     uint32_t nativeTarget = m_manager->unnormalizeAddress(QString::number(valOpt.value(), 16));
                     navigateToAddress(nativeTarget);
                     QString targetStr = m_manager->formatDisplayAddress(nativeTarget);

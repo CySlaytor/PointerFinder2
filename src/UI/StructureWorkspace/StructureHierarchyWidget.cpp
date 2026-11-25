@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 
 namespace PointerFinder2::UI {
 
@@ -299,9 +300,23 @@ bool StructureHierarchyWidget::isPointerItem(QTreeWidgetItem* item) const {
         return false;
     }
     QTreeWidgetItem* meta = getTwinItem(hierItem);
-    QString sizeText = meta ? meta->text(META_COL_SIZE) : "";
-    return (hierItem->childCount() > 0 || hierItem->text(0).contains("Pointer", Qt::CaseInsensitive) ||
-            sizeText.contains("Pointer", Qt::CaseInsensitive) || sizeText.contains("&"));
+    QString sizeText = meta ? meta->text(META_COL_SIZE).trimmed() : "";
+
+    if (hierItem->childCount() > 0) {
+        return true;
+    }
+    if (sizeText.contains("Pointer", Qt::CaseInsensitive) || sizeText.contains("&")) {
+        return true;
+    }
+    if (!sizeText.isEmpty()) {
+        QString lowerSize = sizeText.toLower();
+        bool canBePointerSize = lowerSize.startsWith("32-bit") || lowerSize == "32bit" ||
+                                lowerSize.startsWith("24-bit") || lowerSize == "24bit";
+        if (!canBePointerSize) {
+            return false;
+        }
+    }
+    return hierItem->text(0).contains("Pointer", Qt::CaseInsensitive);
 }
 
 int StructureHierarchyWidget::getColumnMinWidth(int column) const {
@@ -917,22 +932,94 @@ void StructureHierarchyWidget::applyArrayTemplates(const QString& headerComment)
         if (!primaryTemplate)
             return;
 
+        std::set<int64_t> divergentSlots;
+        std::map<int64_t, QString> templateSlotNonPtrSizes;
+        if (arrayStride > 0) {
+            int64_t primarySlotIdx = -1;
+            for (const auto& m : members) {
+                if (m.item == primaryTemplate) {
+                    primarySlotIdx = m.relOffset / static_cast<int64_t>(arrayStride);
+                    break;
+                }
+            }
+
+            if (primarySlotIdx >= 0) {
+                for (const auto& m : members) {
+                    if (!m.item || m.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                        continue;
+                    int64_t slotIdx = m.relOffset / static_cast<int64_t>(arrayStride);
+                    if (slotIdx == primarySlotIdx && !isPointerItem(m.item)) {
+                        int64_t slotOff = m.relOffset % static_cast<int64_t>(arrayStride);
+                        QTreeWidgetItem* meta = getTwinItem(m.item);
+                        QString sz = meta ? meta->text(META_COL_SIZE).trimmed().toLower() : "";
+                        if (!sz.isEmpty()) {
+                            templateSlotNonPtrSizes[slotOff] = sz;
+                        }
+                    }
+                }
+            }
+
+            for (const auto& m : members) {
+                if (!m.item || m.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                    continue;
+
+                int64_t slotIdx = m.relOffset / static_cast<int64_t>(arrayStride);
+                int64_t slotOff = m.relOffset % static_cast<int64_t>(arrayStride);
+
+                auto tmplIt = slotTemplates.find(slotOff);
+                if (tmplIt != slotTemplates.end()) {
+                    if (m.item->childCount() > 0 && m.item != tmplIt->second) {
+                        divergentSlots.insert(slotIdx);
+                        continue;
+                    }
+                    if (!isPointerItem(m.item) || isArrayItem(m.item) ||
+                        !m.item->data(0, Qt::UserRole + 2).toStringList().isEmpty()) {
+                        divergentSlots.insert(slotIdx);
+                        continue;
+                    }
+                } else {
+                    if (m.item->childCount() > 0) {
+                        divergentSlots.insert(slotIdx);
+                        continue;
+                    }
+                    auto szIt = templateSlotNonPtrSizes.find(slotOff);
+                    if (szIt != templateSlotNonPtrSizes.end()) {
+                        if (isPointerItem(m.item)) {
+                            divergentSlots.insert(slotIdx);
+                            continue;
+                        }
+                        QTreeWidgetItem* meta = getTwinItem(m.item);
+                        QString sz = meta ? meta->text(META_COL_SIZE).trimmed().toLower() : "";
+                        if (!sz.isEmpty() && sz != szIt->second) {
+                            divergentSlots.insert(slotIdx);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
         for (const auto& m : members) {
             QTreeWidgetItem* sibling = m.item;
             if (!sibling || sibling == primaryTemplate || sibling->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
                 continue;
-            if (sibling->childCount() > 0 || !isPointerItem(sibling))
+            if (sibling->childCount() > 0 || !isPointerItem(sibling) || isArrayItem(sibling))
+                continue;
+            if (!sibling->data(0, Qt::UserRole + 2).toStringList().isEmpty())
                 continue;
 
             QTreeWidgetItem* tmpl = nullptr;
             if (arrayStride > 0) {
+                int64_t slotIdx = m.relOffset / static_cast<int64_t>(arrayStride);
+                if (divergentSlots.count(slotIdx) > 0)
+                    continue;
+
                 int64_t slotOff = m.relOffset % static_cast<int64_t>(arrayStride);
                 auto it = slotTemplates.find(slotOff);
                 if (it != slotTemplates.end()) {
                     tmpl = it->second;
                 }
-            }
-            if (!tmpl) {
+            } else {
                 tmpl = primaryTemplate;
             }
 
@@ -1495,20 +1582,42 @@ void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr
                 fieldAddr = arrBase + (delta - (delta % arrStride)) + static_cast<uint32_t>(elemFieldOff);
             }
 
+            std::map<int64_t, QTreeWidgetItem*> slotTemplates;
             for (const auto& c : candidates) {
                 if (!c.item || c.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool() || c.item->childCount() == 0 || !isPointerItem(c.item))
                     continue;
-                if ((c.relOffset % static_cast<int64_t>(arrStride)) == elemFieldOff) {
-                    chosenTemplate = c.item;
+                int64_t cOff = c.relOffset % static_cast<int64_t>(arrStride);
+                if (slotTemplates.find(cOff) == slotTemplates.end()) {
+                    slotTemplates[cOff] = c.item;
+                }
+            }
+
+            int64_t clickedSlotIdx = static_cast<int64_t>(delta / arrStride);
+            bool slotHasIndependentStructure = false;
+            for (const auto& c : candidates) {
+                if (!c.item || c.item->data(0, ROLE_IS_TEMPLATE_INHERITED).toBool())
+                    continue;
+                int64_t cSlotIdx = c.relOffset / static_cast<int64_t>(arrStride);
+                if (cSlotIdx != clickedSlotIdx)
+                    continue;
+                int64_t cOff = c.relOffset % static_cast<int64_t>(arrStride);
+                auto tmplIt = slotTemplates.find(cOff);
+                if (tmplIt != slotTemplates.end()) {
+                    if ((c.item->childCount() > 0 && c.item != tmplIt->second) || !isPointerItem(c.item) || isArrayItem(c.item) ||
+                        !c.item->data(0, Qt::UserRole + 2).toStringList().isEmpty()) {
+                        slotHasIndependentStructure = true;
+                        break;
+                    }
+                } else if (c.item->childCount() > 0) {
+                    slotHasIndependentStructure = true;
                     break;
                 }
             }
 
-            if (!chosenTemplate) {
-                fieldAddr = arrBase + (delta & ~3U);
-                auto valOpt = readMemoryDword(fieldAddr, snapshotMemory);
-                if (valOpt.has_value() && isValidPointerForNode(valOpt.value(), firstTemplate)) {
-                    chosenTemplate = firstTemplate;
+            if (!slotHasIndependentStructure) {
+                auto tmplIt = slotTemplates.find(elemFieldOff);
+                if (tmplIt != slotTemplates.end()) {
+                    chosenTemplate = tmplIt->second;
                 }
             }
         } else {
@@ -1614,6 +1723,9 @@ void StructureHierarchyWidget::updateDynamicArraySelection(uint32_t selectedAddr
     if (matchedTemplate && matchedElemFieldAddr != 0) {
         // If this exact element address is already explicitly documented in the hierarchy, no dynamic fallback is needed
         QTreeWidgetItem* explicitNode = findItemForAddress(matchedElemFieldAddr, currentBaseAddress, snapshotMemory, rootArr);
+        if (!explicitNode && selectedAddr != matchedElemFieldAddr) {
+            explicitNode = findItemForAddress(selectedAddr, currentBaseAddress, snapshotMemory, rootArr);
+        }
         if (explicitNode && explicitNode != matchedTemplate) {
             m_dynamicProjection = DynamicArrayProjection{};
             return;
